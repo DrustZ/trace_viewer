@@ -1,6 +1,11 @@
 import { useTheme } from '../../theme'
 
-/** Fixed top-right sun/moon button that flips between the light and dark themes. */
+/**
+ * Bottom-left sun/moon button that flips between the light and dark themes.
+ * Fixed so it is reachable from both the home and trace-detail layouts; anchored
+ * bottom-left to clear the trace page's top-right nav and the bottom-right Ask AI
+ * button.
+ */
 export default function ThemeToggle() {
   const { theme, toggle } = useTheme()
   const isDark = theme === 'dark'
@@ -13,7 +18,7 @@ export default function ThemeToggle() {
       data-testid="theme-toggle"
       aria-label={label}
       title={label}
-      className="fixed top-2 right-2 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-100"
+      className="fixed bottom-3 left-3 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-100"
     >
       {isDark ? <MoonIcon /> : <SunIcon />}
     </button>
