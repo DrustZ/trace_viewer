@@ -12,7 +12,86 @@
       "math_verify": 1
     },
     "extra": {
-      "ground_truth": "2"
+      "ground_truth": "2",
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "deepscaler-i02-s225-r02",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 10302,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 237,
+          "durationMs": 7,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 481,
+          "durationMs": 9683,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 481,
+          "durationMs": 5853,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 183
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 6490,
+          "durationMs": 3674,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 19
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "math_verify",
+          "kind": "grader",
+          "startMs": 10212,
+          "durationMs": 90,
+          "status": "error",
+          "detail": {
+            "verdict": "correct",
+            "exception": "VerifierTimeout: retrying (1/3)"
+          }
+        }
+      ]
     }
   },
   "stats": {

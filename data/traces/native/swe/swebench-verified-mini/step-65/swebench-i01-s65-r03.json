@@ -13,7 +13,388 @@
       "tests_total": 6
     },
     "extra": {
-      "success_criteria": "all 6 pytest tests in tests/defer_regress/tests.py pass"
+      "success_criteria": "all 6 pytest tests in tests/defer_regress/tests.py pass",
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "swebench-i01-s65-r03",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 97971,
+          "status": "error"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "developer.message",
+          "kind": "io",
+          "startMs": 53,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 106,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-2"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 274,
+          "durationMs": 14603,
+          "status": "ok"
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-5",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 274,
+          "durationMs": 11251,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 63
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-5",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 11787,
+          "durationMs": 663,
+          "status": "ok",
+          "messageId": "m-4",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-5",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 12662,
+          "durationMs": 2215,
+          "status": "ok",
+          "messageId": "m-5"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 15036,
+          "durationMs": 16399,
+          "status": "ok"
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-9",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 15036,
+          "durationMs": 8876,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 56
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-9",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 24023,
+          "durationMs": 1711,
+          "status": "ok",
+          "messageId": "m-7",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-9",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 25813,
+          "durationMs": 5622,
+          "status": "ok",
+          "messageId": "m-8"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 31527,
+          "durationMs": 9002,
+          "status": "ok"
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-13",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 31527,
+          "durationMs": 7172,
+          "status": "ok",
+          "messageId": "m-9",
+          "detail": {
+            "tokens_out": 45
+          }
+        },
+        {
+          "id": "sp-15",
+          "parentId": "sp-13",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 38861,
+          "durationMs": 1398,
+          "status": "ok",
+          "messageId": "m-10",
+          "detail": {
+            "tokens_out": 10
+          }
+        },
+        {
+          "id": "sp-16",
+          "parentId": "sp-13",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 40492,
+          "durationMs": 37,
+          "status": "error",
+          "messageId": "m-11",
+          "detail": {
+            "exception": "ArgumentParseError: invalid tool call arguments"
+          }
+        },
+        {
+          "id": "sp-17",
+          "parentId": "sp-1",
+          "name": "turn_4",
+          "kind": "io",
+          "startMs": 40637,
+          "durationMs": 4106,
+          "status": "ok"
+        },
+        {
+          "id": "sp-18",
+          "parentId": "sp-17",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 40637,
+          "durationMs": 659,
+          "status": "ok",
+          "messageId": "m-12",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-19",
+          "parentId": "sp-17",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 41519,
+          "durationMs": 3224,
+          "status": "ok",
+          "messageId": "m-13"
+        },
+        {
+          "id": "sp-20",
+          "parentId": "sp-1",
+          "name": "turn_5",
+          "kind": "io",
+          "startMs": 45037,
+          "durationMs": 18292,
+          "status": "ok"
+        },
+        {
+          "id": "sp-21",
+          "parentId": "sp-20",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 45037,
+          "durationMs": 14904,
+          "status": "ok",
+          "messageId": "m-14",
+          "detail": {
+            "tokens_out": 31
+          }
+        },
+        {
+          "id": "sp-22",
+          "parentId": "sp-20",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 60019,
+          "durationMs": 1041,
+          "status": "ok",
+          "messageId": "m-15",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-23",
+          "parentId": "sp-20",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 61283,
+          "durationMs": 2046,
+          "status": "ok",
+          "messageId": "m-16"
+        },
+        {
+          "id": "sp-24",
+          "parentId": "sp-1",
+          "name": "turn_6",
+          "kind": "io",
+          "startMs": 63553,
+          "durationMs": 17627,
+          "status": "ok"
+        },
+        {
+          "id": "sp-25",
+          "parentId": "sp-24",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 63553,
+          "durationMs": 14971,
+          "status": "ok",
+          "messageId": "m-17",
+          "detail": {
+            "tokens_out": 29
+          }
+        },
+        {
+          "id": "sp-26",
+          "parentId": "sp-24",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 78791,
+          "durationMs": 1791,
+          "status": "ok",
+          "messageId": "m-18",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-27",
+          "parentId": "sp-24",
+          "name": "str_replace_editor.exec",
+          "kind": "sandbox",
+          "startMs": 80943,
+          "durationMs": 237,
+          "status": "ok",
+          "messageId": "m-19"
+        },
+        {
+          "id": "sp-28",
+          "parentId": "sp-1",
+          "name": "turn_7",
+          "kind": "io",
+          "startMs": 81440,
+          "durationMs": 9378,
+          "status": "ok"
+        },
+        {
+          "id": "sp-29",
+          "parentId": "sp-28",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 81440,
+          "durationMs": 2712,
+          "status": "ok",
+          "messageId": "m-20",
+          "detail": {
+            "tokens_out": 12
+          }
+        },
+        {
+          "id": "sp-30",
+          "parentId": "sp-28",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 84396,
+          "durationMs": 430,
+          "status": "ok",
+          "messageId": "m-21",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-31",
+          "parentId": "sp-28",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 84954,
+          "durationMs": 5864,
+          "status": "ok",
+          "messageId": "m-22"
+        },
+        {
+          "id": "sp-32",
+          "parentId": "sp-1",
+          "name": "turn_8",
+          "kind": "io",
+          "startMs": 91174,
+          "durationMs": 867,
+          "status": "ok"
+        },
+        {
+          "id": "sp-33",
+          "parentId": "sp-32",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 91174,
+          "durationMs": 867,
+          "status": "ok",
+          "messageId": "m-23",
+          "detail": {
+            "tokens_out": 35
+          }
+        },
+        {
+          "id": "sp-34",
+          "parentId": "sp-1",
+          "name": "test_runner",
+          "kind": "grader",
+          "startMs": 92107,
+          "durationMs": 5864,
+          "status": "ok",
+          "detail": {
+            "tests_passed": 2,
+            "tests_total": 6
+          }
+        }
+      ]
     }
   },
   "stats": {

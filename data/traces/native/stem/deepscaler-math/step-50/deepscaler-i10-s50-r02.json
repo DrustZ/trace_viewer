@@ -12,7 +12,85 @@
       "math_verify": 0
     },
     "extra": {
-      "ground_truth": "2047"
+      "ground_truth": "2047",
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "deepscaler-i10-s50-r02",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 6050,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 352,
+          "durationMs": 6,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 710,
+          "durationMs": 5286,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 710,
+          "durationMs": 3332,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 316
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 4162,
+          "durationMs": 1834,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 20
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "math_verify",
+          "kind": "grader",
+          "startMs": 6045,
+          "durationMs": 5,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        }
+      ]
     }
   },
   "stats": {

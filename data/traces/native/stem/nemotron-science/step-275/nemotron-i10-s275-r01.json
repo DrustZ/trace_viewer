@@ -12,7 +12,97 @@
       "judge": 1
     },
     "extra": {
-      "ground_truth": "Higher, due to the Doppler effect compressing wavefronts ahead of the source"
+      "ground_truth": "Higher, due to the Doppler effect compressing wavefronts ahead of the source",
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "nemotron-i10-s275-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 18028,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 7,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 193,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 281,
+          "durationMs": 14764,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 281,
+          "durationMs": 12295,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 184
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 12655,
+          "durationMs": 2390,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 22
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 15149,
+          "durationMs": 2879,
+          "status": "ok",
+          "detail": {
+            "verdict": "correct"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 15293,
+          "durationMs": 2591,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 62
+          }
+        }
+      ]
     }
   },
   "stats": {

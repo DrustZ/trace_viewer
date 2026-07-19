@@ -17,6 +17,7 @@ import { leetcode } from './scenarios/leetcode'
 import { nemotronScience } from './scenarios/nemotronScience'
 import { swebench } from './scenarios/swebench'
 import { terminalBench } from './scenarios/terminalBench'
+import { buildProfSpans } from './spans'
 import type { Scenario, TracePlan } from './types'
 
 export const BASE_TIMESTAMP = '2026-03-01T00:00:00.000Z'
@@ -240,6 +241,17 @@ export function runGenerate(opts: GenerateOptions): GenerateSummary {
       },
     }
     const trace = finalizeTrace(meta, output.messages, overrides)
+    // Observability profile: built after finalize so spans see annotated
+    // messages (ids + stepIndex) and the computed stats.
+    trace.meta.extra = {
+      ...trace.meta.extra,
+      spans: buildProfSpans(
+        trace.messages,
+        trace.meta,
+        trace.stats,
+        mulberry32(hashSeed(seed, plan.traceId, 'spans')),
+      ),
+    }
 
     if (plan.emit === 'harmony') {
       summary.totalBytes += writeHarmony(out, trace, overrides).bytes

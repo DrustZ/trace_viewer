@@ -6,11 +6,12 @@ import { formatDuration, formatNumber, formatPercent } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { StatusPill } from '../common/StatusPill'
 
-export const TRACE_TABS = ['conversation', 'metadata', 'evolution', 'raw'] as const
+export const TRACE_TABS = ['conversation', 'timeline', 'metadata', 'evolution', 'raw'] as const
 export type TraceTab = (typeof TRACE_TABS)[number]
 
 const TAB_LABELS: Record<TraceTab, string> = {
   conversation: 'Conversation',
+  timeline: 'Timeline',
   metadata: 'Metadata',
   evolution: 'Evolution',
   raw: 'Raw',

@@ -3,6 +3,7 @@ import { ConversationView } from './ConversationView'
 import { EvolutionTab } from './EvolutionTab'
 import { MetadataTab } from './MetadataTab'
 import { RawTab } from './RawTab'
+import { TimelineTab } from './TimelineTab'
 import { TraceHeader, type TraceTab } from './TraceHeader'
 
 /** Shared trace renderer: header strip + tab bar + tab content. Fills its parent's height. */
@@ -36,6 +37,11 @@ export function TraceView({
       />
       <div className="min-h-0 flex-1">
         {tab === 'conversation' && <ConversationView trace={trace} />}
+        {tab === 'timeline' && (
+          <div className="h-full overflow-y-auto">
+            <TimelineTab trace={trace} />
+          </div>
+        )}
         {tab === 'metadata' && (
           <div className="h-full overflow-y-auto">
             <MetadataTab trace={trace} />

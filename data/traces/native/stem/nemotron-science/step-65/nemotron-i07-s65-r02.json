@@ -12,7 +12,97 @@
       "judge": 0
     },
     "extra": {
-      "ground_truth": "Red blood cells (erythrocytes)"
+      "ground_truth": "Red blood cells (erythrocytes)",
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "nemotron-i07-s65-r02",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 11918,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 54,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 310,
+          "durationMs": 9336,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 310,
+          "durationMs": 5186,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 129
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 5843,
+          "durationMs": 3803,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 10
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 9745,
+          "durationMs": 2173,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 9854,
+          "durationMs": 1956,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 83
+          }
+        }
+      ]
     }
   },
   "stats": {

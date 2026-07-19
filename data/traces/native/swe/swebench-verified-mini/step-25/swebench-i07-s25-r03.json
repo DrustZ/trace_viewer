@@ -13,7 +13,253 @@
       "tests_total": 5
     },
     "extra": {
-      "success_criteria": "all 5 pytest tests in tests/test_adapters.py pass"
+      "success_criteria": "all 5 pytest tests in tests/test_adapters.py pass",
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "swebench-i07-s25-r03",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 39437,
+          "status": "error"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "developer.message",
+          "kind": "io",
+          "startMs": 64,
+          "durationMs": 6,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 244,
+          "durationMs": 6,
+          "status": "ok",
+          "messageId": "m-2"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 400,
+          "durationMs": 4099,
+          "status": "ok"
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-5",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 400,
+          "durationMs": 2407,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 52
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-5",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 3116,
+          "durationMs": 1053,
+          "status": "ok",
+          "messageId": "m-4",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-5",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 4473,
+          "durationMs": 26,
+          "status": "error",
+          "messageId": "m-5",
+          "detail": {
+            "exception": "ArgumentParseError: invalid tool call arguments"
+          }
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 4588,
+          "durationMs": 4716,
+          "status": "ok"
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-9",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 4588,
+          "durationMs": 576,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-9",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 5209,
+          "durationMs": 4095,
+          "status": "ok",
+          "messageId": "m-7"
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 9617,
+          "durationMs": 11972,
+          "status": "ok"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-12",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 9617,
+          "durationMs": 11212,
+          "status": "ok",
+          "messageId": "m-8",
+          "detail": {
+            "tokens_out": 44
+          }
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-12",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 20864,
+          "durationMs": 340,
+          "status": "ok",
+          "messageId": "m-9",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-15",
+          "parentId": "sp-12",
+          "name": "str_replace_editor.exec",
+          "kind": "sandbox",
+          "startMs": 21349,
+          "durationMs": 240,
+          "status": "ok",
+          "messageId": "m-10"
+        },
+        {
+          "id": "sp-16",
+          "parentId": "sp-1",
+          "name": "turn_4",
+          "kind": "io",
+          "startMs": 21800,
+          "durationMs": 8694,
+          "status": "ok"
+        },
+        {
+          "id": "sp-17",
+          "parentId": "sp-16",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 21800,
+          "durationMs": 2594,
+          "status": "ok",
+          "messageId": "m-11",
+          "detail": {
+            "tokens_out": 12
+          }
+        },
+        {
+          "id": "sp-18",
+          "parentId": "sp-16",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 24756,
+          "durationMs": 1492,
+          "status": "ok",
+          "messageId": "m-12",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-19",
+          "parentId": "sp-16",
+          "name": "bash.exec",
+          "kind": "sandbox",
+          "startMs": 26401,
+          "durationMs": 4093,
+          "status": "ok",
+          "messageId": "m-13"
+        },
+        {
+          "id": "sp-20",
+          "parentId": "sp-1",
+          "name": "turn_5",
+          "kind": "io",
+          "startMs": 30826,
+          "durationMs": 4458,
+          "status": "ok"
+        },
+        {
+          "id": "sp-21",
+          "parentId": "sp-20",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 30826,
+          "durationMs": 4458,
+          "status": "ok",
+          "messageId": "m-14",
+          "detail": {
+            "tokens_out": 44
+          }
+        },
+        {
+          "id": "sp-22",
+          "parentId": "sp-1",
+          "name": "test_runner",
+          "kind": "grader",
+          "startMs": 35344,
+          "durationMs": 4093,
+          "status": "ok",
+          "detail": {
+            "tests_passed": 5,
+            "tests_total": 5
+          }
+        }
+      ]
     }
   },
   "stats": {

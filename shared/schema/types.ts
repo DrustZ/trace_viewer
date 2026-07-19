@@ -20,6 +20,8 @@ export interface TokenLogprob {
   token: string
   /** Natural log probability, <= 0. */
   logprob: number
+  /** Vocabulary token id (stable per token string). Optional: imported formats may lack it. */
+  id?: number
 }
 
 export interface ToolCall {

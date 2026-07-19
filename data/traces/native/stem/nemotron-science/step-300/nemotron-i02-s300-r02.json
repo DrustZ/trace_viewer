@@ -12,7 +12,97 @@
       "judge": 0
     },
     "extra": {
-      "ground_truth": "ATP and NADPH"
+      "ground_truth": "ATP and NADPH",
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "nemotron-i02-s300-r02",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 9596,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 280,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 647,
+          "durationMs": 6651,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 647,
+          "durationMs": 3207,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 185
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 4014,
+          "durationMs": 3284,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 4
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 7418,
+          "durationMs": 2178,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 7527,
+          "durationMs": 1960,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 116
+          }
+        }
+      ]
     }
   },
   "stats": {

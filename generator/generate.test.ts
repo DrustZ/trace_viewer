@@ -97,4 +97,21 @@ describe('generator', () => {
     const corrupt = readFileSync(join(dirA, 'native/corrupt-example.json'), 'utf8')
     expect(() => JSON.parse(corrupt)).toThrow()
   })
+
+  it('every native trace carries meta.extra.spans with exactly one root', () => {
+    const nativeTraces = walk(dirA).filter(
+      (f) => f.startsWith('native/') && f.endsWith('.json') && !f.endsWith('corrupt-example.json'),
+    )
+    expect(nativeTraces.length).toBeGreaterThan(0)
+    for (const rel of nativeTraces) {
+      const trace = JSON.parse(readFileSync(join(dirA, rel), 'utf8'))
+      const spans = trace.meta.extra?.spans
+      expect(Array.isArray(spans), rel).toBe(true)
+      const roots = (spans as Array<{ parentId: string | null; name: string }>).filter(
+        (s) => s.parentId === null,
+      )
+      expect(roots.length, rel).toBe(1)
+      expect(roots[0].name, rel).toBe(trace.meta.traceId)
+    }
+  })
 })

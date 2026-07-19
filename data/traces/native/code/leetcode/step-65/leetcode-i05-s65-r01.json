@@ -9,7 +9,86 @@
     "split": "train",
     "sourceFormat": "native",
     "extra": {
-      "ground_truth": "Returns the maximum of prices[j] - prices[i] over j > i, or 0 when no profitable pair exists; buying and selling on the same day is not allowed."
+      "ground_truth": "Returns the maximum of prices[j] - prices[i] over j > i, or 0 when no profitable pair exists; buying and selling on the same day is not allowed.",
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "leetcode-i05-s65-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 15857,
+          "status": "error"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 305,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 486,
+          "durationMs": 15371,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 486,
+          "durationMs": 12500,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 107
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 13279,
+          "durationMs": 643,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 70
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "execute_code.exec",
+          "kind": "sandbox",
+          "startMs": 14320,
+          "durationMs": 1537,
+          "status": "error",
+          "messageId": "m-4",
+          "detail": {
+            "exception": "CancelledError: SIGINT"
+          }
+        }
+      ]
     }
   },
   "stats": {
