@@ -149,7 +149,9 @@ export default function ComparePage() {
         ) : (
           <>
             <div className="shrink-0">
-              <CollapsibleSection id="compare-curves" title="Reward curves — A vs B" defaultOpen>
+              {/* Collapsed by default so the two trace views get the full height;
+                  the state persists per-id, and it's one click to compare curves. */}
+              <CollapsibleSection id="compare-curves" title="Reward curves — A vs B">
                 <DualEvolutionChart instanceId={instance} runA={runA} runB={runB} />
               </CollapsibleSection>
             </div>
