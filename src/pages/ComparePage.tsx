@@ -5,6 +5,7 @@ import { useTraces } from '../api/hooks'
 import { EmptyState } from '../components/common/EmptyState'
 import { DualEvolutionChart } from '../components/compare/DualEvolutionChart'
 import { RunColumn } from '../components/compare/RunColumn'
+import { CollapsibleSection } from '../components/home/CollapsibleSection'
 
 const INSTANCE_SCAN_LIMIT = 5000
 // Fallback when the corpus scan yields no distinct extra.run values.
@@ -147,7 +148,9 @@ export default function ComparePage() {
           />
         ) : (
           <>
-            <DualEvolutionChart instanceId={instance} runA={runA} runB={runB} />
+            <CollapsibleSection id="compare-curves" title="Reward curves — A vs B" defaultOpen>
+              <DualEvolutionChart instanceId={instance} runA={runA} runB={runB} />
+            </CollapsibleSection>
             <div className="grid grid-cols-2 gap-4">
               <RunColumn
                 run={runA}
