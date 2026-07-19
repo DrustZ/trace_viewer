@@ -173,9 +173,7 @@ export function Minimap({
               >
                 <span
                   className={`block h-full w-full rounded-[3px] transition-all duration-150 hover:opacity-100 ${BAR[kind]} ${
-                    focused
-                      ? 'scale-x-[1.6] opacity-100 shadow-sm ring-1 ring-slate-500/50'
-                      : 'opacity-75'
+                    focused ? 'scale-x-[1.6] opacity-100 ring-1 ring-slate-500/50' : 'opacity-75'
                   }`}
                   style={focused ? { transformOrigin: 'right' } : undefined}
                 />

@@ -330,7 +330,16 @@ export function ConversationView({ trace }: { trace: Trace }) {
                 viewportHeight={parentRef.current?.clientHeight ?? 0}
                 totalSize={virtualizer.getTotalSize()}
                 scrollMargin={virtualizer.options.scrollMargin}
-                onJump={(index) => virtualizer.scrollToIndex(index, { align: 'start' })}
+                onJump={(index) => {
+                  // Dynamic row heights: the first jump lands on estimates; re-align
+                  // once the target row has been measured.
+                  virtualizer.scrollToIndex(index, { align: 'start' })
+                  requestAnimationFrame(() =>
+                    requestAnimationFrame(() =>
+                      virtualizer.scrollToIndex(index, { align: 'start' }),
+                    ),
+                  )
+                }}
               />
             )}
           </>
