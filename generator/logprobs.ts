@@ -2,7 +2,7 @@ import type { Message, TokenLogprob } from '../shared/schema/types'
 import { hashSeed, type Rng } from './rng'
 import type { FailureRegion } from './types'
 
-export const MAX_TOKENS_PER_MESSAGE = 700
+export const MAX_TOKENS_PER_MESSAGE = 600
 
 /** Synthetic vocabulary size for token ids. */
 export const TOKEN_ID_VOCAB = 200000
@@ -183,36 +183,20 @@ export function hasZeroLogprobSpan(messages: readonly Message[]): boolean {
 }
 
 /**
- * Attaches tokens to the final assistant message and (if present) one
- * commentary message — preferring a commentary that carries a failure region.
- * Returns true when any tokens were attached.
+ * Attaches tokens to every assistant message — analysis, commentary (tool-call
+ * arguments), and final — capped at MAX_TOKENS_PER_MESSAGE each. Failure
+ * regions still force low-confidence tokens on their message. Returns true
+ * when any tokens were attached.
  */
 export function attachLogprobs(
   messages: Message[],
   rng: Rng,
   regions: readonly FailureRegion[] = [],
 ): boolean {
-  const targets: number[] = []
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (m.role === 'assistant' && m.channel === 'final') {
-      targets.push(i)
-      break
-    }
-  }
-  const commentaryIdxs: number[] = []
-  for (let i = 0; i < messages.length; i++) {
-    const m = messages[i]
-    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) commentaryIdxs.push(i)
-  }
-  if (commentaryIdxs.length > 0) {
-    const flagged = commentaryIdxs.find((i) => regions.some((r) => r.messageIndex === i))
-    targets.push(flagged ?? rng.pick(commentaryIdxs))
-  }
-
   let attached = false
-  for (const idx of targets.sort((a, b) => a - b)) {
+  for (let idx = 0; idx < messages.length; idx++) {
     const m = messages[idx]
+    if (m.role !== 'assistant') continue
     const text = logprobText(m)
     if (text.length === 0) continue
     let region: { start: number; end: number } | undefined

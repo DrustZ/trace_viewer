@@ -27,6 +27,7 @@ function stepLabel(unit: StepUnit): string {
 function StepCell({ unit }: { unit: StepUnit }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5">
+      <span className="min-w-0 flex-1 truncate text-xs text-slate-700">{stepLabel(unit)}</span>
       {unit.analysis.length > 0 && (
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400"
@@ -34,9 +35,78 @@ function StepCell({ unit }: { unit: StepUnit }) {
           data-testid="rail-reasoning-dot"
         />
       )}
-      <span className="min-w-0 flex-1 truncate text-xs text-slate-700">{stepLabel(unit)}</span>
     </span>
   )
+}
+
+/** Visual identity per unit kind: left border color, dot color, tiny uppercase label. */
+function unitKindStyle(unit: RenderUnit): {
+  border: string
+  dot: string
+  label: string
+  labelClass: string
+} {
+  if (unit.kind === 'step') {
+    const hasTools = unit.responses.some((m) => m.toolCalls?.length)
+    const step = unit.stepIndex !== undefined ? `S${unit.stepIndex}` : 'STEP'
+    return hasTools
+      ? {
+          border: 'border-l-indigo-500',
+          dot: 'bg-indigo-500',
+          label: step,
+          labelClass: 'text-indigo-600',
+        }
+      : {
+          border: 'border-l-emerald-500',
+          dot: 'bg-emerald-500',
+          label: step,
+          labelClass: 'text-emerald-600',
+        }
+  }
+  switch (unit.message.role) {
+    case 'user':
+      return {
+        border: 'border-l-blue-400',
+        dot: 'bg-blue-400',
+        label: 'USER',
+        labelClass: 'text-blue-600',
+      }
+    case 'system':
+      return {
+        border: 'border-l-slate-400',
+        dot: 'bg-slate-400',
+        label: 'SYS',
+        labelClass: 'text-slate-500',
+      }
+    case 'developer':
+      return {
+        border: 'border-l-amber-400',
+        dot: 'bg-amber-400',
+        label: 'DEV',
+        labelClass: 'text-amber-600',
+      }
+    case 'tool':
+      return unit.message.toolResult?.isError
+        ? {
+            border: 'border-l-red-400',
+            dot: 'bg-red-400',
+            label: 'ENV',
+            labelClass: 'text-red-600',
+          }
+        : {
+            border: 'border-l-cyan-400',
+            dot: 'bg-cyan-400',
+            label: 'ENV',
+            labelClass: 'text-cyan-600',
+          }
+    default:
+      return {
+        border: 'border-l-slate-300',
+        dot: 'bg-slate-300',
+        label: 'MSG',
+        labelClass: 'text-slate-500',
+      }
+  }
 }
 
 /**
@@ -101,29 +171,34 @@ export function TurnRail({
           )
         } else {
           body = (
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="shrink-0 text-slate-400">
-                {unit.message.role === 'user' ? '›' : '⚙'}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
-                {clip(unit.message.content) || `(${unit.message.role})`}
-              </span>
+            <span className="block min-w-0 truncate text-xs text-slate-500">
+              {clip(unit.message.content) || `(${unit.message.role})`}
             </span>
           )
         }
+        const kind = unitKindStyle(unit)
         return (
           <button
             key={unit.id}
             type="button"
             data-testid="turn-rail-cell"
             data-index={i}
+            data-kind={unit.kind === 'step' ? 'step' : unit.message.role}
             aria-current={i === selected ? 'true' : undefined}
             onClick={() => onSelect(i)}
-            className={`block w-full border-l-2 px-2 py-1.5 text-left ${
-              i === selected ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-slate-50'
+            className={`block w-full border-l-[3px] px-2 py-1.5 text-left ${kind.border} ${
+              i === selected ? 'bg-blue-50' : 'hover:bg-slate-50'
             }`}
           >
-            {body}
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${kind.dot}`} />
+              <span
+                className={`w-7 shrink-0 text-[9px] font-semibold uppercase tracking-wide ${kind.labelClass}`}
+              >
+                {kind.label}
+              </span>
+              <span className="min-w-0 flex-1">{body}</span>
+            </span>
             {cellFlags.length > 0 && (
               <span className="mt-0.5 flex flex-wrap gap-1">
                 {cellFlags.map((flag) => (
