@@ -311,7 +311,7 @@ export function runGenerate(opts: GenerateOptions): GenerateSummary {
       summary.totalBytes += writeHarmony(out, trace, overrides).bytes
       summary.showcase.harmony.push(plan.traceId)
     } else if (plan.emit === 'openai') {
-      summary.totalBytes += writeOpenAI(out, trace).bytes
+      summary.totalBytes += writeOpenAI(out, trace, overrides).bytes
       summary.showcase.openai.push(plan.traceId)
     } else {
       summary.totalBytes += writeNative(out, trace).bytes

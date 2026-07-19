@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Message, Trace } from '../../shared/schema/types'
+import type { Message, Trace, TraceStats } from '../../shared/schema/types'
 
 interface OpenAIToolCall {
   id: string
@@ -97,11 +97,24 @@ export function renderOpenAI(trace: Trace): OpenAIChatFile {
   }
 }
 
-export function writeOpenAI(outDir: string, trace: Trace): { path: string; bytes: number } {
+/**
+ * Writes <traceId>.json plus a <traceId>.meta.json sidecar carrying
+ * { meta, statsOverrides } — mirroring writeHarmony. Without it the connector
+ * defaults these showcase traces to the 'imported/openai-chat' component; the
+ * sidecar puts them back under their real component/run.
+ */
+export function writeOpenAI(
+  outDir: string,
+  trace: Trace,
+  statsOverrides: Partial<TraceStats>,
+): { paths: string[]; bytes: number } {
   const dir = join(outDir, 'openai')
   mkdirSync(dir, { recursive: true })
-  const rel = join('openai', `${trace.meta.traceId}.json`)
+  const jsonRel = join('openai', `${trace.meta.traceId}.json`)
+  const metaRel = join('openai', `${trace.meta.traceId}.meta.json`)
   const body = `${JSON.stringify(renderOpenAI(trace), null, 2)}\n`
-  writeFileSync(join(outDir, rel), body)
-  return { path: rel, bytes: Buffer.byteLength(body) }
+  const sidecar = `${JSON.stringify({ meta: trace.meta, statsOverrides }, null, 2)}\n`
+  writeFileSync(join(outDir, jsonRel), body)
+  writeFileSync(join(outDir, metaRel), sidecar)
+  return { paths: [jsonRel, metaRel], bytes: Buffer.byteLength(body) + Buffer.byteLength(sidecar) }
 }

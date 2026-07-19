@@ -180,10 +180,10 @@ export function SidebarFilters({
           className={INPUT_CLASS}
         />
       </Field>
-      <Field label="Trace keyword">
+      <Field label="Filter by keyword">
         <input
           type="text"
-          aria-label="Trace keyword"
+          aria-label="Filter traces by keyword"
           data-testid="filter-trace-kw"
           value={traceKw}
           onChange={(e) => setTraceKw(e.target.value)}
@@ -191,7 +191,7 @@ export function SidebarFilters({
           onKeyDown={(e) => {
             if (e.key === 'Enter') commitTraceKw()
           }}
-          placeholder="keyword in messages…"
+          placeholder="Filter traces by keyword (message text, tools, ids)"
           className={INPUT_CLASS}
         />
       </Field>

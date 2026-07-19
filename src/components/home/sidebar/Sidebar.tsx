@@ -1,15 +1,22 @@
-import { decodeFilterSet, encodeFilterSet } from '@shared/filter/parse'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { type ListParams, useMeta, useRefresh } from '../../../api/hooks'
+import { type ListParams, useImportTrace, useMeta, useRefresh } from '../../../api/hooks'
 import type { ListParamKey, ListParamPatch } from '../../../state/filterParams'
 import { formatNumber } from '../../common/format'
-import { GlobalSearchBox } from '../GlobalSearchBox'
 import { ImportDialog } from '../ImportDialog'
 import { CategoryTree } from './CategoryTree'
-import { ImportDropzone } from './ImportDropzone'
+import { RunTree } from './RunTree'
 import { SelectionStats } from './SelectionStats'
 import { SidebarFilters } from './SidebarFilters'
+
+function readText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+    reader.onerror = () => reject(new Error('could not read file'))
+    reader.readAsText(file)
+  })
+}
 
 function Chevron({ left }: { left: boolean }) {
   return (
@@ -51,50 +58,6 @@ function ReloadIcon({ spinning }: { spinning: boolean }) {
 const BTN =
   'inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50'
 
-/** Known training runs. Static, time-boxed: the corpus is generated with exactly these. */
-const RUNS = ['run-a', 'run-b']
-
-function runFromFilters(filters: string | undefined): string {
-  const cond = decodeFilterSet(filters).conditions.find((c) => c.key === 'run' && c.op === 'eq')
-  return cond && !Array.isArray(cond.value) ? String(cond.value) : ''
-}
-
-/** 'RUN' selector: applies/removes a `run.eq.<x>` condition on the filters param. */
-function RunSection({
-  params,
-  setParam,
-}: {
-  params: ListParams
-  setParam: (key: ListParamKey, value: string | undefined) => void
-}) {
-  const setRun = (value: string) => {
-    const others = decodeFilterSet(params.filters).conditions.filter(
-      (c) => !(c.key === 'run' && c.op === 'eq'),
-    )
-    const conditions = value === '' ? others : [...others, { key: 'run', op: 'eq' as const, value }]
-    setParam('filters', encodeFilterSet({ conditions }) || undefined)
-  }
-  return (
-    <section data-testid="run-section" className="flex flex-col gap-1.5">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Run</h2>
-      <select
-        className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-        data-testid="run-select"
-        aria-label="Run"
-        value={runFromFilters(params.filters)}
-        onChange={(e) => setRun(e.target.value)}
-      >
-        <option value="">All runs</option>
-        {RUNS.map((r) => (
-          <option key={r} value={r}>
-            {r}
-          </option>
-        ))}
-      </select>
-    </section>
-  )
-}
-
 export function Sidebar({
   open,
   onToggle,
@@ -112,7 +75,21 @@ export function Sidebar({
 }) {
   const meta = useMeta()
   const refresh = useRefresh()
+  const importTrace = useImportTrace()
   const [importOpen, setImportOpen] = useState(false)
+  const [dragging, setDragging] = useState(false)
+
+  // Sole drag-and-drop entry point: dropping files anywhere on the sidebar runs
+  // the same import mutation the Import dialog uses.
+  const importFiles = async (files: File[]) => {
+    for (const file of files) {
+      try {
+        await importTrace.mutateAsync({ type: 'text', content: await readText(file) })
+      } catch {
+        // per-file failure — the dialog is the path for detailed errors
+      }
+    }
+  }
 
   if (!open) {
     return (
@@ -136,9 +113,31 @@ export function Sidebar({
   return (
     <aside
       data-testid="sidebar"
-      className="flex w-[300px] shrink-0 flex-col border-r border-slate-200 bg-white"
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false)
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragging(false)
+        void importFiles(Array.from(e.dataTransfer.files))
+      }}
+      className={`relative flex w-[300px] shrink-0 flex-col border-r border-slate-200 bg-white ${
+        dragging ? 'ring-2 ring-inset ring-blue-400' : ''
+      }`}
     >
-      {/* Non-scrolling head: brand + search, so the search dropdown can overflow the sidebar. */}
+      {dragging && (
+        <div
+          data-testid="sidebar-drop-overlay"
+          className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-50/80 text-sm font-medium text-blue-700"
+        >
+          Drop trace files to import
+        </div>
+      )}
+      {/* Non-scrolling head: brand + actions. */}
       <div className="flex shrink-0 flex-col gap-2 border-b border-slate-100 px-3 py-3">
         <div className="flex items-start justify-between">
           <div>
@@ -183,14 +182,12 @@ export function Sidebar({
             Compare runs
           </Link>
         </div>
-        <GlobalSearchBox />
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-3">
-        <RunSection params={params} setParam={setParam} />
+        <RunTree params={params} setParam={setParam} setParams={setParams} />
         <SelectionStats params={params} />
         <CategoryTree params={params} setParams={setParams} />
         <SidebarFilters params={params} setParam={setParam} clearAll={clearAll} />
-        <ImportDropzone onOpenDialog={() => setImportOpen(true)} />
       </div>
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </aside>

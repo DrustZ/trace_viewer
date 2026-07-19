@@ -57,8 +57,10 @@ describe('generator', () => {
       (f) => f.startsWith('native/') && f.endsWith('.json') && !f.endsWith('corrupt-example.json'),
     )
     const harmonyTexts = files.filter((f) => f.startsWith('harmony/') && f.endsWith('.txt'))
-    const harmonySidecars = files.filter((f) => f.endsWith('.meta.json'))
-    const openaiFiles = files.filter((f) => f.startsWith('openai/') && f.endsWith('.json'))
+    const sidecars = files.filter((f) => f.endsWith('.meta.json'))
+    const openaiFiles = files.filter(
+      (f) => f.startsWith('openai/') && f.endsWith('.json') && !f.endsWith('.meta.json'),
+    )
 
     for (const rel of nativeTraces) {
       const trace = JSON.parse(readFileSync(join(dirA, rel), 'utf8'))
@@ -72,7 +74,8 @@ describe('generator', () => {
     expect(manifest.counts.total).toBe(
       nativeTraces.length + harmonyTexts.length + openaiFiles.length,
     )
-    expect(harmonySidecars.length).toBe(harmonyTexts.length)
+    // Both harmony and openai showcase traces now emit a .meta.json sidecar.
+    expect(sidecars.length).toBe(harmonyTexts.length + openaiFiles.length)
     expect(manifest.showcase.harmony.length).toBe(harmonyTexts.length)
     expect(manifest.showcase.openai.length).toBe(openaiFiles.length)
     const componentSum = Object.values(

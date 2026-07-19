@@ -1,0 +1,117 @@
+{
+  "meta": {
+    "traceId": "b-deepscaler-i05-s75-r01",
+    "instanceId": "deepscaler-i05",
+    "component": "stem/deepscaler-math",
+    "status": "completed",
+    "timestamp": "2026-03-04T03:18:45.384Z",
+    "checkpointStep": 75,
+    "split": "test",
+    "sourceFormat": "openai-chat",
+    "rewardDetails": {
+      "math_verify": 0
+    },
+    "extra": {
+      "ground_truth": "155",
+      "golden_response": "For a right triangle with legs $a, b$ and hypotenuse $c$, the inradius is $r = (a + b - c)/2$. With $r = 5$ and $c = 26$ this gives $a + b = 36$.\n\nThe area equals $rs$ where $s$ is the semiperimeter: $s = (a + b + c)/2 = (36 + 26)/2 = 31$, so the area is $5 \\cdot 31 = 155$.\n\nFinal answer: $\\boxed{155}$",
+      "run": "run-b",
+      "kl": 0.2997,
+      "trainer_batch": 3,
+      "format_errors": 0,
+      "zero_logprob_span": true,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-deepscaler-i05-s75-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 8910,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 212,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 393,
+          "durationMs": 8488,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 393,
+          "durationMs": 7562,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 167
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 8249,
+          "durationMs": 632,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 24
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "math_verify",
+          "kind": "grader",
+          "startMs": 8901,
+          "durationMs": 9,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  }
+}

@@ -3,7 +3,10 @@ import { useMemo, useState } from 'react'
 import { type ListParams, useComponentAggregates } from '../../api/hooks'
 import { selectedComponents, toggleComponentPatch, useListParams } from '../../state/filterParams'
 import { formatDuration, formatNumber, formatPercent, formatScore } from '../common/format'
+import { useColumnWidths } from '../common/useColumnWidths'
 import { Sparkline } from './Sparkline'
+
+const DEFAULT_WIDTHS: Record<string, number> = { component: 240 }
 
 type SplitMode = Split | 'all'
 
@@ -159,6 +162,8 @@ const HEADERS = [
 export function ComponentTable({ params }: { params: ListParams }) {
   const aggregates = useComponentAggregates(params)
   const { setParams } = useListParams()
+  const { widths, startResize, resetCol } = useColumnWidths('components', DEFAULT_WIDTHS)
+  const nameWidth = widths.component ?? DEFAULT_WIDTHS.component
   const [splitMode, setSplitMode] = useState<SplitMode>('all')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   // Active rows come from the decoded filters DSL (plus legacy ?component deep links).
@@ -205,7 +210,19 @@ export function ComponentTable({ params }: { params: ListParams }) {
           <table className="w-full whitespace-nowrap text-xs" data-testid="component-table">
             <thead>
               <tr className="border-b border-slate-200 text-[11px] text-slate-400">
-                <th className="px-2 py-1.5 text-left font-medium">Component</th>
+                <th className="relative px-2 py-1.5 text-left font-medium">
+                  <div className="truncate" style={{ width: nameWidth }}>
+                    Component
+                  </div>
+                  <div
+                    data-testid="col-resize-component"
+                    aria-hidden="true"
+                    title="Drag to resize · double-click to reset"
+                    onPointerDown={(e) => startResize('component', e)}
+                    onDoubleClick={() => resetCol('component')}
+                    className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none hover:bg-blue-300"
+                  />
+                </th>
                 {HEADERS.map((h) => (
                   <th key={h} className="px-2 py-1.5 text-right font-medium">
                     {h}
@@ -218,6 +235,7 @@ export function ComponentTable({ params }: { params: ListParams }) {
                 <CategoryRows
                   key={group.category}
                   group={group}
+                  nameWidth={nameWidth}
                   open={isExpanded(group)}
                   selected={selected}
                   onToggle={() =>
@@ -237,12 +255,14 @@ export function ComponentTable({ params }: { params: ListParams }) {
 
 function CategoryRows({
   group,
+  nameWidth,
   open,
   selected,
   onToggle,
   onSelect,
 }: {
   group: CategoryGroup
+  nameWidth: number
   open: boolean
   selected: ReadonlySet<string>
   onToggle: () => void
@@ -256,7 +276,7 @@ function CategoryRows({
         className="cursor-pointer border-b border-slate-100 bg-slate-50/60 text-slate-700 hover:bg-slate-100"
       >
         <td className="px-2 py-1.5">
-          <span className="flex items-center gap-1 font-medium">
+          <span className="flex items-center gap-1 font-medium" style={{ width: nameWidth }}>
             <svg
               viewBox="0 0 16 16"
               aria-hidden="true"
@@ -271,8 +291,8 @@ function CategoryRows({
                 strokeLinejoin="round"
               />
             </svg>
-            {group.category}
-            <span className="font-normal text-slate-400">({group.children.length})</span>
+            <span className="truncate">{group.category}</span>
+            <span className="shrink-0 font-normal text-slate-400">({group.children.length})</span>
           </span>
         </td>
         <MetricCells row={group.rollup} />
@@ -289,7 +309,11 @@ function CategoryRows({
                 active ? 'bg-blue-50 text-blue-900' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <td className="px-2 py-1.5 pl-8">{row.component}</td>
+              <td className="py-1.5 pr-2 pl-8">
+                <div className="truncate" style={{ width: nameWidth - 24 }} title={row.component}>
+                  {row.component}
+                </div>
+              </td>
               <MetricCells row={row} />
             </tr>
           )

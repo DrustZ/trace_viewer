@@ -9,10 +9,26 @@ import { EmptyState, ErrorState, LoadingState } from '../common/EmptyState'
 import { formatDuration, formatNumber, formatTimestamp } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { StatusPill } from '../common/StatusPill'
+import { useColumnWidths } from '../common/useColumnWidths'
 
 const ROW_HEIGHT = 40
-const GRID =
-  'minmax(150px,1.3fr) minmax(120px,1fr) minmax(110px,0.9fr) 64px 56px 56px 96px 56px 56px 72px 76px 80px 136px'
+const COL_GAP = 8 // matches gap-x-2 on header + rows
+
+const DEFAULT_WIDTHS: Record<string, number> = {
+  traceId: 260,
+  instance: 150,
+  component: 130,
+  score: 64,
+  step: 56,
+  split: 56,
+  status: 120,
+  turns: 56,
+  tools: 56,
+  outTok: 72,
+  thinkTok: 76,
+  duration: 80,
+  time: 136,
+}
 
 interface Column {
   id: string
@@ -57,6 +73,29 @@ function ComponentBadge({ component }: { component: string }) {
   )
 }
 
+function TruncBadge() {
+  return (
+    <span
+      data-testid="trunc-badge"
+      title="output truncated"
+      className="shrink-0 rounded bg-orange-100 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-orange-700"
+    >
+      TRUNC
+    </span>
+  )
+}
+
+function ErrorDot() {
+  return (
+    <span
+      role="img"
+      title="has tool/exec errors"
+      aria-label="has tool/exec errors"
+      className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500"
+    />
+  )
+}
+
 function TraceRow({
   trace,
   indent,
@@ -85,7 +124,7 @@ function TraceRow({
         e.preventDefault()
         onSelect()
       }}
-      style={{ ...style, gridTemplateColumns: GRID }}
+      style={style}
       className={`grid w-full cursor-pointer items-center gap-x-2 border-b border-slate-100 px-3 text-left text-xs ${
         selected ? 'bg-blue-50' : 'hover:bg-slate-50'
       }`}
@@ -102,8 +141,10 @@ function TraceRow({
       </span>
       <span className={num}>{meta.checkpointStep}</span>
       <span className="text-slate-600">{meta.split}</span>
-      <span>
+      <span className="flex min-w-0 items-center gap-1 overflow-hidden">
         <StatusPill status={meta.status} />
+        {stats.truncated && <TruncBadge />}
+        {stats.hasError && <ErrorDot />}
       </span>
       <span className={num}>{formatNumber(stats.turns)}</span>
       <span className={num}>{formatNumber(stats.toolUses)}</span>
@@ -149,6 +190,8 @@ function GroupRow({
   const maxStep = Math.max(...steps)
   const splits = new Set(items.map((t) => t.meta.split))
   const statuses = new Set(items.map((t) => t.meta.status))
+  const anyTruncated = items.some((t) => t.stats.truncated)
+  const anyError = items.some((t) => t.stats.hasError)
   const first = items[0]
   const stepChip =
     'shrink-0 rounded border border-slate-300 bg-white px-1 py-px text-[10px] font-medium text-slate-600'
@@ -159,7 +202,7 @@ function GroupRow({
       data-testid="group-row"
       aria-expanded={expanded}
       onClick={onToggle}
-      style={{ ...style, gridTemplateColumns: GRID }}
+      style={style}
       className="grid w-full items-center gap-x-2 border-b border-slate-200 bg-slate-50 px-3 text-left text-xs font-medium hover:bg-slate-100"
     >
       <span className="flex min-w-0 items-center gap-1">
@@ -196,12 +239,14 @@ function GroupRow({
       <span className="text-slate-600">
         {splits.size === 1 && first ? first.meta.split : 'mixed'}
       </span>
-      <span>
+      <span className="flex min-w-0 items-center gap-1 overflow-hidden">
         {statuses.size === 1 && first ? (
           <StatusPill status={first.meta.status} />
         ) : (
           <span className="font-normal text-slate-500">mixed</span>
         )}
+        {anyTruncated && <TruncBadge />}
+        {anyError && <ErrorDot />}
       </span>
       <span className={num}>{formatNumber(avgTurns)}</span>
       <span className={num}>{formatNumber(avgTools)}</span>
@@ -230,9 +275,15 @@ export function TraceTable({
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const location = useLocation()
   const parentRef = useRef<HTMLDivElement>(null)
+  const { widths, startResize, resetCol } = useColumnWidths('traces', DEFAULT_WIDTHS)
 
   const sort = params.sort ?? 'time'
   const order = params.order ?? 'desc'
+
+  const colWidth = (id: string) => widths[id] ?? DEFAULT_WIDTHS[id] ?? 60
+  const gridTemplate = COLUMNS.map((c) => `${colWidth(c.id)}px`).join(' ')
+  const minWidth =
+    COLUMNS.reduce((s, c) => s + colWidth(c.id), 0) + COL_GAP * (COLUMNS.length - 1) + 24
 
   const rows = useMemo<Row[]>(() => {
     const data = query.data
@@ -296,9 +347,9 @@ export function TraceTable({
           }`}
         >
           <div ref={parentRef} className="h-full overflow-auto">
-            <div className="min-w-[1140px]">
+            <div style={{ minWidth }}>
               <div
-                style={{ gridTemplateColumns: GRID }}
+                style={{ gridTemplateColumns: gridTemplate }}
                 className="sticky top-0 z-10 grid items-center gap-x-2 border-b border-slate-200 bg-slate-50 px-3"
               >
                 {COLUMNS.map((col) => {
@@ -313,22 +364,36 @@ export function TraceTable({
                       )}
                     </>
                   )
-                  const base = `h-8 truncate py-2 text-[11px] font-medium uppercase tracking-wide ${
+                  const base = `max-w-full truncate text-[11px] font-medium uppercase tracking-wide ${
                     active ? 'text-slate-800' : 'text-slate-500'
                   } ${col.align === 'right' ? 'text-right' : 'text-left'}`
-                  return col.sortKey ? (
-                    <button
+                  return (
+                    <div
                       key={col.id}
-                      type="button"
-                      onClick={() => onSort(col.sortKey as string)}
-                      className={`${base} cursor-pointer hover:text-slate-800`}
+                      className={`relative flex h-8 items-center py-2 ${
+                        col.align === 'right' ? 'justify-end' : ''
+                      }`}
                     >
-                      {label}
-                    </button>
-                  ) : (
-                    <span key={col.id} className={base}>
-                      {label}
-                    </span>
+                      {col.sortKey ? (
+                        <button
+                          type="button"
+                          onClick={() => onSort(col.sortKey as string)}
+                          className={`${base} cursor-pointer hover:text-slate-800`}
+                        >
+                          {label}
+                        </button>
+                      ) : (
+                        <span className={base}>{label}</span>
+                      )}
+                      <div
+                        data-testid={`col-resize-${col.id}`}
+                        aria-hidden="true"
+                        title="Drag to resize · double-click to reset"
+                        onPointerDown={(e) => startResize(col.id, e)}
+                        onDoubleClick={() => resetCol(col.id)}
+                        className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none hover:bg-blue-300"
+                      />
+                    </div>
                   )
                 })}
               </div>
@@ -343,6 +408,7 @@ export function TraceTable({
                     width: '100%',
                     height: virtualRow.size,
                     transform: `translateY(${virtualRow.start}px)`,
+                    gridTemplateColumns: gridTemplate,
                   }
                   if (row.kind === 'group') {
                     return (
