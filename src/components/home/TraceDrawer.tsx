@@ -73,8 +73,8 @@ export function TraceDrawer({
   return (
     <aside
       data-testid="trace-drawer"
-      style={{ width, maxWidth: '90vw' }}
-      className="fixed inset-y-0 right-0 z-40 border-l border-slate-200 bg-white shadow-xl"
+      style={{ width, maxWidth: '90vw', background: 'var(--app-bg)' }}
+      className="fixed inset-y-0 right-0 z-40 border-l border-slate-200 shadow-xl"
     >
       <div
         data-testid="drawer-resize"
