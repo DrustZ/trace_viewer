@@ -131,8 +131,14 @@ function ReferenceBlock({
   )
 }
 
+/**
+ * A file-property-style summary: one always-visible line of chips (score, reward,
+ * status) so the conversation stays at the top, with the deeper evaluation
+ * evidence (reward breakdown, reference/golden, judge, warnings) behind a
+ * "details" toggle that scrolls when long. Replaces the old always-open 2-col grid.
+ */
 export function TraceSummaryPanel({ trace }: { trace: Trace }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const [judgeFull, setJudgeFull] = useState(false)
   const { meta, stats } = trace
   const extra = meta.extra ?? {}
@@ -164,20 +170,16 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
     return undefined
   }, [trace.messages])
 
-  // Why the score is missing (or zero) — shown under the badge so a bare "—"
-  // or an unexplained 0 never stands alone. Budget-exhausted rollouts are
-  // graded 0, so that note must not hide behind the null-score branch.
+  // Why the score is missing (or zero) — shown inline so a bare "—" or an
+  // unexplained 0 never stands alone.
   let scoreNote: { text: string; cls: string } | undefined
   if (endReason === 'budget_exceeded' && (stats.score === null || stats.score === 0)) {
-    scoreNote = {
-      text: 'score 0 — budget exhausted before a final answer',
-      cls: 'text-amber-700',
-    }
+    scoreNote = { text: 'score 0 — budget exhausted', cls: 'text-amber-700' }
   } else if (stats.score === null) {
     if (meta.status === 'executing') {
-      scoreNote = { text: 'ungraded — rollout still executing', cls: 'text-blue-600' }
+      scoreNote = { text: 'ungraded — still executing', cls: 'text-blue-600' }
     } else if (meta.status === 'failed' && lastToolError?.includes('Cancelled')) {
-      scoreNote = { text: 'ungraded — run cancelled before grading', cls: 'text-slate-500' }
+      scoreNote = { text: 'ungraded — run cancelled', cls: 'text-slate-500' }
     } else {
       scoreNote = { text: 'ungraded', cls: 'text-slate-500' }
     }
@@ -207,99 +209,72 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
   const refCount = [groundTruth, successCriteria, goldenResponse].filter(
     (v) => v !== undefined,
   ).length
-  // Score always renders; count the conditional sections so sparse (e.g. failed)
-  // traces still get a compact run-info line instead of a near-empty card.
-  const sectionCount =
-    1 +
-    (badges.length > 0 ? 1 : 0) +
-    (refCount > 0 ? 1 : 0) +
-    (judge !== undefined ? 1 : 0) +
-    (warnings.length > 0 ? 1 : 0)
-  const showRunInfo = sectionCount < 2
+  const hasDetails =
+    breakdown !== undefined || refCount > 0 || judge !== undefined || warnings.length > 0
 
   return (
     <section
       data-testid="trace-summary"
       className="rounded-lg border border-slate-200 bg-white shadow-sm"
     >
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        data-testid="trace-summary-toggle"
-        className="flex w-full items-center gap-2 rounded-lg px-4 py-2.5 text-left hover:bg-slate-50"
-      >
-        <span
-          className={`inline-block text-[10px] text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`}
-        >
-          ▸
+      {/* Always-visible one-line metadata bar. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          Summary
         </span>
-        <span className="text-xs font-semibold tracking-wide text-slate-700">TRACE SUMMARY</span>
-        {!open && stats.score !== null && <ScoreBadge score={stats.score} />}
+        <ScoreBadge score={stats.score} />
+        {chips.map((chip) => (
+          <span
+            key={chip}
+            className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600"
+          >
+            {chip}
+          </span>
+        ))}
+        {badges.map((b) => (
+          <span
+            key={b.key}
+            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${b.cls}`}
+          >
+            {b.label}
+          </span>
+        ))}
+        {scoreNote && <span className={`text-[11px] ${scoreNote.cls}`}>{scoreNote.text}</span>}
         <span className="ml-auto shrink-0 text-[10px] text-slate-400">
-          {open ? 'collapse' : 'click to expand'}
+          step {meta.checkpointStep} · {meta.split} · {meta.status}
         </span>
-      </button>
-      {open && (
-        <div className="grid gap-x-8 gap-y-4 border-t border-slate-100 px-4 py-3 sm:grid-cols-2">
-          <Item label="Score">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* upsize the shared badge for the panel's headline number */}
-              <span className="[&>span]:rounded-md [&>span]:px-2 [&>span]:py-0.5 [&>span]:text-lg">
-                <ScoreBadge score={stats.score} />
-              </span>
-              {breakdown && (
-                <span data-testid="reward-breakdown" className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
-                    correctness {String(breakdown.correctness)}
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
-                      breakdown.length_penalty < 0
-                        ? 'bg-red-50 text-red-600'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    length penalty {String(breakdown.length_penalty)}
-                  </span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
-                    final reward {String(breakdown.final_reward)}
-                  </span>
+        {hasDetails && (
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            data-testid="trace-summary-toggle"
+            className="shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-50"
+          >
+            {open ? 'hide details ▾' : 'details ▸'}
+          </button>
+        )}
+      </div>
+      {open && hasDetails && (
+        <div className="max-h-[45vh] space-y-4 overflow-y-auto border-t border-slate-100 px-4 py-3">
+          {breakdown && (
+            <Item label="Reward breakdown">
+              <div data-testid="reward-breakdown" className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
+                  correctness {String(breakdown.correctness)}
                 </span>
-              )}
-              {chips.map((chip) => (
                 <span
-                  key={chip}
-                  className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600"
+                  className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
+                    breakdown.length_penalty < 0
+                      ? 'bg-red-50 text-red-600'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
                 >
-                  {chip}
+                  length penalty {String(breakdown.length_penalty)}
                 </span>
-              ))}
-            </div>
-            {scoreNote && (
-              <p data-testid="score-note" className={`mt-1.5 text-xs ${scoreNote.cls}`}>
-                {scoreNote.text}
-              </p>
-            )}
-          </Item>
-          {showRunInfo && (
-            <Item label="Run">
-              <p data-testid="run-info" className="text-xs text-slate-600">
-                step {meta.checkpointStep} · {meta.split} · {meta.status}
-              </p>
-            </Item>
-          )}
-          {badges.length > 0 && (
-            <Item label="Status">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {badges.map((b) => (
-                  <span
-                    key={b.key}
-                    className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${b.cls}`}
-                  >
-                    {b.label}
-                  </span>
-                ))}
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
+                  final reward {String(breakdown.final_reward)}
+                </span>
               </div>
             </Item>
           )}
@@ -352,60 +327,56 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
             </Item>
           )}
           {judge !== undefined && (
-            <div className="sm:col-span-2">
-              <Item label="Judge">
-                {judgeExtra && (
-                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                    <span
-                      data-testid="judge-verdict"
-                      className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                        judgeExtra.verdict === 1
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {judgeExtra.verdict === 1 ? 'PASS' : 'FAIL'}
-                    </span>
-                    {judgeExtra.model && (
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
-                        {judgeExtra.model}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <blockquote className="rounded-r border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-amber-900">
-                  <MarkdownContent
-                    text={
-                      judge.length > JUDGE_CLAMP && !judgeFull
-                        ? `${judge.slice(0, JUDGE_CLAMP)}…`
-                        : judge
-                    }
-                    className="text-sm"
-                  />
-                </blockquote>
-                {judge.length > JUDGE_CLAMP && (
-                  <button
-                    type="button"
-                    data-testid="judge-expand"
-                    onClick={() => setJudgeFull(!judgeFull)}
-                    className="mt-1 text-xs font-medium text-amber-700 underline hover:text-amber-900"
+            <Item label="Judge">
+              {judgeExtra && (
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                  <span
+                    data-testid="judge-verdict"
+                    className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      judgeExtra.verdict === 1
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}
                   >
-                    {judgeFull ? 'Collapse' : `Show all (${judge.length.toLocaleString()} chars)`}
-                  </button>
-                )}
-              </Item>
-            </div>
+                    {judgeExtra.verdict === 1 ? 'PASS' : 'FAIL'}
+                  </span>
+                  {judgeExtra.model && (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+                      {judgeExtra.model}
+                    </span>
+                  )}
+                </div>
+              )}
+              <blockquote className="rounded-r border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-amber-900">
+                <MarkdownContent
+                  text={
+                    judge.length > JUDGE_CLAMP && !judgeFull
+                      ? `${judge.slice(0, JUDGE_CLAMP)}…`
+                      : judge
+                  }
+                  className="text-sm"
+                />
+              </blockquote>
+              {judge.length > JUDGE_CLAMP && (
+                <button
+                  type="button"
+                  data-testid="judge-expand"
+                  onClick={() => setJudgeFull(!judgeFull)}
+                  className="mt-1 text-xs font-medium text-amber-700 underline hover:text-amber-900"
+                >
+                  {judgeFull ? 'Collapse' : `Show all (${judge.length.toLocaleString()} chars)`}
+                </button>
+              )}
+            </Item>
           )}
           {warnings.length > 0 && (
-            <div className="sm:col-span-2">
-              <Item label="Warnings">
-                <ul className="list-disc rounded border border-amber-200 bg-amber-50 py-2 pr-3 pl-7 text-xs text-amber-800">
-                  {warnings.map((w) => (
-                    <li key={w}>{w}</li>
-                  ))}
-                </ul>
-              </Item>
-            </div>
+            <Item label="Warnings">
+              <ul className="list-disc rounded border border-amber-200 bg-amber-50 py-2 pr-3 pl-7 text-xs text-amber-800">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </Item>
           )}
         </div>
       )}
