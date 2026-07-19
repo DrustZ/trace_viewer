@@ -15,8 +15,9 @@ That framing drives the two-level information architecture:
 
 - **Corpus level** (home): reward-by-checkpoint curves, per-component analytics, an
   instance-grouped trace table — the "where do I look?" instruments.
-- **Trace level**: a chat-first conversation view with step-grouped agent responses, plus
-  Timeline (profiling), Evolution (instance across checkpoints), Playground (replay), Raw.
+- **Trace level**: a chat-first conversation view with step-grouped agent responses (with an
+  in-view Timeline profiling mode and a compact three-pane mode), plus Metadata, Evolution
+  (instance across checkpoints), Playground (replay), and Raw tabs.
 
 Langfuse/LangSmith answer "how is my app doing in production"; this tool answers "why did
 this rollout go wrong". That's why it is local-first and reader-optimized rather than an
@@ -39,7 +40,7 @@ loudly — for an RL debugger, a model emitting broken JSON is signal, not noise
 "turns" or "thinking tokens" mean the same thing regardless of source. Sources may override
 with exact values (e.g., real token counts) — overrides win, estimates fill gaps.
 
-**In-memory store + JSON files; no database.** ~1,200 traces aggregate in milliseconds in
+**In-memory store + JSON files; no database.** ~1,340 traces aggregate in milliseconds in
 memory; disk (plain JSON) is the source of truth, so traces are greppable and shareable as
 files. The store hides behind a narrow interface — at 100k+ traces you swap one file for
 SQLite/DuckDB. Progressive scanning (serve immediately, stream the corpus in batches) covers
@@ -135,7 +136,7 @@ log-scaled duration bars so 30s timeouts don't flatten 200ms tool calls.
   is future work.
 - **Real dataset content** — synthetic but dataset-shaped; no downloads, no licenses, fully
   deterministic.
-- **UI test suite** — view-feeding logic is unit-tested (≈260 tests incl. API integration);
+- **UI test suite** — view-feeding logic is unit-tested (322 tests incl. API integration);
   the UI was verified continuously with a headless Playwright harness (`scripts/ui-debug.ts`)
   and manual review at every iteration. Playwright E2E specs are the natural next step.
 
@@ -143,8 +144,8 @@ log-scaled duration bars so 30s timeouts don't flatten 200ms tool calls.
 
 A structured self-review against an earlier prototype of mine surfaced a prioritized adoption
 list; what fit before the deadline landed (honest partial-comparison semantics on /compare —
-totals vs loaded, '≈' aggregates, B−A delta labeling, matched/one-side-only rows; atomic
-all-or-nothing imports with duplicate/conflict detection). The rest is deliberately deferred
+totals vs loaded, '≈' aggregates, B−A delta labeling, matched/one-side-only rows; ephemeral
+load-and-view import that opens the trace directly). The rest is deliberately deferred
 and documented here as the next hardening pass:
 
 - **First-class run identity** — runId currently lives in `meta.extra` with query-level
@@ -178,11 +179,11 @@ Playwright E2E suite.
 | Conversation clearly by message type | Role/channel color coding, step-grouped responses, uniform full-width cards (left/right chat alignment was tried and reverted — see §2) |
 | Very long traces | Virtualized everything; 3.5 MB / 400-turn stress trace ships in-corpus; minimap navigation; content clamps; lazy raw |
 | Stats about the trace | Per-trace metrics strip, Metadata tab, compact-mode metrics panel (token breakdown, avg neg log-prob); corpus tiles / component table / reward curves |
-| More than one trace format | native + harmony + openai-chat connectors behind an auto-detecting registry |
+| More than one trace format | six connectors (native, openai-chat, openai-responses, anthropic-messages, qwen-generic, harmony) behind an auto-detecting registry; `examples/` fixtures |
 | View the raw trace | Raw tab (lazy, downloadable) + per-message raw JSON view |
 | Format normalization / extensibility | `shared/connectors` interface (never-throws), one central stats definition, `meta.extra` preserves unknown fields; new format = one file + registry entry |
 | Easy to get value | Two commands to a fully populated app; 30-second tour in the README; seeded demo data with failures worth finding |
-| Persistence (UX + architecture) | Disk JSON is the source of truth; imports persist to `data/imported/`; view state in the URL; UI preferences in localStorage |
+| Persistence (UX + architecture) | Disk JSON (`data/runs/<run>/`) is the source of truth; import is ephemeral load-and-view (in-memory); view state in the URL; UI preferences in localStorage |
 | Sharing with a teammate | The URL is the share unit (filters/tab/drawer/message anchors); traces are plain files you can send; import round-trips them |
 | Code patterns | Pure-function core in `shared/` consumed by both server and web; app factory for testability; single DSL codec for URL+API; contract-first schema |
 | Keeping code clean | Strict TS + biome; ~260 unit/integration tests; view-feeding logic out of components; dead-code sweeps |

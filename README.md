@@ -19,7 +19,7 @@ npm run dev        # API on :8787 + web on :5173 (one command, no other setup)
 ```
 
 Open **http://localhost:5173** — the app boots with a committed example corpus
-(~1,200 traces across two simulated training runs) already loaded. No API keys required;
+(~1,340 traces across four simulated training runs) — pick a run to load it. No API keys required;
 see [AI features](#ai-features) for the optional ones.
 
 Production mode (single port):
@@ -57,25 +57,32 @@ BrowseComp) with realistic failure modes: tool timeouts + retries, malformed too
 truncation, budget exhaustion, cancelled runs, wrong answers — plus one 3.5 MB / 400-turn
 stress trace and one deliberately corrupt file (the scanner must survive it).
 
-Three **connectors** parse input formats (auto-detected; adding a format = one file +
+Six **connectors** parse input formats (auto-detected; adding a format = one file +
 one registry entry in `shared/connectors/`):
 
-| Connector | Input | Example |
-|---|---|---|
-| `native` | normalized trace JSON / JSONL | `data/traces/native/**` |
-| `harmony` | raw OpenAI-harmony token text (`<\|start\|>…<\|message\|>…<\|end\|>`) | `data/traces/harmony/*.txt` |
-| `openai-chat` | chat-completions request/response JSON | `data/traces/openai/*.json` |
+| Connector | Input |
+|---|---|
+| `native` | this tool's normalized trace JSON / JSONL |
+| `openai-chat` | OpenAI Chat Completions JSON |
+| `openai-responses` | OpenAI Responses API JSON (`output` items, reasoning, function calls) |
+| `anthropic-messages` | Anthropic Messages API JSON (content blocks, `tool_use`/`tool_result`, extended `thinking`) |
+| `qwen-generic` | Qwen/DeepSeek `reasoning_content`, or a bare `[{role, content}]` list |
+| `harmony` | raw OpenAI-harmony token text (`<\|start\|>…<\|message\|>…<\|end\|>`) |
 
-Load more traces four ways: drop files on the sidebar **Import** zone, paste text /
-upload / fetch a URL via the Import dialog, or drop files into `data/` (the server watches
-and rescans). Imports persist under `data/imported/`.
+`examples/` holds one importable fixture per format (plus richer ones — a ~99-message
+agentic session, heavy Markdown/LaTeX, and full Anthropic/OpenAI metadata) for exercising
+the **Import a trace** dialog.
+
+**Import is load-and-view**: paste text / upload a file / fetch a URL, and the imported
+trace opens directly as its own page. Imports are held in memory only (re-importing just
+refreshes) — for a persistent corpus, drop files into `data/runs/<run>/` and the server
+watches + rescans.
 
 Regenerate the corpus (byte-identical for a given seed):
 
 ```bash
-npm run generate                                                    # run-a, seed 42
-npx tsx generator/generate.ts --seed 43 --run run-b --scale 0.5 \
-  --out data/traces_runb                                            # second run for /compare
+npm run generate:all     # all runs (run-a…run-d) into data/runs/<run>/
+npm run generate         # run-a only (seed 42)
 ```
 
 ## AI features
@@ -99,32 +106,33 @@ cp .env.example .env    # set ANTHROPIC_API_KEY
 |---|---|
 | `npm run dev` | tsx watch API (:8787) + Vite (:5173, `/api` proxied) |
 | `npm run build` / `npm start` | typecheck + build; production single-port serve |
-| `npm run generate` | regenerate the example corpus (seeded, deterministic) |
-| `npm test` / `npm run lint` / `npm run check` | vitest (≈260 tests) / biome / everything |
+| `npm run generate:all` / `npm run generate` | regenerate the corpus (all runs / run-a), seeded + deterministic |
+| `npm test` / `npm run lint` / `npm run check` | vitest (322 tests) / biome / everything |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  subgraph disk [data/]
-    N[native JSON] --- H[harmony .txt] --- O[openai .json] --- I[imported/]
+  subgraph disk [data/runs/&lt;run&gt;/]
+    N[native JSON] --- H[harmony .txt] --- O[openai .json]
   end
-  disk -->|scan + chokidar watch| C[connector registry\ndetect + parse, never throws]
+  disk -->|scan + chokidar watch| C[connector registry\n6 formats · detect + parse · never throws]
   C --> F[finalizeTrace\none stats definition]
   F --> S[(in-memory TraceStore\n+ minisearch index)]
   S --> API[Express REST API]
-  API -->|react-query| UI[React SPA\nsidebar · curves · table · drawer\nconversation · timeline · evolution · playground]
-  UI -->|paste / upload / URL| API
+  API -->|react-query| UI[React SPA\nsidebar · curves · table · drawer\nconversation · timeline · evolution · playground · compare]
+  UI -->|paste / upload / URL import| API
   API --> LLM[claude-sonnet-5\nfilter · chat · analyst · replay]
 ```
 
 ```
 shared/      pure-TS contract: schema, connectors, stats, filter DSL (used by server + web)
 server/      Express API: store, scan/watch, search, import (SSRF-guarded), AI endpoints
-src/         React app: home (sidebar/curves/components/table/drawer), trace views
+src/         React app: home (sidebar/curves/components/table/drawer), trace views, compare
 generator/   deterministic synthetic-corpus CLI (scenarios, failures, logprobs, spans)
-data/        committed example corpus (two runs) + imported/ (runtime)
-scripts/     ui-debug.ts — headless Playwright harness used for development QA
+data/runs/   committed example corpus (run-a…run-d)
+examples/    importable fixtures, one per connector format (+ richer samples)
+scripts/     ui-debug.ts (Playwright QA harness), make-examples.ts (fixture generator)
 ```
 
 Design decisions, trade-offs, failure-mode handling and non-goals are written up in
