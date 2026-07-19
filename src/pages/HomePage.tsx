@@ -1,20 +1,20 @@
-import { useQuery } from '@tanstack/react-query'
-import { apiGet } from '../api/client'
-
-interface Health {
-  ok: boolean
-  version: string
-}
+import { FilterBar } from '../components/home/FilterBar'
+import { Header } from '../components/home/Header'
+import { StatTiles } from '../components/home/StatTiles'
+import { TraceTable } from '../components/home/TraceTable'
+import { useListParams } from '../state/filterParams'
 
 export default function HomePage() {
-  const health = useQuery({ queryKey: ['health'], queryFn: () => apiGet<Health>('/api/health') })
+  const { params, setParam, setParams, clearAll } = useListParams()
 
   return (
-    <div className="mx-auto max-w-7xl p-6">
-      <h1 className="text-xl font-semibold">Trace Viewer</h1>
-      <p className="mt-2 text-sm text-slate-500">
-        API: {health.isLoading ? 'connecting…' : health.data?.ok ? 'connected' : 'unreachable'}
-      </p>
+    <div className="min-h-screen">
+      <Header />
+      <main className="mx-auto flex max-w-[1400px] flex-col gap-4 px-6 py-4">
+        <StatTiles params={params} />
+        <FilterBar params={params} setParam={setParam} clearAll={clearAll} />
+        <TraceTable params={params} setParams={setParams} />
+      </main>
     </div>
   )
 }
