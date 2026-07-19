@@ -252,6 +252,24 @@ in, per-checkpoint view updates), scan-progress indicator, message bodies always
 (or DuckDB) index behind the existing `traceStore` interface for keyword search at scale —
 interface already isolates the swap to one file.
 
+### v1.5 — S2-inspired compact trace mode (adopted from the S2 viewer reference)
+A third reading mode for dense agent traces, toggleable from the conversation view:
+- **Left turn rail**: one compact cell per step/action — intent or tool label
+  ('exploring code files', 'grep', '31 lines'), result line-counts, and inline **warning
+  badges** derived per unit (output-too-long, malformed tool JSON, timeout/retry, truncated).
+  Click a cell → center focuses that unit. This rail doubles as a scannable failure map.
+- **Center**: the selected unit rendered with the existing card renderers
+  (Rendered | Raw | Tokens views apply per piece).
+- **Right metrics panel**: score/instance chips; turns · messages · user msgs · tool calls ·
+  tools ✓/✗ · input/output/reasoning tokens · **avg neg log-prob**; a **token-breakdown
+  stacked bar** (system / user / tool response / reasoning / tool call, color-coded);
+  remaining `meta.extra` metrics as a key list.
+- Data additions: per-trace `avg_neg_logprob` (generator + stats), per-unit derived flags
+  (computed client-side from existing message data — no schema change).
+Deliberately NOT adopted from S2: dark theme (keeping one coherent light theme),
+Proto view (no proto layer here — Raw JSON covers it), external Sisyphus/Delphi links
+(no external systems), trainer-logprob files (no trainer artifacts in this demo).
+
 ### v1.4 — Checkpoint playground / replay
 Select a prompt (or history prefix) + a "checkpoint" and replay it live. Real policy
 checkpoints don't exist in this demo, so replay calls a stand-in model (claude via API, clearly
