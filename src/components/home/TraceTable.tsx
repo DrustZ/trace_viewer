@@ -21,7 +21,8 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   score: 64,
   step: 56,
   split: 56,
-  status: 120,
+  status: 90,
+  trunc: 64,
   turns: 56,
   tools: 56,
   outTok: 72,
@@ -45,6 +46,7 @@ const COLUMNS: Column[] = [
   { id: 'step', label: 'Step', sortKey: 'step', align: 'right' },
   { id: 'split', label: 'Split' },
   { id: 'status', label: 'Status' },
+  { id: 'trunc', label: 'Trunc', sortKey: 'truncated', align: 'right' },
   { id: 'turns', label: 'Turns', sortKey: 'turns', align: 'right' },
   { id: 'tools', label: 'Tools', sortKey: 'toolUses', align: 'right' },
   { id: 'outTok', label: 'Out Tok', sortKey: 'outputTokens', align: 'right' },
@@ -143,8 +145,10 @@ function TraceRow({
       <span className="text-slate-600">{meta.split}</span>
       <span className="flex min-w-0 items-center gap-1 overflow-hidden">
         <StatusPill status={meta.status} />
-        {stats.truncated && <TruncBadge />}
         {stats.hasError && <ErrorDot />}
+      </span>
+      <span className="text-right">
+        {stats.truncated ? <TruncBadge /> : <span className="text-slate-300">—</span>}
       </span>
       <span className={num}>{formatNumber(stats.turns)}</span>
       <span className={num}>{formatNumber(stats.toolUses)}</span>
@@ -245,8 +249,10 @@ function GroupRow({
         ) : (
           <span className="font-normal text-slate-500">mixed</span>
         )}
-        {anyTruncated && <TruncBadge />}
         {anyError && <ErrorDot />}
+      </span>
+      <span className="text-right">
+        {anyTruncated ? <TruncBadge /> : <span className="text-slate-300">—</span>}
       </span>
       <span className={num}>{formatNumber(avgTurns)}</span>
       <span className={num}>{formatNumber(avgTools)}</span>
