@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useImportTrace } from '../../api/hooks'
@@ -56,6 +56,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [url, setUrl] = useState('')
   const importTrace = useImportTrace()
   const [, setSearchParams] = useSearchParams()
+  // Guards the auto-open effect so it fires once per successful import.
+  const openedRef = useRef(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -64,6 +66,26 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // On success, open the imported trace directly: set the peek param (the home
+  // page's TraceDrawer keys off it). A single trace also closes the dialog so
+  // the drawer is unobstructed; multiple keeps the dialog for the count note.
+  useEffect(() => {
+    if (!importTrace.isSuccess || openedRef.current) return
+    const ids = importTrace.data.traceIds
+    const first = ids[0]
+    if (!first) return
+    openedRef.current = true
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('peek', first)
+        return next
+      },
+      { replace: true },
+    )
+    if (ids.length === 1) onClose()
+  }, [importTrace.isSuccess, importTrace.data, onClose, setSearchParams])
 
   const submit = () => {
     if (importTrace.isPending) return
@@ -85,21 +107,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     reader.readAsText(file)
   }
 
-  const viewFirst = () => {
-    const first = importTrace.data?.traceIds[0]
-    if (!first) return
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        next.set('peek', first)
-        return next
-      },
-      { replace: true },
-    )
-    onClose()
-  }
-
   const reset = () => {
+    openedRef.current = false
     importTrace.reset()
     setContent('')
     setFileName('')
@@ -123,12 +132,12 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Import traces"
+        aria-label="Import a trace"
         className="flex w-full max-w-xl flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Import traces</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Import a trace</h2>
           <button
             type="button"
             aria-label="Close import dialog"
@@ -143,16 +152,17 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col gap-2">
             <p className="text-sm text-emerald-700">
               Imported {importTrace.data.traceIds.length} trace
-              {importTrace.data.traceIds.length === 1 ? '' : 's'} ({importTrace.data.format})
+              {importTrace.data.traceIds.length === 1 ? '' : 's'} ({importTrace.data.format}).
+              {importTrace.data.traceIds.length > 1 && ' Opened the first — close to view it.'}
             </p>
             <WarningList warnings={importTrace.data.warnings} />
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={viewFirst}
+                onClick={onClose}
                 className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               >
-                View
+                View first trace
               </button>
               <button
                 type="button"

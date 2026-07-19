@@ -173,7 +173,8 @@ export async function scanFile(
       // Sidecar first (its run counts as "carried"), then the folder-derived run
       // wins for runs-root files so the layout is the source of truth.
       const merged = sidecar ? applySidecar(parsed, sidecar) : parsed
-      const stamped = root !== undefined ? stampRun(merged, resolveRun(root, filePath, merged)) : merged
+      const stamped =
+        root !== undefined ? stampRun(merged, resolveRun(root, filePath, merged)) : merged
       store.upsert(stamped, filePath)
     }
     return { traces: result.traces.length, warnings }

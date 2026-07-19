@@ -41,8 +41,13 @@ function main(): void {
   }
   const mb = (b: number): string => `${(b / (1024 * 1024)).toFixed(1)} MB`
   console.log('\n=== combined ===')
-  for (const r of perRun) console.log(`  ${r.run.padEnd(6)} ${String(r.total).padStart(5)} traces  ${mb(r.bytes).padStart(9)}`)
-  console.log(`  ${'all'.padEnd(6)} ${String(perRun.reduce((a, r) => a + r.total, 0)).padStart(5)} traces  ${mb(totalBytes).padStart(9)} (approx)`)
+  for (const r of perRun)
+    console.log(
+      `  ${r.run.padEnd(6)} ${String(r.total).padStart(5)} traces  ${mb(r.bytes).padStart(9)}`,
+    )
+  console.log(
+    `  ${'all'.padEnd(6)} ${String(perRun.reduce((a, r) => a + r.total, 0)).padStart(5)} traces  ${mb(totalBytes).padStart(9)} (approx)`,
+  )
 }
 
 main()

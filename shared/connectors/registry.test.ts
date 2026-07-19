@@ -1,5 +1,21 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { connectors, detectFormat, parseAny } from './registry'
+
+const EXAMPLES = join(process.cwd(), 'examples')
+const readExample = (name: string) => readFileSync(join(EXAMPLES, name), 'utf8')
+
+/** Each example file → the single connector expected to claim it. */
+const exampleFixtures: Record<string, string> = {
+  'native-sample.json': 'native',
+  'openai-chat-sample.json': 'openai-chat',
+  'openai-responses-sample.json': 'openai-responses',
+  'anthropic-messages-sample.json': 'anthropic-messages',
+  'qwen-messages-sample.json': 'qwen-generic',
+  'simple-role-content.json': 'qwen-generic',
+  'harmony-sample.txt': 'harmony',
+}
 
 const fixtures = {
   native: JSON.stringify({
@@ -14,8 +30,32 @@ const fixtures = {
 }
 
 describe('registry', () => {
-  it('registers native, openai-chat, harmony in order', () => {
-    expect(connectors.map((c) => c.id)).toEqual(['native', 'openai-chat', 'harmony'])
+  it('registers connectors in detect-priority order', () => {
+    expect(connectors.map((c) => c.id)).toEqual([
+      'native',
+      'openai-chat',
+      'openai-responses',
+      'anthropic-messages',
+      'qwen-generic',
+      'harmony',
+    ])
+  })
+
+  it('each example fixture is detected by exactly the intended connector', () => {
+    for (const [file, expected] of Object.entries(exampleFixtures)) {
+      const text = readExample(file)
+      const matches = connectors.filter((c) => c.detect(text)).map((c) => c.id)
+      expect(matches, `${file} should match only ${expected}`).toEqual([expected])
+      expect(detectFormat(text)?.id).toBe(expected)
+    }
+  })
+
+  it('parses every example fixture into at least one trace without throwing', () => {
+    for (const [file, expected] of Object.entries(exampleFixtures)) {
+      const result = parseAny(readExample(file), { sourcePath: `examples/${file}` })
+      expect(result.traces.length, file).toBeGreaterThan(0)
+      expect(result.traces[0].meta.sourceFormat).toBe(expected)
+    }
   })
 
   it('each fixture is detected by exactly one connector', () => {

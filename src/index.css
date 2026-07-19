@@ -89,19 +89,29 @@ body {
   --tw-ring-color: var(--border);
 }
 
+/* Emerald accent borders (assistant/step card ring + reasoning inset). The raw
+ * emerald-100/200/300 are near-white on dark and read as a bright green ring;
+ * mute them so green is a hint. The left accent (border-l-emerald-400) keeps its
+ * brighter emerald as the deliberate "assistant" marker. */
+[data-theme="dark"] .border-emerald-100,
+[data-theme="dark"] .border-emerald-200,
+[data-theme="dark"] .border-emerald-300 {
+  border-color: color-mix(in srgb, #10b981 28%, var(--border));
+}
+
 /* Accent callouts: darken the pastel -50/-100 fills and lighten their text so
  * badges/callouts read light-on-dark instead of dark-on-dark. */
 [data-theme="dark"] .bg-blue-50 {
-  background-color: color-mix(in srgb, #3b82f6 13%, var(--panel));
+  background-color: color-mix(in srgb, #3b82f6 10%, var(--panel));
 }
 [data-theme="dark"] .bg-blue-100 {
   background-color: color-mix(in srgb, #3b82f6 20%, var(--panel));
 }
 [data-theme="dark"] .bg-emerald-50 {
-  background-color: color-mix(in srgb, #10b981 13%, var(--panel));
+  background-color: color-mix(in srgb, #10b981 8%, var(--panel));
 }
 [data-theme="dark"] .bg-emerald-100 {
-  background-color: color-mix(in srgb, #10b981 20%, var(--panel));
+  background-color: color-mix(in srgb, #10b981 15%, var(--panel));
 }
 [data-theme="dark"] .bg-red-50 {
   background-color: color-mix(in srgb, #ef4444 13%, var(--panel));
@@ -116,7 +126,7 @@ body {
   background-color: color-mix(in srgb, #f59e0b 20%, var(--panel));
 }
 [data-theme="dark"] .bg-indigo-50 {
-  background-color: color-mix(in srgb, #6366f1 13%, var(--panel));
+  background-color: color-mix(in srgb, #6366f1 10%, var(--panel));
 }
 [data-theme="dark"] .bg-indigo-100 {
   background-color: color-mix(in srgb, #6366f1 20%, var(--panel));
@@ -128,7 +138,7 @@ body {
   background-color: color-mix(in srgb, #f97316 20%, var(--panel));
 }
 [data-theme="dark"] .bg-violet-50 {
-  background-color: color-mix(in srgb, #8b5cf6 13%, var(--panel));
+  background-color: color-mix(in srgb, #8b5cf6 10%, var(--panel));
 }
 [data-theme="dark"] .bg-violet-100 {
   background-color: color-mix(in srgb, #8b5cf6 20%, var(--panel));
@@ -137,7 +147,7 @@ body {
   background-color: color-mix(in srgb, #f43f5e 20%, var(--panel));
 }
 [data-theme="dark"] .bg-cyan-50 {
-  background-color: color-mix(in srgb, #06b6d4 13%, var(--panel));
+  background-color: color-mix(in srgb, #06b6d4 10%, var(--panel));
 }
 [data-theme="dark"] .bg-cyan-100 {
   background-color: color-mix(in srgb, #06b6d4 20%, var(--panel));
@@ -168,19 +178,19 @@ body {
  * hover:bg-cyan-100/70) also skip the exact-match rules and would stay light —
  * darken them to match their solid counterparts so text stays legible. */
 [data-theme="dark"] [class*="bg-blue-50/"] {
-  background-color: color-mix(in srgb, #3b82f6 13%, var(--panel));
+  background-color: color-mix(in srgb, #3b82f6 10%, var(--panel));
 }
 [data-theme="dark"] [class*="bg-blue-100/"] {
   background-color: color-mix(in srgb, #3b82f6 20%, var(--panel));
 }
 [data-theme="dark"] [class*="bg-emerald-50/"] {
-  background-color: color-mix(in srgb, #10b981 13%, var(--panel));
+  background-color: color-mix(in srgb, #10b981 8%, var(--panel));
 }
 [data-theme="dark"] [class*="bg-emerald-100/"] {
-  background-color: color-mix(in srgb, #10b981 20%, var(--panel));
+  background-color: color-mix(in srgb, #10b981 15%, var(--panel));
 }
 [data-theme="dark"] [class*="bg-indigo-50/"] {
-  background-color: color-mix(in srgb, #6366f1 13%, var(--panel));
+  background-color: color-mix(in srgb, #6366f1 10%, var(--panel));
 }
 [data-theme="dark"] [class*="bg-indigo-100/"] {
   background-color: color-mix(in srgb, #6366f1 20%, var(--panel));
@@ -216,12 +226,21 @@ body {
 [data-theme="dark"] .text-blue-950 {
   color: #93c5fd;
 }
+/* Small emerald accents only (ASSISTANT chip, the "ASSISTANT RESPONSE" fold
+ * label) sit on neutral/near-neutral backdrops — keep them a bright emerald. */
 [data-theme="dark"] .text-emerald-600,
-[data-theme="dark"] .text-emerald-700,
+[data-theme="dark"] .text-emerald-700 {
+  color: #6ee7b7;
+}
+/* Emerald BODY-copy weights (assistant final answer, confidence chips, the big
+ * evolution numbers) must read as normal light ink, never green-on-green. The
+ * `/80` opacity variant is the REASONING fold label — caught via substring so
+ * it stops rendering as dim dark-green on the reasoning panel. */
 [data-theme="dark"] .text-emerald-800,
 [data-theme="dark"] .text-emerald-900,
-[data-theme="dark"] .text-emerald-950 {
-  color: #6ee7b7;
+[data-theme="dark"] .text-emerald-950,
+[data-theme="dark"] [class*="text-emerald-800/"] {
+  color: var(--ink);
 }
 [data-theme="dark"] .text-red-600,
 [data-theme="dark"] .text-red-700,

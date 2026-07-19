@@ -1,0 +1,35 @@
+{
+  "id": "resp_swe_5150",
+  "object": "response",
+  "created_at": 1768743900,
+  "model": "gpt-5.1",
+  "input": "List the failing test in tests/test_math.py and say why it fails.",
+  "output": [
+    {
+      "type": "reasoning",
+      "summary": [{ "type": "summary_text", "text": "Run the test file, then read the traceback." }]
+    },
+    {
+      "type": "function_call",
+      "call_id": "fc_run",
+      "name": "run_tests",
+      "arguments": "{\"path\":\"tests/test_math.py\"}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "fc_run",
+      "output": "1 failed: test_divide - ZeroDivisionError: division by zero"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "`test_divide` fails: `divide(1, 0)` raises ZeroDivisionError because there is no zero guard."
+        }
+      ]
+    }
+  ],
+  "usage": { "input_tokens": 96, "output_tokens": 61, "total_tokens": 157 }
+}

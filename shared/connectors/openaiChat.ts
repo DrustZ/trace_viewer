@@ -218,11 +218,25 @@ export const openaiChatConnector: Connector = {
     }
     if (!isRecord(value)) return false
     if (isRecord(value.meta) && value.meta.traceId) return false
-    const messagesOk =
-      Array.isArray(value.messages) &&
-      value.messages.length > 0 &&
-      value.messages.every((m) => isRecord(m) && typeof m.role === 'string')
-    return messagesOk || Array.isArray(value.choices)
+    // `choices` is an unambiguous chat.completion response.
+    if (Array.isArray(value.choices)) return true
+    // Decline Anthropic-shaped payloads so they route to anthropic-messages:
+    // a top-level `system` string, or tool_use/tool_result content blocks.
+    if (typeof value.system === 'string') return false
+    if (
+      !Array.isArray(value.messages) ||
+      value.messages.length === 0 ||
+      !value.messages.every((m) => isRecord(m) && typeof m.role === 'string')
+    ) {
+      return false
+    }
+    const hasAnthropicBlocks = value.messages.some(
+      (m) =>
+        isRecord(m) &&
+        Array.isArray(m.content) &&
+        m.content.some((b) => isRecord(b) && (b.type === 'tool_use' || b.type === 'tool_result')),
+    )
+    return !hasAnthropicBlocks
   },
 
   parse(text: string, ctx: ParseContext): ParseResult {
