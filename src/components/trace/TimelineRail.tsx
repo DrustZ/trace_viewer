@@ -7,7 +7,7 @@ type BarKind = 'user' | 'neutral' | 'toolCall' | 'toolResult' | 'toolError' | 'f
 // Mirrors the card colors for continuity: a step's bar takes the color of its
 // response (indigo when it calls tools, emerald for a final answer).
 function barKind(unit: RenderUnit): BarKind {
-  if (unit.kind === 'step') return stepHasToolCalls(unit) ? 'toolCall' : 'final'
+  if (unit.kind === 'step') return 'final' // assistant steps read green, like the cards
   const m = unit.message
   if (m.role === 'tool') return m.toolResult?.isError ? 'toolError' : 'toolResult'
   if (m.role === 'user') return 'user'
@@ -16,21 +16,21 @@ function barKind(unit: RenderUnit): BarKind {
 
 const BAR: Record<BarKind, string> = {
   user: 'bg-blue-400',
-  neutral: 'bg-slate-300',
-  toolCall: 'bg-indigo-500',
-  toolResult: 'bg-cyan-400',
+  neutral: 'bg-slate-200',
+  toolCall: 'bg-emerald-400',
+  toolResult: 'bg-sky-300',
   toolError: 'bg-red-400',
-  final: 'bg-emerald-500',
+  final: 'bg-emerald-400',
 }
 
 /** Label ink per segment color: white on the saturated fills, slate on the light ones. */
 const LABEL_INK: Record<BarKind, string> = {
-  user: 'text-slate-700',
-  neutral: 'text-slate-600',
-  toolCall: 'text-white/90',
-  toolResult: 'text-slate-700',
+  user: 'text-blue-950/70',
+  neutral: 'text-slate-500',
+  toolCall: 'text-emerald-950/70',
+  toolResult: 'text-sky-950/70',
   toolError: 'text-white/90',
-  final: 'text-white/90',
+  final: 'text-emerald-950/70',
 }
 
 function kindLabel(unit: RenderUnit): string {
@@ -41,7 +41,7 @@ function kindLabel(unit: RenderUnit): string {
 const SAMPLE_CAP = 400
 const GAP = 1
 const MIN_SEG = 3
-const LABEL_MIN_SEG = 12
+const LABEL_MIN_SEG = 14
 
 function sampleIndices(count: number, cap: number): number[] {
   if (count <= cap) return Array.from({ length: count }, (_, i) => i)
@@ -196,7 +196,7 @@ export function Minimap({
   return (
     <div
       data-testid="timeline-minimap"
-      className="absolute top-2 right-1 bottom-2 z-10 flex w-9 flex-col"
+      className="absolute top-2 right-1 bottom-2 z-10 flex w-6 flex-col"
     >
       <div
         className="shrink-0 pb-1 text-center font-mono text-[8px] leading-none text-slate-500"
@@ -204,7 +204,7 @@ export function Minimap({
       >
         {formatDuration(totalDurationMs)}
       </div>
-      <div className="min-h-0 flex-1 rounded-md border border-slate-200 bg-slate-100/60 p-1">
+      <div className="min-h-0 flex-1 rounded-lg border border-slate-200/80 bg-slate-50 p-0.5">
         <div ref={trackRef} className="relative h-full">
           {sampled.map((index, i) => {
             const unit = units[index]
@@ -223,11 +223,11 @@ export function Minimap({
                 style={{ top: segTops[i], height: h }}
               >
                 <span
-                  className={`block h-full w-full rounded-[1px] opacity-80 hover:opacity-100 ${BAR[kind]}`}
+                  className={`block h-full w-full rounded-[3px] opacity-75 transition-opacity duration-100 hover:opacity-100 ${BAR[kind]}`}
                 />
                 {showLabel && (
                   <span
-                    className={`pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[8px] leading-none ${LABEL_INK[kind]}`}
+                    className={`pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[7px] leading-none ${LABEL_INK[kind]}`}
                   >
                     {formatDuration(d)}
                   </span>
@@ -241,7 +241,7 @@ export function Minimap({
             onPointerMove={onWindowPointerMove}
             onPointerUp={onWindowPointerEnd}
             onPointerCancel={onWindowPointerEnd}
-            className={`absolute inset-x-0 touch-none rounded border border-slate-500/50 bg-slate-500/25 ${
+            className={`absolute inset-x-0 touch-none rounded-md border border-slate-400/60 bg-white/40 shadow-sm backdrop-blur-[1px] ${
               dragY !== null ? 'cursor-grabbing' : 'cursor-grab'
             }`}
             style={{ top: windowTop, height: windowHeight }}
