@@ -11,16 +11,23 @@ moves — you open this, find the rollout, and read exactly what the model did a
 
 ## Quick start
 
-Requires **Node ≥ 20**.
+Requires **Node ≥ 20**. One command:
+
+```bash
+./setup.sh          # installs deps, generates the example corpus, starts the app
+```
+
+Or manually:
 
 ```bash
 npm install
-npm run dev        # API on :8787 + web on :5173 (one command, no other setup)
+npm run generate:all   # creates the example corpus (deterministic; ~1,340 traces / 4 runs)
+npm run dev            # API on :8787 + web on :5173
 ```
 
-Open **http://localhost:5173** — the app boots with a committed example corpus
-(~1,340 traces across four simulated training runs) — pick a run to load it. No API keys required;
-see [AI features](#ai-features) for the optional ones.
+Open **http://localhost:5173** and pick a run from the sidebar to load it. No API keys required;
+see [AI features](#ai-features) for the optional ones. (The generator is shipped, not the
+~30 MB corpus — `generate:all` creates it locally in one step.)
 
 Production mode (single port):
 

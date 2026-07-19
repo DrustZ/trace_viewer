@@ -6,16 +6,25 @@ A local web app — no account, no database, no cloud. Two commands and you're i
 
 - **Node.js ≥ 20** (check with `node -v`)
 
-## Run
+## Run — one click
+
+```bash
+./setup.sh
+```
+
+Installs dependencies, generates the example corpus, and starts the app. Then open
+**http://localhost:5173**.
+
+### Or run it manually
 
 ```bash
 npm install
-npm run dev
+npm run generate:all   # creates the bundled example corpus (deterministic)
+npm run dev            # API on :8787 + web UI on :5173
 ```
 
-Then open **http://localhost:5173**.
-
-That's it. One command starts both the API (port 8787) and the web UI (port 5173).
+Then open **http://localhost:5173**. (`generate:all` is only needed once — the source package
+ships the generator, not the ~30 MB corpus, so you create it locally in one step.)
 
 ## What you'll see
 
