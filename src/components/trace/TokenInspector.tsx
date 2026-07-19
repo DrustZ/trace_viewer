@@ -221,6 +221,15 @@ function TokenDetail({
         <DetailField label="Logprob" value={synthetic ? '—' : token.logprob.toFixed(4)} />
         <DetailField label="Raw token" value={JSON.stringify(token.token)} mono />
       </div>
+      {showTopk && (token.topk === undefined || token.topk.length === 0) && (
+        <div
+          className="mt-2 border-t border-slate-200 pt-1.5 text-[10px] text-slate-400"
+          data-testid="token-detail-topk-empty"
+        >
+          No top-k alternatives recorded for this token — inference only logs them for
+          lower-confidence tokens. Pick a token with a ⋯ marker.
+        </div>
+      )}
       {showTopk && token.topk !== undefined && token.topk.length > 0 && (
         <div className="mt-2 border-t border-slate-200 pt-1.5" data-testid="token-detail-topk">
           <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
@@ -326,12 +335,20 @@ export function TokenInspector({ message, className }: { message: Message; class
               {(Math.exp(t.logprob) * 100).toFixed(0)}%
             </span>
           )}
+          {showTopk && t.topk !== undefined && t.topk.length > 0 && (
+            <span
+              className="-mt-0.5 ml-0.5 text-[8px] text-violet-500"
+              title="has top-k alternatives"
+            >
+              ⋯
+            </span>
+          )}
         </button>,
       )
       offset += t.token.length + 1
     })
     return { spans: out, overflow: tokens.length - shown.length }
-  }, [tokens, isSynthetic, selected, showIndex, showProbs, showWs, onChipClick])
+  }, [tokens, isSynthetic, selected, showIndex, showProbs, showWs, showTopk, onChipClick])
 
   const active = selected === null ? undefined : tokens[selected]
 
