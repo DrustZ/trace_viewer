@@ -334,6 +334,7 @@ export function ConversationView({ trace }: { trace: Trace }) {
                 totalSize={virtualizer.getTotalSize()}
                 scrollMargin={virtualizer.options.scrollMargin}
                 onJump={(index) => virtualizer.scrollToIndex(index, { align: 'start' })}
+                onScrollTo={(offset) => parentRef.current?.scrollTo({ top: offset })}
               />
             )}
           </>

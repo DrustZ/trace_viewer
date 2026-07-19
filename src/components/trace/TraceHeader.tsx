@@ -85,6 +85,7 @@ export function TraceHeader({
 
   const expandTo = useMemo(() => {
     const p = new URLSearchParams(listSearch)
+    p.delete('peek') // drawer-only param — stale on the full trace page
     p.set('tab', activeTab)
     return { pathname: `/trace/${encodeURIComponent(meta.traceId)}`, search: `?${p.toString()}` }
   }, [listSearch, activeTab, meta.traceId])
