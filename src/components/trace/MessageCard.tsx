@@ -14,6 +14,16 @@ import { ToolResultBlock } from './ToolResultBlock'
 /** Content above this length is clamped behind the fold control. */
 const CLAMP = 2500
 
+/** toolCallId → tool name, built from the assistant messages' toolCalls of a whole trace. */
+export function buildCallNameMap(messages: readonly Message[]): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const m of messages) {
+    if (m.toolCalls === undefined) continue
+    for (const c of m.toolCalls) map.set(c.id, c.name)
+  }
+  return map
+}
+
 /** Message id 'm-<idx>' (assigned by finalizeTrace) → 1-based '#<n>'; unknown ids omit it. */
 export function messageNumber(id: string): number | undefined {
   const match = /^m-(\d+)$/.exec(id)
@@ -71,9 +81,9 @@ export const FOLD_TONES = {
     hover: 'hover:bg-amber-100/70',
   },
   analysis: {
-    label: 'text-violet-700',
-    chevron: 'text-violet-400',
-    hover: 'hover:bg-violet-100/70',
+    label: 'text-emerald-800/80',
+    chevron: 'text-emerald-500',
+    hover: 'hover:bg-emerald-100/60',
   },
   user: { label: 'text-blue-700', chevron: 'text-blue-400', hover: 'hover:bg-blue-100/70' },
   final: { label: 'text-emerald-700', chevron: 'text-emerald-400', hover: 'hover:bg-emerald-50' },
@@ -192,12 +202,14 @@ function Body({
   number,
   expanded,
   onToggle,
+  toolName,
 }: {
   message: Message
   kind: Kind
   number: number | undefined
   expanded: boolean
   onToggle: () => void
+  toolName?: string
 }) {
   const [tab, setTab] = useMessageViewTab(message.id)
   const card = `rounded-lg border border-l-4 px-2 py-1.5 ${CARD[kind]}`
@@ -218,7 +230,7 @@ function Body({
             className="rounded-lg border border-slate-200 bg-white px-2 py-1.5"
           />
         ) : (
-          <ToolResultBlock message={message} />
+          <ToolResultBlock message={message} toolName={toolName} />
         )}
       </div>
     )
@@ -284,10 +296,17 @@ export function MessageCard({
   message,
   bodyExpanded,
   onToggleBody,
+  toolName,
 }: {
   message: Message
   bodyExpanded: boolean
   onToggleBody: () => void
+  /**
+   * Tool name for the tool-result chip. MessageCard only sees its own message,
+   * so the owner of the message list resolves it (see buildCallNameMap); when
+   * absent the chip shows just the call id.
+   */
+  toolName?: string
 }) {
   const kind = kindOf(message)
   return (
@@ -298,6 +317,7 @@ export function MessageCard({
         number={messageNumber(message.id)}
         expanded={bodyExpanded}
         onToggle={onToggleBody}
+        toolName={toolName}
       />
       {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
       <MessageMeta message={message} />

@@ -15,6 +15,19 @@ import { type StepUnit, stepScore, unitDurationMs } from './unitize'
 const SUMMARY_ARGS_CHARS = 90
 const SUMMARY_TEXT_CHARS = 140
 
+/**
+ * toolCallId → result.isError across a whole trace. Tool results are standalone
+ * units (never inside a StepUnit), so the message-list owner builds this and
+ * passes it down for the error dot on ToolCallBlock.
+ */
+export function buildResultErrorMap(messages: readonly Message[]): Map<string, boolean> {
+  const map = new Map<string, boolean>()
+  for (const m of messages) {
+    if (m.toolResult !== undefined) map.set(m.toolResult.toolCallId, m.toolResult.isError)
+  }
+  return map
+}
+
 function firstToolCall(unit: StepUnit): ToolCall | undefined {
   for (const m of unit.responses) {
     if (m.toolCalls && m.toolCalls.length > 0) return m.toolCalls[0]
@@ -23,7 +36,13 @@ function firstToolCall(unit: StepUnit): ToolCall | undefined {
 }
 
 /** One response piece: a commentary message's tool call(s) or the final text. */
-function ResponsePiece({ message }: { message: Message }) {
+function ResponsePiece({
+  message,
+  resultErrorByCallId,
+}: {
+  message: Message
+  resultErrorByCallId?: ReadonlyMap<string, boolean>
+}) {
   const [tab, setTab] = useMessageViewTab(message.id)
   const isToolCall = message.toolCalls !== undefined && message.toolCalls.length > 0
   return (
@@ -47,7 +66,11 @@ function ResponsePiece({ message }: { message: Message }) {
             <RichTextBlock text={message.content} label="COMMENTARY" tone={FOLD_TONES.toolCall} />
           )}
           {message.toolCalls?.map((call) => (
-            <ToolCallBlock key={call.id} call={call} />
+            <ToolCallBlock
+              key={call.id}
+              call={call}
+              resultIsError={resultErrorByCallId?.get(call.id)}
+            />
           ))}
         </div>
       ) : (
@@ -127,12 +150,15 @@ export function StepCard({
   onToggle,
   reasoningOpen,
   onToggleReasoning,
+  resultErrorByCallId,
 }: {
   unit: StepUnit
   expanded: boolean
   onToggle: () => void
   reasoningOpen: boolean
   onToggleReasoning: () => void
+  /** From buildResultErrorMap(trace.messages); omitted ⇒ no error dots on calls. */
+  resultErrorByCallId?: ReadonlyMap<string, boolean>
 }) {
   const first = unit.messages[0]
   const number = first ? messageNumber(first.id) : undefined
@@ -194,7 +220,7 @@ export function StepCard({
           <div className="space-y-2 border-t border-emerald-100 px-2.5 pt-2 pb-2">
             {unit.analysis.length > 0 && (
               <div
-                className="rounded-lg border border-l-4 border-violet-200 border-l-violet-400 bg-violet-50 px-2 py-1.5"
+                className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-2 py-1.5"
                 data-testid="step-reasoning"
               >
                 <FoldSection
@@ -218,7 +244,7 @@ export function StepCard({
               (m) => m.judgeOutput && <JudgeCallout key={m.id} text={m.judgeOutput} />,
             )}
             {unit.responses.map((m) => (
-              <ResponsePiece key={m.id} message={m} />
+              <ResponsePiece key={m.id} message={m} resultErrorByCallId={resultErrorByCallId} />
             ))}
           </div>
         ) : (

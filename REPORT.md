@@ -52,10 +52,11 @@ API. Sharing a debugging state = copying the address bar. This also made deep-li
 AI-analysis findings trivial. Trade-off: a slightly busy query string.
 
 **Step-grouped conversation.** An agent "response" is one unit: reasoning (collapsed by
-default, expandable in place), then tool calls or the final answer; tool results and user
-input stay left-aligned, model responses right-aligned. Expand-all deliberately does *not*
-open reasoning (it's the noisiest content); collapse-all closes everything. This came directly
-from dogfooding: flat message lists made 40-turn agent traces unreadable.
+default, expandable in place), then tool calls or the final answer. Uniform full-width,
+left-aligned cards with color-coded borders and kind chips carry the who-said-what signal —
+we tried chat-style left/right alignment and reverted it after dogfooding (eyes ping-pong).
+Expand-all deliberately does *not* open reasoning (it's the noisiest content); collapse-all
+closes everything. Flat message lists made 40-turn agent traces unreadable; grouping fixed it.
 
 **Two timeline granularities.** A vertical minimap beside the conversation (color = message
 kind, width/saturation = duration, with a visible-window indicator; click to jump) answers
@@ -138,9 +139,14 @@ log-scaled duration bars so 30s timeouts don't flatten 200ms tool calls.
   the UI was verified continuously with a headless Playwright harness (`scripts/ui-debug.ts`)
   and manual review at every iteration. Playwright E2E specs are the natural next step.
 
-## 6. If I had more time
+## 6. Known gaps & if I had more time
 
-Streaming responses for chat/analysis; a Python-sandbox tool for the analysis agent;
+Two navigation affordances were consciously deferred at the deadline (both small,
+both noted from self-review): click-through from a tool call to its result card and back,
+and a "go to message" jump from a Timeline span into the conversation view (the span detail
+panel shows the message id today).
+
+Also: streaming responses for chat/analysis; a Python-sandbox tool for the analysis agent;
 an OTel GenAI / Langfuse export connector (the registry makes this one file); SQLite index
 behind the store for 100k+ corpora; richer cross-run diffing (per-instance output diffs,
 regression detection between checkpoints); redaction toggles for sensitive payloads;
