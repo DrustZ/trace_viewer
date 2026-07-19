@@ -25,8 +25,8 @@
   --surface: #201d17;
   --surface-2: #2a261e;
   --ink: #f5f3ee;
-  --ink-2: #d6d1c7;
-  --muted: #a29b8e;
+  --ink-2: #e6e1d6; /* brighter secondary text for readable dark contrast */
+  --muted: #b8b1a4; /* brighter muted text so labels/previews clear contrast */
   --border: #3a352c;
 }
 
@@ -136,6 +136,79 @@ body {
 [data-theme="dark"] .bg-rose-100 {
   background-color: color-mix(in srgb, #f43f5e 20%, var(--panel));
 }
+[data-theme="dark"] .bg-cyan-50 {
+  background-color: color-mix(in srgb, #06b6d4 13%, var(--panel));
+}
+[data-theme="dark"] .bg-cyan-100 {
+  background-color: color-mix(in srgb, #06b6d4 20%, var(--panel));
+}
+[data-theme="dark"] .bg-sky-50 {
+  background-color: color-mix(in srgb, #0ea5e9 13%, var(--panel));
+}
+[data-theme="dark"] .bg-sky-100 {
+  background-color: color-mix(in srgb, #0ea5e9 20%, var(--panel));
+}
+[data-theme="dark"] .bg-yellow-100 {
+  background-color: color-mix(in srgb, #eab308 20%, var(--panel));
+}
+
+/* Opacity-suffixed light surfaces (bg-white/70 chips, bg-slate-50/60 insets,
+ * bg-slate-100/60 minimap track) are separate utility classes the exact-match
+ * rules above don't catch — remap them to dark surfaces so they don't paint a
+ * light veil. Attribute-substring match keeps the base non-opacity rules intact. */
+[data-theme="dark"] [class*="bg-white/"] {
+  background-color: color-mix(in srgb, #ffffff 9%, transparent);
+}
+[data-theme="dark"] [class*="bg-slate-50/"],
+[data-theme="dark"] [class*="bg-slate-100/"] {
+  background-color: var(--surface);
+}
+
+/* Colored opacity-suffixed callout fills (e.g. bg-emerald-50/70 reasoning inset,
+ * hover:bg-cyan-100/70) also skip the exact-match rules and would stay light —
+ * darken them to match their solid counterparts so text stays legible. */
+[data-theme="dark"] [class*="bg-blue-50/"] {
+  background-color: color-mix(in srgb, #3b82f6 13%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-blue-100/"] {
+  background-color: color-mix(in srgb, #3b82f6 20%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-emerald-50/"] {
+  background-color: color-mix(in srgb, #10b981 13%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-emerald-100/"] {
+  background-color: color-mix(in srgb, #10b981 20%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-indigo-50/"] {
+  background-color: color-mix(in srgb, #6366f1 13%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-indigo-100/"] {
+  background-color: color-mix(in srgb, #6366f1 20%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-amber-50/"] {
+  background-color: color-mix(in srgb, #f59e0b 13%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-amber-100/"] {
+  background-color: color-mix(in srgb, #f59e0b 20%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-cyan-100/"] {
+  background-color: color-mix(in srgb, #06b6d4 20%, var(--panel));
+}
+[data-theme="dark"] [class*="bg-red-100/"] {
+  background-color: color-mix(in srgb, #ef4444 20%, var(--panel));
+}
+
+/* Hover-state light fills (hover:bg-slate-50 on table rows/buttons,
+ * hover:bg-slate-100 on headers/folds) are separate utility classes the base
+ * remaps don't reach — without this they flash near-white on hover in dark. */
+[data-theme="dark"] [class*="hover:bg-slate-50"]:hover,
+[data-theme="dark"] [class*="hover:bg-slate-100"]:hover {
+  background-color: var(--surface-2);
+}
+[data-theme="dark"] [class*="hover:bg-blue-100"]:hover,
+[data-theme="dark"] [class*="hover:bg-indigo-100"]:hover {
+  background-color: color-mix(in srgb, #6366f1 22%, var(--panel));
+}
 
 [data-theme="dark"] .text-blue-600,
 [data-theme="dark"] .text-blue-700,
@@ -178,4 +251,22 @@ body {
 }
 [data-theme="dark"] .text-rose-900 {
   color: #fda4af;
+}
+[data-theme="dark"] .text-cyan-500,
+[data-theme="dark"] .text-cyan-600,
+[data-theme="dark"] .text-cyan-700 {
+  color: #67e8f9;
+}
+[data-theme="dark"] .text-sky-700 {
+  color: #7dd3fc;
+}
+[data-theme="dark"] .text-slate-300 {
+  color: var(--muted);
+}
+
+/* Clamp-fade gradients (CollapsibleText / FoldSection previews) use
+ * `from-white to-transparent`; in dark that paints a light veil over the text.
+ * Fade to the panel color instead so the preview trails off into the card. */
+[data-theme="dark"] .from-white {
+  background-image: linear-gradient(to top, var(--panel), transparent);
 }
