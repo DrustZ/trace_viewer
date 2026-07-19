@@ -177,21 +177,43 @@ export function MessageMeta({
   )
 }
 
+/** Role chip + message number, rendered on the card's header line (no left gutter). */
+function CardHeader({ kind, number }: { kind: Kind; number: number | undefined }) {
+  const chip = CHIP[kind]
+  return (
+    <div className="flex items-center gap-2 px-1.5 pt-0.5 pb-1">
+      <span
+        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${chip.cls}`}
+      >
+        {chip.label}
+      </span>
+      {number !== undefined && (
+        <span className="font-mono text-[10px] text-slate-400" data-testid="message-number">
+          #{number}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function Body({
   message,
   kind,
+  number,
   expanded,
   onToggle,
   logprobMode,
 }: {
   message: Message
   kind: Kind
+  number: number | undefined
   expanded: boolean
   onToggle: () => void
   logprobMode: LogprobMode
 }) {
   const [view, setView] = useViewMode(message.id)
   const card = `rounded-lg border border-l-4 px-2 py-1.5 ${CARD[kind]}`
+  const header = <CardHeader kind={kind} number={number} />
 
   // Per the logprob contract: an active token view replaces rich/plain text rendering.
   const tokenMode = logprobMode === 'off' ? undefined : logprobMode
@@ -205,12 +227,21 @@ function Body({
         : [],
     [tokenMode, real, kind, message.content],
   )
-  if (kind === 'toolResult' || kind === 'toolError') return <ToolResultBlock message={message} />
+  // ToolResultBlock draws its own card, so its header line sits just above it.
+  if (kind === 'toolResult' || kind === 'toolError') {
+    return (
+      <div>
+        {header}
+        <ToolResultBlock message={message} />
+      </div>
+    )
+  }
 
   const tokens = real ?? (synthetic.length > 0 ? synthetic : null)
   if (tokenMode && tokens) {
     return (
       <div className={card}>
+        {header}
         <TokenLogprobText tokens={tokens} mode={tokenMode} className="px-1.5 py-0.5" />
       </div>
     )
@@ -221,6 +252,7 @@ function Body({
     case 'developer':
       return (
         <div className={card}>
+          {header}
           {expanded && (
             <div className="-mb-1 flex justify-end px-1.5 pt-0.5">
               <RichRawToggle mode={view} onChange={setView} />
@@ -240,6 +272,7 @@ function Body({
     case 'user':
       return (
         <div className={card}>
+          {header}
           <RichTextBlock
             id={message.id}
             text={message.content}
@@ -251,6 +284,7 @@ function Body({
     default:
       return (
         <div className={card}>
+          {header}
           <RichTextBlock
             id={message.id}
             text={message.content}
@@ -275,33 +309,18 @@ export function MessageCard({
   logprobMode?: LogprobMode
 }) {
   const kind = kindOf(message)
-  const chip = CHIP[kind]
-  const number = messageNumber(message.id)
   return (
-    <div className="flex gap-3 py-1.5" data-testid="message-card" data-kind={kind}>
-      <div className="flex w-24 shrink-0 flex-col items-end gap-1 pt-1.5">
-        <span
-          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${chip.cls}`}
-        >
-          {chip.label}
-        </span>
-        {number !== undefined && (
-          <span className="font-mono text-[10px] text-slate-400" data-testid="message-number">
-            #{number}
-          </span>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <Body
-          message={message}
-          kind={kind}
-          expanded={bodyExpanded}
-          onToggle={onToggleBody}
-          logprobMode={logprobMode}
-        />
-        {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
-        <MessageMeta message={message} logprobMode={logprobMode} />
-      </div>
+    <div className="py-1.5" data-testid="message-card" data-kind={kind}>
+      <Body
+        message={message}
+        kind={kind}
+        number={messageNumber(message.id)}
+        expanded={bodyExpanded}
+        onToggle={onToggleBody}
+        logprobMode={logprobMode}
+      />
+      {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
+      <MessageMeta message={message} logprobMode={logprobMode} />
     </div>
   )
 }

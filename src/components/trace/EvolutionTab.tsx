@@ -15,6 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { ApiError } from '../../api/client'
 import { useEvolution, useSiblings } from '../../api/hooks'
 import { EmptyState, ErrorState, LoadingState } from '../common/EmptyState'
 import { formatDuration, formatNumber, formatPercent, formatScore } from '../common/format'
@@ -283,12 +284,25 @@ export function EvolutionTab({
     )
   }
   if (evolution.isError || !evolution.data) {
+    // 404 = the instance is unknown to the evolution index (typical for imports).
+    const notFound = evolution.error instanceof ApiError && evolution.error.status === 404
     return (
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <ErrorState message={`No evolution data for instance '${instanceId}'.`} />
+      <div className="mx-auto max-w-5xl px-4 py-6" data-testid="evolution-empty">
+        {notFound ? (
+          <EmptyState
+            title="No evolution data"
+            hint={`This trace's instance (${instanceId}) has no other rollouts (imported traces are single-rollout).`}
+          />
+        ) : (
+          <ErrorState message={`Could not load evolution data for instance '${instanceId}'.`} />
+        )}
       </div>
     )
   }
+
+  // A lone imported/one-off rollout has nothing to plot — keep the tiles and the
+  // rollout list, but swap the chart for a short note instead of a one-dot plot.
+  const singlePoint = rows.length === 1 && totalRollouts === 1
 
   return (
     <div data-testid="evolution-tab" className="mx-auto max-w-5xl space-y-4 px-4 py-6">
@@ -335,36 +349,44 @@ export function EvolutionTab({
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <h2 className="text-sm font-medium text-slate-700">Avg score by checkpoint</h2>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className="inline-block h-0.5 w-3 rounded-full"
-                  style={{ backgroundColor: SERIES_COLOR }}
-                />
-                Avg reward
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className="inline-block h-2 w-3 rounded-[2px]"
-                  style={{ backgroundColor: SERIES_COLOR, opacity: 0.2 }}
-                />
-                Min/max range
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className="inline-block h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: DOT_COLOR, opacity: 0.55 }}
-                />
-                Individual rollouts
-              </span>
-            </div>
+            {!singlePoint && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-0.5 w-3 rounded-full"
+                    style={{ backgroundColor: SERIES_COLOR }}
+                  />
+                  Avg reward
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-2 w-3 rounded-[2px]"
+                    style={{ backgroundColor: SERIES_COLOR, opacity: 0.2 }}
+                  />
+                  Min/max range
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: DOT_COLOR, opacity: 0.55 }}
+                  />
+                  Individual rollouts
+                </span>
+              </div>
+            )}
           </div>
-          <span className="text-xs text-slate-400">click a point to inspect its rollouts</span>
+          {!singlePoint && (
+            <span className="text-xs text-slate-400">click a point to inspect its rollouts</span>
+          )}
         </div>
         {rows.length === 0 ? (
           <div className="flex h-[220px] items-center justify-center text-xs text-slate-400">
             No checkpoints recorded for this instance
           </div>
+        ) : singlePoint ? (
+          <p data-testid="evolution-chart-note" className="text-xs text-slate-500">
+            Only one checkpoint — nothing to plot yet
+          </p>
         ) : (
           <div
             data-testid="evolution-chart"

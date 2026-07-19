@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ConversationToolbar, type LogprobMode } from './ConversationToolbar'
 import { MessageCard } from './MessageCard'
 import { StepCard } from './StepCard'
-import { TimelineRailCell, TimelineRailHeader } from './TimelineRail'
+import { Minimap } from './TimelineRail'
 import { TraceSummaryPanel } from './TraceSummaryPanel'
 import { buildUnits, unitDurationMs } from './unitize'
 
@@ -33,15 +33,15 @@ function readLogprobMode(): LogprobMode {
 export function ConversationView({ trace }: { trace: Trace }) {
   const parentRef = useRef<HTMLDivElement>(null)
   const headRef = useRef<HTMLDivElement>(null)
-  const railHeadRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   // All expand state lives here, keyed by unit id (= first message id) — never
   // inside recycled rows.
-  // - foldOpen: system/developer body folds on standalone cards (default collapsed)
-  // - step cards: `stepOverrides.get(id) ?? stepDefault` — Expand/Collapse all
-  //   just resets the overrides and flips the default
+  // - system/developer body folds: `foldOpen.get(id) ?? foldDefault`
+  // - step cards: `stepOverrides.get(id) ?? stepDefault`
+  //   Expand/Collapse all just resets the overrides and flips the defaults.
   // - reasoningOpen: nested reasoning widgets (default collapsed, always)
   const [foldOpen, setFoldOpen] = useState<Map<string, boolean>>(new Map())
+  const [foldDefault, setFoldDefault] = useState(false)
   const [stepOverrides, setStepOverrides] = useState<Map<string, boolean>>(new Map())
   const [stepDefault, setStepDefault] = useState(true)
   const [reasoningOpen, setReasoningOpen] = useState<Map<string, boolean>>(new Map())
@@ -106,13 +106,16 @@ export function ConversationView({ trace }: { trace: Trace }) {
     return seen ? sum : undefined
   }, [trace.stats.durationMs, messages])
 
-  const toggleFold = useCallback((id: string) => {
-    setFoldOpen((prev) => {
-      const next = new Map(prev)
-      next.set(id, !prev.get(id))
-      return next
-    })
-  }, [])
+  const toggleFold = useCallback(
+    (id: string) => {
+      setFoldOpen((prev) => {
+        const next = new Map(prev)
+        next.set(id, !(prev.get(id) ?? foldDefault))
+        return next
+      })
+    },
+    [foldDefault],
+  )
 
   const toggleStep = useCallback(
     (id: string) => {
@@ -133,17 +136,23 @@ export function ConversationView({ trace }: { trace: Trace }) {
     })
   }, [])
 
-  // Expand all: every step card open; reasoning widgets untouched (open ones stay open,
-  // closed ones stay closed). System/developer/long-text folds are out of scope.
+  // Expand all: every step card AND every system/developer fold open; reasoning
+  // widgets untouched (open ones stay open, closed ones stay closed). Long-text
+  // clamps inside cards keep their local state and are not covered.
   const expandAll = useCallback(() => {
     setStepDefault(true)
     setStepOverrides(new Map())
+    setFoldDefault(true)
+    setFoldOpen(new Map())
   }, [])
 
-  // Collapse all: every step card closed AND every reasoning widget closed.
+  // Collapse all: every step card and system/developer fold closed AND every
+  // reasoning widget closed.
   const collapseAll = useCallback(() => {
     setStepDefault(false)
     setStepOverrides(new Map())
+    setFoldDefault(false)
+    setFoldOpen(new Map())
     setReasoningOpen(new Map())
   }, [])
 
@@ -169,14 +178,12 @@ export function ConversationView({ trace }: { trace: Trace }) {
   }, [])
 
   // The summary panel collapses/expands with local state, so track its size directly.
-  // The rail header wrapper stays mounted (empty when closed) so one observer covers both.
   useLayoutEffect(() => {
     const update = () => setListOffset(listRef.current?.offsetTop ?? 0)
     update()
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(update)
     if (headRef.current) observer.observe(headRef.current)
-    if (railHeadRef.current) observer.observe(railHeadRef.current)
     return () => observer.disconnect()
   }, [])
 
@@ -251,77 +258,77 @@ export function ConversationView({ trace }: { trace: Trace }) {
         timelineOpen={timelineOpen}
         onToggleTimeline={toggleTimeline}
       />
-      {/* relative so listRef.offsetTop measures against the scroll container */}
-      <div ref={parentRef} className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-5xl px-4 py-4">
-          <div ref={headRef}>
-            <TraceSummaryPanel trace={trace} />
-          </div>
-          <div
-            ref={railHeadRef}
-            className={`sticky top-2 z-10 ml-auto w-[200px] ${timelineOpen ? 'mt-3' : ''}`}
-          >
-            {timelineOpen && (
-              <TimelineRailHeader
-                units={units}
-                maxDurationMs={maxDurationMs}
-                totalDurationMs={totalDurationMs}
-                onJump={(index) => virtualizer.scrollToIndex(index, { align: 'center' })}
-              />
-            )}
-          </div>
-          <div
-            ref={listRef}
-            className="relative mt-3"
-            style={{ height: virtualizer.getTotalSize() }}
-          >
-            {virtualizer.getVirtualItems().map((item) => {
-              const unit = units[item.index]
-              const isCurrentMatch = currentMatchUnit === item.index
-              return (
-                <div
-                  key={unit.id}
-                  data-index={item.index}
-                  ref={virtualizer.measureElement}
-                  className="absolute top-0 left-0 flex w-full"
-                  style={{
-                    transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
-                  }}
-                >
+      {/* outer wrapper anchors the non-scrolling minimap overlay */}
+      <div className="relative min-h-0 flex-1">
+        {/* relative so listRef.offsetTop measures against the scroll container */}
+        <div ref={parentRef} className="relative h-full overflow-y-auto">
+          <div className="mx-auto max-w-5xl px-4 py-4">
+            <div ref={headRef}>
+              <TraceSummaryPanel trace={trace} />
+            </div>
+            <div
+              ref={listRef}
+              className="relative mt-3"
+              style={{ height: virtualizer.getTotalSize() }}
+            >
+              {virtualizer.getVirtualItems().map((item) => {
+                const unit = units[item.index]
+                const isCurrentMatch = currentMatchUnit === item.index
+                return (
+                  // Chat-style alignment: assistant steps right, everything else left.
                   <div
-                    data-highlight={isCurrentMatch ? 'true' : undefined}
-                    className={`min-w-0 flex-1 ${isCurrentMatch ? 'rounded-lg ring-2 ring-amber-400' : ''}`}
-                  >
-                    {unit.kind === 'step' ? (
-                      <StepCard
-                        unit={unit}
-                        expanded={stepOverrides.get(unit.id) ?? stepDefault}
-                        onToggle={() => toggleStep(unit.id)}
-                        reasoningOpen={reasoningOpen.get(unit.id) ?? false}
-                        onToggleReasoning={() => toggleReasoning(unit.id)}
-                        logprobMode={logprobMode}
-                      />
-                    ) : (
-                      <MessageCard
-                        message={unit.message}
-                        bodyExpanded={foldOpen.get(unit.id) ?? false}
-                        onToggleBody={() => toggleFold(unit.id)}
-                        logprobMode={logprobMode}
-                      />
-                    )}
-                  </div>
-                  <div
-                    className={`shrink-0 overflow-hidden transition-[width] duration-200 ${
-                      timelineOpen ? 'w-[200px]' : 'w-0'
+                    key={unit.id}
+                    data-index={item.index}
+                    ref={virtualizer.measureElement}
+                    className={`absolute top-0 left-0 flex w-full ${
+                      unit.kind === 'step' ? 'justify-end' : 'justify-start'
                     }`}
+                    style={{
+                      transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
+                    }}
                   >
-                    <TimelineRailCell unit={unit} maxDurationMs={maxDurationMs} />
+                    <div
+                      data-highlight={isCurrentMatch ? 'true' : undefined}
+                      className={`min-w-[320px] max-w-[85%] ${
+                        isCurrentMatch ? 'rounded-lg ring-2 ring-amber-400' : ''
+                      }`}
+                    >
+                      {unit.kind === 'step' ? (
+                        <StepCard
+                          unit={unit}
+                          expanded={stepOverrides.get(unit.id) ?? stepDefault}
+                          onToggle={() => toggleStep(unit.id)}
+                          reasoningOpen={reasoningOpen.get(unit.id) ?? false}
+                          onToggleReasoning={() => toggleReasoning(unit.id)}
+                          logprobMode={logprobMode}
+                        />
+                      ) : (
+                        <MessageCard
+                          message={unit.message}
+                          bodyExpanded={foldOpen.get(unit.id) ?? foldDefault}
+                          onToggleBody={() => toggleFold(unit.id)}
+                          logprobMode={logprobMode}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
+        {timelineOpen && (
+          <Minimap
+            units={units}
+            maxDurationMs={maxDurationMs}
+            totalDurationMs={totalDurationMs}
+            scrollOffset={virtualizer.scrollOffset ?? 0}
+            viewportHeight={parentRef.current?.clientHeight ?? 0}
+            totalSize={virtualizer.getTotalSize()}
+            scrollMargin={virtualizer.options.scrollMargin}
+            onJump={(index) => virtualizer.scrollToIndex(index, { align: 'start' })}
+          />
+        )}
       </div>
     </div>
   )

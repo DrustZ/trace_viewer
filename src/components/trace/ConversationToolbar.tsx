@@ -80,9 +80,9 @@ export function ConversationToolbar({
   matchPos: number
   onPrevMatch: () => void
   onNextMatch: () => void
-  /** Expands every step card; leaves reasoning widgets as they are. */
+  /** Expands every step card and system/developer fold; leaves reasoning widgets as they are. */
   onExpandAll: () => void
-  /** Collapses every step card and closes all reasoning widgets. */
+  /** Collapses every step card and system/developer fold, and closes all reasoning widgets. */
   onCollapseAll: () => void
   logprobMode: LogprobMode
   onLogprobModeChange: (mode: LogprobMode) => void
