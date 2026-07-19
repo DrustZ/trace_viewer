@@ -333,22 +333,22 @@ describe('api', () => {
     expect(short.body).toEqual([])
   })
 
-  it('POST /api/import (text) persists the raw source and serves it back', async () => {
+  it('POST /api/import (text) loads into memory and serves it back (no file written)', async () => {
     const res = await request(app)
       .post('/api/import')
       .send({ type: 'text', content: IMPORT_FIXTURE })
     expect(res.status).toBe(200)
     expect(res.body.traceIds).toEqual(['imported-1'])
     expect(res.body.format).toBe('native')
-    const persisted = await fs.readFile(path.join(importDir, 'imported-1.json'), 'utf8')
-    expect(persisted).toBe(IMPORT_FIXTURE)
-    const raw = await request(app).get('/api/traces/imported-1/raw')
-    expect(raw.status).toBe(200)
-    expect(raw.headers['content-type']).toContain('text/plain')
-    expect(raw.text).toBe(IMPORT_FIXTURE)
-    // Seeded traces have no sourcePath, so raw is a 404 for them.
-    const noRaw = await request(app).get('/api/traces/lc-i01-s100-r01/raw')
-    expect(noRaw.status).toBe(404)
+    // Import is ephemeral: served from the in-memory store, nothing on disk.
+    const trace = await request(app).get('/api/traces/imported-1')
+    expect(trace.status).toBe(200)
+    expect(trace.body.meta.traceId).toBe('imported-1')
+    const persisted = await fs
+      .access(path.join(importDir, 'imported-1.json'))
+      .then(() => true)
+      .catch(() => false)
+    expect(persisted).toBe(false)
   })
 
   it('POST /api/import rejects unparseable content (422) and bad bodies (400)', async () => {
@@ -373,21 +373,17 @@ describe('api', () => {
     expect(gone.status).toBe(404)
   })
 
-  it('POST /api/import reports conflicts on re-import; overwrite:true replaces', async () => {
+  it('POST /api/import re-import replaces in place (idempotent load & view)', async () => {
     const first = await request(app)
       .post('/api/import')
       .send({ type: 'text', content: IMPORT_FIXTURE })
     expect(first.status).toBe(200)
+    // Re-importing the same trace succeeds and just refreshes it — no conflict.
     const again = await request(app)
       .post('/api/import')
       .send({ type: 'text', content: IMPORT_FIXTURE })
-    expect(again.status).toBe(409)
-    expect(again.body.conflicts).toEqual(['imported-1'])
-    const forced = await request(app)
-      .post('/api/import')
-      .send({ type: 'text', content: IMPORT_FIXTURE, overwrite: true })
-    expect(forced.status).toBe(200)
-    expect(forced.body.traceIds).toEqual(['imported-1'])
+    expect(again.status).toBe(200)
+    expect(again.body.traceIds).toEqual(['imported-1'])
     const trace = await request(app).get('/api/traces/imported-1')
     expect(trace.status).toBe(200)
   })

@@ -1,6 +1,4 @@
 import { promises as dns } from 'node:dns'
-import { promises as fs } from 'node:fs'
-import path from 'node:path'
 import { Router } from 'express'
 import { parseAny } from '../../shared/connectors/registry'
 import type { ImportResponse } from '../../shared/schema/api'
@@ -8,21 +6,6 @@ import { asyncHandler, isRecord, type RouteCtx } from './context'
 
 const FETCH_TIMEOUT_MS = 15000
 const MAX_BYTES = 25 * 1024 * 1024
-
-const EXT_BY_FORMAT: Record<string, string> = {
-  native: '.json',
-  'openai-chat': '.json',
-  harmony: '.txt',
-}
-
-async function pathExists(p: string): Promise<boolean> {
-  try {
-    await fs.access(p)
-    return true
-  } catch {
-    return false
-  }
-}
 
 class HttpError extends Error {
   constructor(
@@ -163,12 +146,7 @@ export function importRoutes(ctx: RouteCtx): Router {
         return
       }
 
-      // Atomic commit: run every check first; nothing is written or upserted
-      // until the whole batch passes. Connector-level salvage (bad entries
-      // dropped with warnings) happens above in parseAny — atomicity applies
-      // to the commit of whatever the connector accepted.
-
-      // (a) duplicate traceIds within the batch itself.
+      // Duplicate traceIds *within one batch* are genuinely ambiguous — reject.
       const seen = new Set<string>()
       const duplicates = new Set<string>()
       for (const t of result.traces) {
@@ -183,37 +161,15 @@ export function importRoutes(ctx: RouteCtx): Router {
         return
       }
 
-      // (b) traceIds already in the store — importing the same file twice must
-      // not silently re-upsert. body.overwrite === true skips this check.
-      const overwrite = body.overwrite === true
-      if (!overwrite) {
-        const conflicts = result.traces
-          .map((t) => t.meta.traceId)
-          .filter((id) => ctx.store.get(id) !== undefined)
-        if (conflicts.length > 0) {
-          res.status(409).json({
-            error: 'traceIds already exist in the store (pass overwrite: true to replace)',
-            conflicts,
-          })
-          return
-        }
-      }
-
-      // (c) filename collision — decided only after validation passes.
+      // Import = load & view: keep it in memory only (no data/imported/ file),
+      // and re-importing the same trace just replaces the in-memory copy — so
+      // it always "imports and shows" instead of erroring on a duplicate.
       const first = result.traces[0]
       const sourceFormat = first.meta.sourceFormat
-      const ext = EXT_BY_FORMAT[sourceFormat] ?? '.json'
-      const base = first.meta.traceId.replace(/[^\w.-]+/g, '_')
-      await fs.mkdir(ctx.importDir, { recursive: true })
-      let fileName = `${base}${ext}`
-      for (let n = 2; await pathExists(path.join(ctx.importDir, fileName)); n++) {
-        fileName = `${base}-${n}${ext}`
+      for (const parsed of result.traces) {
+        parsed.meta.extra = { ...(parsed.meta.extra ?? {}), run: 'imported' }
+        ctx.store.upsert(parsed, source === 'pasted' ? 'imported (pasted)' : source)
       }
-      const filePath = path.join(ctx.importDir, fileName)
-
-      // Commit point: write the raw file, then upsert the whole batch.
-      await fs.writeFile(filePath, text, 'utf8')
-      for (const parsed of result.traces) ctx.store.upsert(parsed, filePath)
 
       res.json({
         traceIds: result.traces.map((t) => t.meta.traceId),

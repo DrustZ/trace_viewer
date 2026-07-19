@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useImportTrace } from '../../api/hooks'
 
@@ -55,7 +55,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [fileText, setFileText] = useState('')
   const [url, setUrl] = useState('')
   const importTrace = useImportTrace()
-  const [, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   // Guards the auto-open effect so it fires once per successful import.
   const openedRef = useRef(false)
 
@@ -67,25 +67,15 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // On success, open the imported trace directly: set the peek param (the home
-  // page's TraceDrawer keys off it). A single trace also closes the dialog so
-  // the drawer is unobstructed; multiple keeps the dialog for the count note.
+  // On success, open the imported trace as its own full page — the home sidebar
+  // (runs / components / filters) doesn't apply to a one-off import.
   useEffect(() => {
     if (!importTrace.isSuccess || openedRef.current) return
-    const ids = importTrace.data.traceIds
-    const first = ids[0]
+    const first = importTrace.data.traceIds[0]
     if (!first) return
     openedRef.current = true
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        next.set('peek', first)
-        return next
-      },
-      { replace: true },
-    )
-    if (ids.length === 1) onClose()
-  }, [importTrace.isSuccess, importTrace.data, onClose, setSearchParams])
+    navigate(`/trace/${encodeURIComponent(first)}`)
+  }, [importTrace.isSuccess, importTrace.data, navigate])
 
   const submit = () => {
     if (importTrace.isPending) return
@@ -153,13 +143,15 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-emerald-700">
               Imported {importTrace.data.traceIds.length} trace
               {importTrace.data.traceIds.length === 1 ? '' : 's'} ({importTrace.data.format}).
-              {importTrace.data.traceIds.length > 1 && ' Opened the first — close to view it.'}
             </p>
             <WarningList warnings={importTrace.data.warnings} />
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => {
+                  const first = importTrace.data.traceIds[0]
+                  if (first) navigate(`/trace/${encodeURIComponent(first)}`)
+                }}
                 className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               >
                 View first trace
