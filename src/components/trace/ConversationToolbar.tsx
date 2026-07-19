@@ -68,7 +68,6 @@ export function ConversationToolbar({
   onCollapseAll,
   timelineOpen,
   onToggleTimeline,
-  timelineAvailable = true,
   compact,
   onToggleCompact,
 }: {
@@ -85,8 +84,6 @@ export function ConversationToolbar({
   onCollapseAll: () => void
   timelineOpen: boolean
   onToggleTimeline: () => void
-  /** Whether the trace has real timing (spans or message timestamps); hides Timeline when not. */
-  timelineAvailable?: boolean
   /** Compact three-pane reading mode; search/expand/timeline controls are disabled while on. */
   compact: boolean
   onToggleCompact: () => void
@@ -162,16 +159,14 @@ export function ConversationToolbar({
           Collapse all
         </ActionButton>
         <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
-        {timelineAvailable && (
-          <ToggleButton
-            pressed={timelineOpen}
-            onClick={onToggleTimeline}
-            testId="toggle-timeline"
-            disabled={compact}
-          >
-            Timeline
-          </ToggleButton>
-        )}
+        <ToggleButton
+          pressed={timelineOpen}
+          onClick={onToggleTimeline}
+          testId="toggle-timeline"
+          disabled={compact}
+        >
+          Timeline
+        </ToggleButton>
         <ToggleButton
           pressed={compact}
           onClick={onToggleCompact}

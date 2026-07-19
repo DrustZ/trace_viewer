@@ -36,7 +36,7 @@ export function TimelineMode({ trace }: { trace: Trace }) {
     max: 1000,
   })
 
-  const { spans, derived } = useMemo(() => buildSpanTree(trace), [trace])
+  const { spans, derived, synthetic } = useMemo(() => buildSpanTree(trace), [trace])
   const root = useMemo(() => spans.find((s) => s.parentId === null) ?? spans[0], [spans])
   const units = useMemo(() => buildUnits(trace.messages), [trace.messages])
   const resultErrorByCallId = useMemo(() => buildResultErrorMap(trace.messages), [trace.messages])
@@ -183,11 +183,22 @@ export function TimelineMode({ trace }: { trace: Trace }) {
           <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
             timeline
           </span>
-          <span className="font-mono text-[10px] text-slate-500">
-            {formatDuration(root.durationMs)}
-          </span>
+          {!synthetic && (
+            <span className="font-mono text-[10px] text-slate-500">
+              {formatDuration(root.durationMs)}
+            </span>
+          )}
           <span className="text-[10px] text-slate-400">{spans.length} spans</span>
-          {derived && <span className="text-[10px] italic text-slate-400">derived</span>}
+          {synthetic ? (
+            <span
+              className="text-[10px] italic text-slate-400"
+              title="no timing data in this trace"
+            >
+              order only · no timing
+            </span>
+          ) : (
+            derived && <span className="text-[10px] italic text-slate-400">derived</span>
+          )}
         </div>
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
           <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
@@ -205,6 +216,7 @@ export function TimelineMode({ trace }: { trace: Trace }) {
                     row={row}
                     totalMs={totalMs}
                     isRoot={row.span.id === root.id}
+                    synthetic={synthetic}
                     selected={selected?.id === row.span.id}
                     collapsed={collapsed.has(row.span.id)}
                     onSelect={() => select(row.span.id)}
@@ -218,7 +230,11 @@ export function TimelineMode({ trace }: { trace: Trace }) {
       </div>
       <div ref={centerRef} className="min-w-0 flex-1 overflow-y-auto px-4 py-3">
         <div className="mb-3">
-          <SpanDetailPanel span={selected} traceStartIso={trace.meta.timestamp} />
+          <SpanDetailPanel
+            span={selected}
+            traceStartIso={trace.meta.timestamp}
+            synthetic={synthetic}
+          />
         </div>
         <div className="pb-4" data-testid="timeline-center">
           {unit === undefined ? (

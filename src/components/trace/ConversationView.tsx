@@ -58,16 +58,6 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const [compact, setCompact] = useState(readCompact)
   const messages = trace.messages
 
-  // Timeline profiling is only meaningful with real timing: explicit profiling
-  // spans, or per-message timestamps/durations. Without any, the span tree falls
-  // back to synthetic 1s ticks — fabricated numbers we don't want to present
-  // (e.g. an imported chat trace). Hide the toggle in that case.
-  const hasTiming = useMemo(() => {
-    const spans = trace.meta.extra?.spans
-    if (Array.isArray(spans) && spans.length > 0) return true
-    return messages.some((m) => typeof m.durationMs === 'number' || typeof m.timestamp === 'string')
-  }, [trace.meta.extra, messages])
-
   const units = useMemo(() => buildUnits(messages), [messages])
 
   // callId → tool name, so a standalone tool result can label its chip and pick the
@@ -280,14 +270,13 @@ export function ConversationView({ trace }: { trace: Trace }) {
         onCollapseAll={collapseAll}
         timelineOpen={timelineOpen}
         onToggleTimeline={toggleTimeline}
-        timelineAvailable={hasTiming}
         compact={compact}
         onToggleCompact={toggleCompact}
       />
       <div className="relative min-h-0 flex-1">
         {compact ? (
           <CompactMode trace={trace} />
-        ) : timelineOpen && hasTiming ? (
+        ) : timelineOpen ? (
           <TimelineMode trace={trace} />
         ) : (
           <>

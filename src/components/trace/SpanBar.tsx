@@ -42,6 +42,7 @@ export function SpanBar({
   row,
   totalMs,
   isRoot,
+  synthetic = false,
   selected,
   collapsed,
   onSelect,
@@ -50,6 +51,8 @@ export function SpanBar({
   row: SpanRow
   totalMs: number
   isRoot: boolean
+  /** No real timing — show "—" instead of a fabricated duration. */
+  synthetic?: boolean
   selected: boolean
   collapsed: boolean
   onSelect: () => void
@@ -90,7 +93,7 @@ export function SpanBar({
         </div>
         <div className="flex w-20 shrink-0 items-center justify-end gap-1.5">
           <span className="font-mono text-[10px] text-slate-500">
-            {formatDuration(span.durationMs)}
+            {synthetic ? '—' : formatDuration(span.durationMs)}
           </span>
           <span
             className={`h-1.5 w-1.5 shrink-0 rounded-full ${

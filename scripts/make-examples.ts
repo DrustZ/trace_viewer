@@ -536,7 +536,162 @@ function nativeRichFormatting() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 5. Native — WITH real profiling spans (meta.extra.spans) so the Timeline shows
+//    the full turn → model / sandbox / grader tree with genuine durations.
+// ---------------------------------------------------------------------------
+function nativeWithTimeline() {
+  const messages = [
+    {
+      id: 'm0',
+      role: 'system',
+      content: 'You are a coding agent with a sandbox. Fix the failing test.',
+    },
+    {
+      id: 'm1',
+      role: 'user',
+      content:
+        'test_parse_config fails on empty files with a JSONDecodeError. Fix parse_config and make the test pass.',
+    },
+    {
+      id: 'm2',
+      role: 'assistant',
+      channel: 'analysis',
+      stepIndex: 1,
+      content:
+        'An empty file makes json.loads("") raise. Guard the empty case and return {} before parsing.',
+    },
+    {
+      id: 'm3',
+      role: 'assistant',
+      channel: 'commentary',
+      stepIndex: 1,
+      content: '',
+      toolCalls: [
+        {
+          id: 'call_1',
+          name: 'bash',
+          arguments: JSON.stringify({
+            command:
+              "sed -i 's/return json.loads(open(path).read())/data = open(path).read()\\n    return json.loads(data) if data else {}/' src/config.py && pytest -q test_config.py",
+          }),
+          parsedArguments: { command: 'patch + pytest' },
+        },
+      ],
+    },
+    {
+      id: 'm4',
+      role: 'tool',
+      content: '1 passed in 0.14s',
+      toolResult: { toolCallId: 'call_1', isError: false },
+    },
+    {
+      id: 'm5',
+      role: 'assistant',
+      channel: 'final',
+      stepIndex: 1,
+      content:
+        'Fixed: `parse_config` now returns `{}` for an empty file before calling `json.loads`. The test passes.',
+    },
+  ]
+  // Real spans (ms offsets from meta.timestamp).
+  const spans = [
+    {
+      id: 'sp0',
+      parentId: null,
+      name: 'swe-fix-config',
+      kind: 'trace',
+      startMs: 0,
+      durationMs: 9200,
+      status: 'ok',
+    },
+    {
+      id: 'sp1',
+      parentId: 'sp0',
+      name: 'turn_1',
+      kind: 'trace',
+      startMs: 0,
+      durationMs: 8800,
+      status: 'ok',
+    },
+    {
+      id: 'sp2',
+      parentId: 'sp1',
+      name: 'assistant.analysis',
+      kind: 'model',
+      startMs: 0,
+      durationMs: 1900,
+      status: 'ok',
+      messageId: 'm2',
+      detail: { tokens_out: 48 },
+    },
+    {
+      id: 'sp3',
+      parentId: 'sp1',
+      name: 'llm.tool_decide',
+      kind: 'model',
+      startMs: 1900,
+      durationMs: 1100,
+      status: 'ok',
+      messageId: 'm3',
+      detail: { tokens_out: 62 },
+    },
+    {
+      id: 'sp4',
+      parentId: 'sp1',
+      name: 'bash.exec',
+      kind: 'sandbox',
+      startMs: 3000,
+      durationMs: 4300,
+      status: 'ok',
+      messageId: 'm4',
+      detail: { exit_code: 0 },
+    },
+    {
+      id: 'sp5',
+      parentId: 'sp1',
+      name: 'assistant.final',
+      kind: 'model',
+      startMs: 7300,
+      durationMs: 1500,
+      status: 'ok',
+      messageId: 'm5',
+      detail: { tokens_out: 40 },
+    },
+    {
+      id: 'sp6',
+      parentId: 'sp0',
+      name: 'test_runner',
+      kind: 'grader',
+      startMs: 8800,
+      durationMs: 400,
+      status: 'ok',
+      detail: { tests_passed: 1, tests_total: 1 },
+    },
+  ]
+  return {
+    meta: {
+      traceId: 'example-with-timeline-001',
+      instanceId: 'swe-fix-config',
+      component: 'swe/swebench-verified-mini',
+      status: 'completed',
+      timestamp: '2024-06-06T11:00:00Z',
+      checkpointStep: 300,
+      split: 'test',
+      sourceFormat: 'native',
+      extra: {
+        run: 'imported',
+        spans,
+        reward_breakdown: { correctness: 1, length_penalty: -0.001, final_reward: 0.999 },
+      },
+    },
+    stats: { score: 1, durationMs: 9200, model: { name: 'claude-opus-4' } },
+    messages,
+  }
+}
+
 write('anthropic-messages-rich.json', anthropicRich())
 write('openai-responses-rich.json', openaiResponsesRich())
 write('native-long-agent.json', nativeLongAgent())
 write('native-rich-formatting.json', nativeRichFormatting())
+write('native-with-timeline.json', nativeWithTimeline())

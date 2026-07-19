@@ -29,6 +29,9 @@ export interface SpanTree {
   spans: ProfSpan[]
   /** true when the spans were derived from messages (no meta.extra.spans). */
   derived: boolean
+  /** true when there is NO real timing at all (no spans, no timestamps, no durations):
+   * span durations are uniform placeholders, so the UI shows them as "—". */
+  synthetic: boolean
 }
 
 export interface SpanRow {
@@ -243,9 +246,12 @@ export function buildSpanTree(trace: Trace): SpanTree {
   const raw = trace.meta.extra?.spans
   if (Array.isArray(raw)) {
     const spans = validateSpans(raw)
-    if (spans) return { spans, derived: false }
+    if (spans) return { spans, derived: false, synthetic: false }
   }
-  return { spans: deriveSpans(trace), derived: true }
+  const hasTiming = trace.messages.some(
+    (m) => typeof m.durationMs === 'number' || typeof m.timestamp === 'string',
+  )
+  return { spans: deriveSpans(trace), derived: true, synthetic: !hasTiming }
 }
 
 /** DFS over the tree in startMs order, skipping children of collapsed spans. */

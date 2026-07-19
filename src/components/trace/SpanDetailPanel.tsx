@@ -32,10 +32,13 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 export function SpanDetailPanel({
   span,
   traceStartIso,
+  synthetic = false,
 }: {
   span: ProfSpan | null
   /** meta.timestamp — spans' startMs are relative to it. */
   traceStartIso: string
+  /** No real timing — show "—" for duration/start/end instead of placeholders. */
+  synthetic?: boolean
 }) {
   if (!span) {
     return (
@@ -73,14 +76,16 @@ export function SpanDetailPanel({
       </div>
       <div className="mt-3 divide-y divide-slate-100 border-y border-slate-100">
         <Row label="Duration">
-          <span className="font-mono">{formatDuration(span.durationMs)}</span>
+          <span className="font-mono">{synthetic ? '—' : formatDuration(span.durationMs)}</span>
         </Row>
         <Row label="Started">
-          <span className="font-mono">{absTime(traceStartIso, span.startMs)}</span>
+          <span className="font-mono">
+            {synthetic ? '—' : absTime(traceStartIso, span.startMs)}
+          </span>
         </Row>
         <Row label="Ended">
           <span className="font-mono">
-            {absTime(traceStartIso, span.startMs + span.durationMs)}
+            {synthetic ? '—' : absTime(traceStartIso, span.startMs + span.durationMs)}
           </span>
         </Row>
         {span.messageId && (
