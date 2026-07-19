@@ -2,6 +2,7 @@ import type { MetaResponse } from '@shared/schema/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { type ListParams, useMeta, useTiles, useTraces } from '../../api/hooks'
+import { hasActiveSelection } from '../../state/filterParams'
 import { formatNumber } from '../common/format'
 
 /** Scan-progress fields are being added to /api/meta by another track; read them defensively. */
@@ -32,8 +33,11 @@ export function RunStatusBar({ params }: { params: ListParams }) {
     refetchInterval: (query) =>
       (query.state.data as MetaWithScan | undefined)?.scanning === true ? 1200 : false,
   })
+  const active = hasActiveSelection(params)
   const tiles = useTiles(params)
-  const executing = useTraces({ status: 'executing', limit: 1 })
+  // Scope the in-progress badge to the current selection, so a finished run
+  // (run-b/c/d) reads "complete" even while run-a is still executing globally.
+  const executing = useTraces({ ...params, status: 'executing', limit: 1 })
 
   const scan = meta.data as MetaWithScan | undefined
   const scanning = scan?.scanning === true
@@ -63,7 +67,8 @@ export function RunStatusBar({ params }: { params: ListParams }) {
       className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-5 py-2"
     >
       <span className="text-sm font-semibold text-slate-900">RL trace run · seed-42 corpus</span>
-      {executing.data &&
+      {active &&
+        executing.data &&
         (runInProgress ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
@@ -76,9 +81,11 @@ export function RunStatusBar({ params }: { params: ListParams }) {
           </span>
         ))}
       <span className="min-w-0 flex-1 truncate text-center text-xs text-slate-500">
-        {tiles.data && meta.data
-          ? `Showing ${formatNumber(tiles.data.total)} of ${formatNumber(meta.data.traceCount)} traces · ${meta.data.components.length} components`
-          : ''}
+        {active
+          ? tiles.data && meta.data
+            ? `Showing ${formatNumber(tiles.data.total)} of ${formatNumber(meta.data.traceCount)} traces · ${meta.data.components.length} components`
+            : ''
+          : 'No run selected — pick a run to load traces'}
       </span>
       {scan?.scanning === true && (
         <span
