@@ -196,3 +196,64 @@ avg-logprob number). Never cut: conversation view, filters + table, connectors, 
 4. **Recharts click payload quirks** → click-to-step is an enhancement; the checkpoint dropdown
    filter always exists
 5. **Two-process dev friction** → vite proxy hardwired at M1; zero CORS anywhere
+
+
+## Extended feature roadmap (post-baseline)
+
+Ordering: finish v0.7 (sidebar layout + token-chip probs) → **M6 packages a submittable
+baseline** → then ship the extended set below, one version at a time, committing after each.
+
+Already shipped along the way (from the original wishlist): shareable permalinks (every view
+state is a URL), correct system message rendering, trace-id/keyword search with snippets,
+test-failure details (rewardDetails + tool output), proto-extension-style metadata viewing
+(`meta.extra` via JSON tree), rich format tracing (markdown/KaTeX + Rich/Raw), harmony tokens
+visible (Tokens mode + raw harmony source in Raw tab).
+
+### v0.8 — Judge & score deep-dive
+Everything pertaining to the final score, inspectable in one place:
+- Generator: judge **reasoning** (not just verdict), **golden/reference response**, reward
+  decomposition (`correctness_score` vs `final_reward` with explicit length-penalty term),
+  richer test-failure detail
+- UI: a Score panel on the trace page — golden response rendered (rich), judge reasoning +
+  output quoted, correctness-vs-reward split with the penalty visible, per-test failures grid;
+  "validate the judge" reading flow: golden vs actual vs judge-verdict side by side
+
+### v0.9 — Trace AI chat
+Floating chat panel on the trace detail view: packs the current trace (messages + metadata +
+score data, truncated to budget) as context, answers questions like "is this answer actually
+wrong?" via claude-sonnet-5 (`ANTHROPIC_API_KEY`; hidden when no key). Streaming responses;
+conversation stays client-side.
+
+### v1.0 — AI analysis agent
+Home-page analysis box: "find traces with reward-hacking patterns", "why do swe traces time
+out?" → an agent loop (tool-use over this app's own REST API: list/filter/aggregate/get-trace/
+search) that plans, samples traces, reads them, and returns a summary + example trace links +
+a suggested filter query. Progress panel streams the agent's steps. Python-sandbox analysis is
+explicitly out of scope for now (documented); the API-tools loop covers the debugging stories.
+
+### v1.1 — Power filters & real tokenizer
+- New derived filter keys where the data supports them: contextLength, has zero-logprob token
+  spans (consecutive), token/char presence, shortest-success / longest-running presets
+  (sort+filter presets dropdown), harmony-format-error flag; generator adds per-trace
+  `kl` + `trainer_batch` fields so KL-outlier / batch-range filters work
+- Real BPE segmentation for Tokens mode via a JS tokenizer (`gpt-tokenizer`), replacing the
+  synthetic whitespace tokenizer for imported traces without token arrays
+
+### v1.2 — Cross-run comparison (delphi-like)
+- Data model: `runId` on traces; generator emits a second run variant (different seed/name)
+  with overlapping instances
+- Sidebar grows a run switcher (the tree's top level); pick two runs → compare view: same
+  instanceId across runs (final-checkpoint outputs side by side, reward diff table), reward
+  curves overlaid per run; eval-set comparison across runs
+
+### v1.3 — Scale architecture (async/progressive loading)
+For millions of rollouts: metadata-first progressive scan (UI usable while checkpoints stream
+in, per-checkpoint view updates), scan-progress indicator, message bodies always lazy; SQLite
+(or DuckDB) index behind the existing `traceStore` interface for keyword search at scale —
+interface already isolates the swap to one file.
+
+### v1.4 — Checkpoint playground / replay
+Select a prompt (or history prefix) + a "checkpoint" and replay it live. Real policy
+checkpoints don't exist in this demo, so replay calls a stand-in model (claude via API, clearly
+labeled as simulation) — the UX (prefix selection, side-by-side with the recorded rollout) is
+the deliverable; swapping in a real inference endpoint is a config change.
