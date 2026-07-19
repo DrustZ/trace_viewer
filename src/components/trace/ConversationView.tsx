@@ -1,6 +1,7 @@
 import type { Trace } from '@shared/schema/types'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { CompactMode } from './CompactMode'
 import { ConversationToolbar } from './ConversationToolbar'
 import { MessageCard } from './MessageCard'
 import { StepCard } from './StepCard'
@@ -9,12 +10,21 @@ import { TraceSummaryPanel } from './TraceSummaryPanel'
 import { buildUnits, unitDurationMs } from './unitize'
 
 const TIMELINE_KEY = 'tv.timeline.open'
+const COMPACT_KEY = 'tv.compact'
 const MATCH_CAP = 500
 const NO_MATCHES: number[] = []
 
 function readTimelineOpen(): boolean {
   try {
     return localStorage.getItem(TIMELINE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function readCompact(): boolean {
+  try {
+    return localStorage.getItem(COMPACT_KEY) === '1'
   } catch {
     return false
   }
@@ -41,6 +51,7 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const [query, setQuery] = useState('')
   const [matchPos, setMatchPos] = useState(0)
   const [timelineOpen, setTimelineOpen] = useState(readTimelineOpen)
+  const [compact, setCompact] = useState(readCompact)
   const messages = trace.messages
 
   const units = useMemo(() => buildUnits(messages), [messages])
@@ -157,15 +168,29 @@ export function ConversationView({ trace }: { trace: Trace }) {
     })
   }, [])
 
+  const toggleCompact = useCallback(() => {
+    setCompact((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(COMPACT_KEY, next ? '1' : '0')
+      } catch {
+        // private mode etc. — state still works for this session
+      }
+      return next
+    })
+  }, [])
+
   // The summary panel collapses/expands with local state, so track its size directly.
+  // Re-runs when compact mode toggles: the list DOM unmounts/remounts across the switch.
   useLayoutEffect(() => {
+    if (compact) return
     const update = () => setListOffset(listRef.current?.offsetTop ?? 0)
     update()
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(update)
     if (headRef.current) observer.observe(headRef.current)
     return () => observer.disconnect()
-  }, [])
+  }, [compact])
 
   const virtualizer = useVirtualizer({
     count: units.length,
@@ -235,75 +260,83 @@ export function ConversationView({ trace }: { trace: Trace }) {
         onCollapseAll={collapseAll}
         timelineOpen={timelineOpen}
         onToggleTimeline={toggleTimeline}
+        compact={compact}
+        onToggleCompact={toggleCompact}
       />
       {/* outer wrapper anchors the non-scrolling minimap overlay */}
       <div className="relative min-h-0 flex-1">
-        {/* relative so listRef.offsetTop measures against the scroll container */}
-        <div ref={parentRef} className="relative h-full overflow-y-auto">
-          <div className="mx-auto max-w-5xl px-4 py-4">
-            <div ref={headRef}>
-              <TraceSummaryPanel trace={trace} />
+        {compact ? (
+          <CompactMode trace={trace} />
+        ) : (
+          <>
+            {/* relative so listRef.offsetTop measures against the scroll container */}
+            <div ref={parentRef} className="relative h-full overflow-y-auto">
+              <div className="mx-auto max-w-5xl px-4 py-4">
+                <div ref={headRef}>
+                  <TraceSummaryPanel trace={trace} />
+                </div>
+                <div
+                  ref={listRef}
+                  className="relative mt-3"
+                  style={{ height: virtualizer.getTotalSize() }}
+                >
+                  {virtualizer.getVirtualItems().map((item) => {
+                    const unit = units[item.index]
+                    const isCurrentMatch = currentMatchUnit === item.index
+                    return (
+                      // Chat-style alignment: assistant steps right, everything else left.
+                      <div
+                        key={unit.id}
+                        data-index={item.index}
+                        ref={virtualizer.measureElement}
+                        className={`absolute top-0 left-0 flex w-full ${
+                          unit.kind === 'step' ? 'justify-end' : 'justify-start'
+                        }`}
+                        style={{
+                          transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
+                        }}
+                      >
+                        <div
+                          data-highlight={isCurrentMatch ? 'true' : undefined}
+                          className={`min-w-[320px] max-w-[85%] ${
+                            isCurrentMatch ? 'rounded-lg ring-2 ring-amber-400' : ''
+                          }`}
+                        >
+                          {unit.kind === 'step' ? (
+                            <StepCard
+                              unit={unit}
+                              expanded={stepOverrides.get(unit.id) ?? stepDefault}
+                              onToggle={() => toggleStep(unit.id)}
+                              reasoningOpen={reasoningOpen.get(unit.id) ?? false}
+                              onToggleReasoning={() => toggleReasoning(unit.id)}
+                            />
+                          ) : (
+                            <MessageCard
+                              message={unit.message}
+                              bodyExpanded={foldOpen.get(unit.id) ?? foldDefault}
+                              onToggleBody={() => toggleFold(unit.id)}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
-            <div
-              ref={listRef}
-              className="relative mt-3"
-              style={{ height: virtualizer.getTotalSize() }}
-            >
-              {virtualizer.getVirtualItems().map((item) => {
-                const unit = units[item.index]
-                const isCurrentMatch = currentMatchUnit === item.index
-                return (
-                  // Chat-style alignment: assistant steps right, everything else left.
-                  <div
-                    key={unit.id}
-                    data-index={item.index}
-                    ref={virtualizer.measureElement}
-                    className={`absolute top-0 left-0 flex w-full ${
-                      unit.kind === 'step' ? 'justify-end' : 'justify-start'
-                    }`}
-                    style={{
-                      transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
-                    }}
-                  >
-                    <div
-                      data-highlight={isCurrentMatch ? 'true' : undefined}
-                      className={`min-w-[320px] max-w-[85%] ${
-                        isCurrentMatch ? 'rounded-lg ring-2 ring-amber-400' : ''
-                      }`}
-                    >
-                      {unit.kind === 'step' ? (
-                        <StepCard
-                          unit={unit}
-                          expanded={stepOverrides.get(unit.id) ?? stepDefault}
-                          onToggle={() => toggleStep(unit.id)}
-                          reasoningOpen={reasoningOpen.get(unit.id) ?? false}
-                          onToggleReasoning={() => toggleReasoning(unit.id)}
-                        />
-                      ) : (
-                        <MessageCard
-                          message={unit.message}
-                          bodyExpanded={foldOpen.get(unit.id) ?? foldDefault}
-                          onToggleBody={() => toggleFold(unit.id)}
-                        />
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-        {timelineOpen && (
-          <Minimap
-            units={units}
-            maxDurationMs={maxDurationMs}
-            totalDurationMs={totalDurationMs}
-            scrollOffset={virtualizer.scrollOffset ?? 0}
-            viewportHeight={parentRef.current?.clientHeight ?? 0}
-            totalSize={virtualizer.getTotalSize()}
-            scrollMargin={virtualizer.options.scrollMargin}
-            onJump={(index) => virtualizer.scrollToIndex(index, { align: 'start' })}
-          />
+            {timelineOpen && (
+              <Minimap
+                units={units}
+                maxDurationMs={maxDurationMs}
+                totalDurationMs={totalDurationMs}
+                scrollOffset={virtualizer.scrollOffset ?? 0}
+                viewportHeight={parentRef.current?.clientHeight ?? 0}
+                totalSize={virtualizer.getTotalSize()}
+                scrollMargin={virtualizer.options.scrollMargin}
+                onJump={(index) => virtualizer.scrollToIndex(index, { align: 'start' })}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

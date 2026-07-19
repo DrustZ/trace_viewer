@@ -6,11 +6,13 @@ function ToggleButton({
   pressed,
   onClick,
   testId,
+  disabled = false,
   children,
 }: {
   pressed: boolean
   onClick: () => void
   testId: string
+  disabled?: boolean
   children: string
 }) {
   return (
@@ -19,7 +21,8 @@ function ToggleButton({
       aria-pressed={pressed}
       data-testid={testId}
       onClick={onClick}
-      className={`h-7 rounded border px-2 text-xs font-medium transition-colors ${
+      disabled={disabled}
+      className={`h-7 rounded border px-2 text-xs font-medium transition-colors disabled:opacity-40 ${
         pressed
           ? 'border-slate-700 bg-slate-800 text-white'
           : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
@@ -33,10 +36,12 @@ function ToggleButton({
 function ActionButton({
   onClick,
   testId,
+  disabled = false,
   children,
 }: {
   onClick: () => void
   testId: string
+  disabled?: boolean
   children: string
 }) {
   return (
@@ -44,7 +49,8 @@ function ActionButton({
       type="button"
       data-testid={testId}
       onClick={onClick}
-      className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
+      disabled={disabled}
+      className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40"
     >
       {children}
     </button>
@@ -62,6 +68,8 @@ export function ConversationToolbar({
   onCollapseAll,
   timelineOpen,
   onToggleTimeline,
+  compact,
+  onToggleCompact,
 }: {
   /** Receives the debounced query; must be referentially stable (e.g. a setState). */
   onQueryChange: (query: string) => void
@@ -76,6 +84,9 @@ export function ConversationToolbar({
   onCollapseAll: () => void
   timelineOpen: boolean
   onToggleTimeline: () => void
+  /** Compact three-pane reading mode; search/expand/timeline controls are disabled while on. */
+  compact: boolean
+  onToggleCompact: () => void
 }) {
   const [value, setValue] = useState('')
 
@@ -101,9 +112,11 @@ export function ConversationToolbar({
           }}
           placeholder="Search in trace…"
           data-testid="trace-search"
-          className="h-7 w-64 max-w-full rounded border border-slate-200 px-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+          disabled={compact}
+          title={compact ? 'Search is unavailable in compact mode' : undefined}
+          className="h-7 w-64 max-w-full rounded border border-slate-200 px-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:opacity-50"
         />
-        {value !== '' && (
+        {value !== '' && !compact && (
           <>
             <span
               data-testid="search-count"
@@ -135,15 +148,23 @@ export function ConversationToolbar({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <ActionButton onClick={onExpandAll} testId="expand-all">
+        <ActionButton onClick={onExpandAll} testId="expand-all" disabled={compact}>
           Expand all
         </ActionButton>
-        <ActionButton onClick={onCollapseAll} testId="collapse-all">
+        <ActionButton onClick={onCollapseAll} testId="collapse-all" disabled={compact}>
           Collapse all
         </ActionButton>
         <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
-        <ToggleButton pressed={timelineOpen} onClick={onToggleTimeline} testId="toggle-timeline">
+        <ToggleButton
+          pressed={timelineOpen}
+          onClick={onToggleTimeline}
+          testId="toggle-timeline"
+          disabled={compact}
+        >
           Timeline
+        </ToggleButton>
+        <ToggleButton pressed={compact} onClick={onToggleCompact} testId="toggle-compact">
+          Compact
         </ToggleButton>
       </div>
     </div>
