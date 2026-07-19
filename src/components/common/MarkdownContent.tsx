@@ -1,4 +1,8 @@
-import 'katex/dist/katex.min.css'
+// KaTeX CSS must match the katex version that GENERATES the markup. rehype-katex pins
+// katex ^0.16 (nested under its own node_modules because the root has 0.18), and 0.18
+// renamed ~21 layout classes (.stretchy → .katex-stretchy, …) — importing the root 0.18
+// stylesheet against 0.16 markup collapses \boxed{} borders, accents and struts.
+import '../../../node_modules/rehype-katex/node_modules/katex/dist/katex.min.css'
 import { Component, type ReactNode, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'

@@ -22,6 +22,8 @@ export interface TokenLogprob {
   logprob: number
   /** Vocabulary token id (stable per token string). Optional: imported formats may lack it. */
   id?: number
+  /** Inference top-k alternatives at this position (usually only sampled for low-confidence tokens). */
+  topk?: Array<{ token: string; logprob: number; id?: number }>
 }
 
 export interface ToolCall {

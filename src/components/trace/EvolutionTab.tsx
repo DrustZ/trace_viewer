@@ -234,24 +234,21 @@ export function EvolutionTab({
   )
 
   // One dot per scored rollout, fanned out around its step by a deterministic
-  // per-index offset scaled to the smallest step gap (avoids overplotting).
+  // per-index pixel offset (avoids overplotting without polluting the x-axis ticks).
   const scatterPoints = useMemo<ScatterDatum[]>(() => {
     const points = evolution.data?.points ?? []
     const rowByStep = new Map(rows.map((r) => [r.step, r]))
-    const steps = points.map((p) => p.step).sort((a, b) => a - b)
-    let gap = Number.POSITIVE_INFINITY
-    for (let i = 1; i < steps.length; i++) gap = Math.min(gap, steps[i] - steps[i - 1])
-    const spread = Number.isFinite(gap) ? gap * 0.15 : 0.5
     const out: ScatterDatum[] = []
     for (const p of points) {
       const row = rowByStep.get(p.step)
       if (!row) continue
       const n = p.rollouts.length
+      const spreadPx = Math.min(26, (n - 1) * 6)
       p.rollouts.forEach((rollout, i) => {
         const score = rollout.stats.score
         if (score === null) return
-        const jitter = n > 1 ? (i / (n - 1) - 0.5) * spread : 0
-        out.push({ step: p.step + jitter, score, row })
+        const jitterPx = n > 1 ? (i / (n - 1) - 0.5) * spreadPx : 0
+        out.push({ step: p.step, score, jitterPx, row })
       })
     }
     return out
@@ -432,8 +429,14 @@ export function EvolutionTab({
                   name="Individual rollouts"
                   tooltipType="none"
                   isAnimationActive={false}
-                  shape={(props: { cx?: number; cy?: number }) => (
-                    <circle cx={props.cx} cy={props.cy} r={3} fill={DOT_COLOR} fillOpacity={0.55} />
+                  shape={(props: { cx?: number; cy?: number; payload?: ScatterDatum }) => (
+                    <circle
+                      cx={(props.cx ?? 0) + (props.payload?.jitterPx ?? 0)}
+                      cy={props.cy}
+                      r={3}
+                      fill={DOT_COLOR}
+                      fillOpacity={0.55}
+                    />
                   )}
                 />
                 <Line
