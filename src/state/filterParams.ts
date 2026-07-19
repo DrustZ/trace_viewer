@@ -87,6 +87,17 @@ export function toggleComponentPatch(params: ListParams, component: string): Lis
   return componentSelectionPatch(params, next)
 }
 
+/**
+ * Whether the user has narrowed the corpus at all. The home page loads nothing —
+ * no curves, no analytics, no table — until this is true: with potentially
+ * thousands of runs, aggregating "everything" by default is neither useful nor
+ * cheap. Any run/component/status/split/step pick, a filter DSL, or a keyword
+ * counts as a selection.
+ */
+export function hasActiveSelection(p: ListParams): boolean {
+  return !!(p.filters || p.q || p.component || p.status || p.split || p.step)
+}
+
 export function useListParams() {
   const [search, setSearch] = useSearchParams()
   const params = useMemo(() => searchToListParams(search), [search])

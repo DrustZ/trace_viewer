@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import { EmptyState } from '../components/common/EmptyState'
 import { AnalysisPanel } from '../components/home/AnalysisPanel'
 import { RunStatusBar } from '../components/home/RunStatusBar'
 import { Sidebar } from '../components/home/sidebar/Sidebar'
 import { TopPanel } from '../components/home/TopPanel'
 import { TraceTableArea } from '../components/home/TraceTableArea'
-import { useListParams } from '../state/filterParams'
+import { hasActiveSelection, useListParams } from '../state/filterParams'
 
 const SIDEBAR_KEY = 'tv.sidebar.open'
 
@@ -48,9 +49,18 @@ export default function HomePage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <RunStatusBar params={params} />
         <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-3">
-          <AnalysisPanel setParam={setParam} />
-          <TopPanel params={params} setParam={setParam} />
-          <TraceTableArea params={params} setParams={setParams} />
+          {hasActiveSelection(params) ? (
+            <>
+              <AnalysisPanel setParam={setParam} />
+              <TopPanel params={params} setParam={setParam} />
+              <TraceTableArea params={params} setParams={setParams} />
+            </>
+          ) : (
+            <EmptyState
+              title="Select a run to begin"
+              hint="Pick a run from the RUNS list on the left (or a component below it), or Import a trace. Nothing is loaded until you choose — a real corpus can hold thousands of runs."
+            />
+          )}
         </main>
       </div>
     </div>
