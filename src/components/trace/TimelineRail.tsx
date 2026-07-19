@@ -143,7 +143,7 @@ export function Minimap({
   return (
     <div
       data-testid="timeline-minimap"
-      className="absolute top-2 right-3 bottom-2 z-10 flex w-6 flex-col"
+      className="absolute top-2 right-3 bottom-20 z-10 flex w-6 flex-col"
     >
       <div
         className="shrink-0 pb-1 text-center font-mono text-[8px] leading-none text-slate-500"
