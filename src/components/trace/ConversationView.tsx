@@ -7,7 +7,7 @@ import { MessageCard } from './MessageCard'
 import { StepCard } from './StepCard'
 import { Minimap } from './TimelineRail'
 import { TraceSummaryPanel } from './TraceSummaryPanel'
-import { buildUnits, unitDurationMs } from './unitize'
+import { buildUnits } from './unitize'
 
 const TIMELINE_KEY = 'tv.timeline.open'
 const COMPACT_KEY = 'tv.compact'
@@ -67,7 +67,9 @@ export function ConversationView({ trace }: { trace: Trace }) {
     return map
   }, [units, messages.length])
 
-  // Message indices matching the in-trace search (content + toolCall arguments).
+  // Message indices matching the in-trace search. Diagnostic fields are
+  // searchable too: tool names, malformed-JSON parse errors, judge output —
+  // what the page visibly renders must be findable.
   const matches = useMemo(() => {
     const q = query.toLowerCase()
     if (!q) return NO_MATCHES
@@ -76,22 +78,20 @@ export function ConversationView({ trace }: { trace: Trace }) {
       const m = messages[i]
       if (
         m.content.toLowerCase().includes(q) ||
-        m.toolCalls?.some((c) => c.arguments.toLowerCase().includes(q))
+        m.judgeOutput?.toLowerCase().includes(q) ||
+        m.toolCalls?.some(
+          (c) =>
+            c.arguments.toLowerCase().includes(q) ||
+            c.name.toLowerCase().includes(q) ||
+            c.parseError?.toLowerCase().includes(q) ||
+            (c.parseError !== undefined && 'malformed json'.includes(q)),
+        )
       ) {
         found.push(i)
       }
     }
     return found
   }, [messages, query])
-
-  const maxDurationMs = useMemo(() => {
-    let max = 0
-    for (const unit of units) {
-      const d = unitDurationMs(unit)
-      if (d !== undefined && d > max) max = d
-    }
-    return max
-  }, [units])
 
   const totalDurationMs = useMemo(() => {
     if (trace.stats.durationMs !== undefined) return trace.stats.durationMs
@@ -289,9 +289,7 @@ export function ConversationView({ trace }: { trace: Trace }) {
                         key={unit.id}
                         data-index={item.index}
                         ref={virtualizer.measureElement}
-                        className={`absolute top-0 left-0 flex w-full ${
-                          unit.kind === 'step' ? 'justify-end' : 'justify-start'
-                        }`}
+                        className={`absolute top-0 left-0 flex w-full ${'justify-start'}`}
                         style={{
                           transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
                         }}
@@ -327,7 +325,6 @@ export function ConversationView({ trace }: { trace: Trace }) {
             {timelineOpen && (
               <Minimap
                 units={units}
-                maxDurationMs={maxDurationMs}
                 totalDurationMs={totalDurationMs}
                 scrollOffset={virtualizer.scrollOffset ?? 0}
                 viewportHeight={parentRef.current?.clientHeight ?? 0}
