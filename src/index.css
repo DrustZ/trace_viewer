@@ -1,9 +1,181 @@
 @import "tailwindcss";
 
+/*
+ * Theme tokens. Light = warm cream page with pure-white cards so panels
+ * visibly separate. Dark = warm near-black page with a warm slate panel.
+ * Components are NOT edited per-theme; instead the dark section below remaps
+ * the existing tailwind utility classes to these tokens.
+ */
 :root {
   color-scheme: light;
+  --app-bg: #faf7f0; /* warm cream page */
+  --panel: #ffffff; /* cards stay pure white to separate from the page */
+  --surface: #f3efe6; /* subtle warm inset surface */
+  --surface-2: #ece7db;
+  --ink: #0f172a; /* slate-900 */
+  --ink-2: #334155; /* slate-700 */
+  --muted: #64748b; /* slate-500 */
+  --border: #e6e0d4; /* warm border */
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --app-bg: #1b1917; /* warm near-black page */
+  --panel: #232019; /* warm slate card */
+  --surface: #201d17;
+  --surface-2: #2a261e;
+  --ink: #f5f3ee;
+  --ink-2: #d6d1c7;
+  --muted: #a29b8e;
+  --border: #3a352c;
+}
+
+html {
+  background: var(--app-bg);
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply antialiased;
+  min-height: 100vh;
+  background: var(--app-bg);
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark-theme utility remap. Keeps every component readable without touching
+ * its markup. A few bespoke-colored spots (recharts, KaTeX) may stay lighter.
+ * ------------------------------------------------------------------------- */
+
+/* Card / panel surfaces */
+[data-theme="dark"] .bg-white {
+  background-color: var(--panel);
+}
+[data-theme="dark"] .bg-slate-50 {
+  background-color: var(--surface);
+}
+[data-theme="dark"] .bg-slate-100 {
+  background-color: var(--surface-2);
+}
+[data-theme="dark"] .bg-slate-200 {
+  background-color: #353027;
+}
+
+/* Text */
+[data-theme="dark"] .text-slate-900,
+[data-theme="dark"] .text-slate-800,
+[data-theme="dark"] .text-slate-700 {
+  color: var(--ink);
+}
+[data-theme="dark"] .text-slate-600 {
+  color: var(--ink-2);
+}
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .text-slate-400 {
+  color: var(--muted);
+}
+
+/* Borders / dividers / rings */
+[data-theme="dark"] .border-slate-100,
+[data-theme="dark"] .border-slate-200,
+[data-theme="dark"] .border-slate-300,
+[data-theme="dark"] .border-slate-400 {
+  border-color: var(--border);
+}
+[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border);
+}
+[data-theme="dark"] .ring-slate-400,
+[data-theme="dark"] .ring-slate-500 {
+  --tw-ring-color: var(--border);
+}
+
+/* Accent callouts: darken the pastel -50/-100 fills and lighten their text so
+ * badges/callouts read light-on-dark instead of dark-on-dark. */
+[data-theme="dark"] .bg-blue-50 {
+  background-color: color-mix(in srgb, #3b82f6 13%, var(--panel));
+}
+[data-theme="dark"] .bg-blue-100 {
+  background-color: color-mix(in srgb, #3b82f6 20%, var(--panel));
+}
+[data-theme="dark"] .bg-emerald-50 {
+  background-color: color-mix(in srgb, #10b981 13%, var(--panel));
+}
+[data-theme="dark"] .bg-emerald-100 {
+  background-color: color-mix(in srgb, #10b981 20%, var(--panel));
+}
+[data-theme="dark"] .bg-red-50 {
+  background-color: color-mix(in srgb, #ef4444 13%, var(--panel));
+}
+[data-theme="dark"] .bg-red-100 {
+  background-color: color-mix(in srgb, #ef4444 20%, var(--panel));
+}
+[data-theme="dark"] .bg-amber-50 {
+  background-color: color-mix(in srgb, #f59e0b 13%, var(--panel));
+}
+[data-theme="dark"] .bg-amber-100 {
+  background-color: color-mix(in srgb, #f59e0b 20%, var(--panel));
+}
+[data-theme="dark"] .bg-indigo-50 {
+  background-color: color-mix(in srgb, #6366f1 13%, var(--panel));
+}
+[data-theme="dark"] .bg-indigo-100 {
+  background-color: color-mix(in srgb, #6366f1 20%, var(--panel));
+}
+[data-theme="dark"] .bg-orange-50 {
+  background-color: color-mix(in srgb, #f97316 13%, var(--panel));
+}
+[data-theme="dark"] .bg-orange-100 {
+  background-color: color-mix(in srgb, #f97316 20%, var(--panel));
+}
+[data-theme="dark"] .bg-violet-50 {
+  background-color: color-mix(in srgb, #8b5cf6 13%, var(--panel));
+}
+[data-theme="dark"] .bg-violet-100 {
+  background-color: color-mix(in srgb, #8b5cf6 20%, var(--panel));
+}
+[data-theme="dark"] .bg-rose-100 {
+  background-color: color-mix(in srgb, #f43f5e 20%, var(--panel));
+}
+
+[data-theme="dark"] .text-blue-600,
+[data-theme="dark"] .text-blue-700,
+[data-theme="dark"] .text-blue-900,
+[data-theme="dark"] .text-blue-950 {
+  color: #93c5fd;
+}
+[data-theme="dark"] .text-emerald-600,
+[data-theme="dark"] .text-emerald-700,
+[data-theme="dark"] .text-emerald-800,
+[data-theme="dark"] .text-emerald-900,
+[data-theme="dark"] .text-emerald-950 {
+  color: #6ee7b7;
+}
+[data-theme="dark"] .text-red-600,
+[data-theme="dark"] .text-red-700,
+[data-theme="dark"] .text-red-900 {
+  color: #fca5a5;
+}
+[data-theme="dark"] .text-amber-600,
+[data-theme="dark"] .text-amber-700,
+[data-theme="dark"] .text-amber-800,
+[data-theme="dark"] .text-amber-900 {
+  color: #fcd34d;
+}
+[data-theme="dark"] .text-indigo-600,
+[data-theme="dark"] .text-indigo-700,
+[data-theme="dark"] .text-indigo-800,
+[data-theme="dark"] .text-indigo-900 {
+  color: #a5b4fc;
+}
+[data-theme="dark"] .text-orange-600,
+[data-theme="dark"] .text-orange-700 {
+  color: #fdba74;
+}
+[data-theme="dark"] .text-violet-600,
+[data-theme="dark"] .text-violet-700,
+[data-theme="dark"] .text-purple-700 {
+  color: #c4b5fd;
+}
+[data-theme="dark"] .text-rose-900 {
+  color: #fda4af;
 }

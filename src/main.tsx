@@ -5,6 +5,10 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { ApiError } from './api/client'
 import './index.css'
+import { applyTheme, getTheme } from './theme'
+
+// Apply the persisted/system theme before first paint to avoid a flash.
+applyTheme(getTheme())
 
 const queryClient = new QueryClient({
   defaultOptions: {

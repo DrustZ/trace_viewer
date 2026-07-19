@@ -1,35 +1,37 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { formatDuration } from '../common/format'
 import { type RenderUnit, stepHasToolCalls, unitDurationMs } from './unitize'
 
 type BarKind = 'user' | 'neutral' | 'toolCall' | 'toolResult' | 'toolError' | 'final'
 
-// Mirrors the card colors for continuity: assistant reads green like the cards.
+// Mirrors the card colors for continuity: assistant reads green like the cards,
+// indigo once a step fires tools.
 function barKind(unit: RenderUnit): BarKind {
-  if (unit.kind === 'step') return 'final'
+  if (unit.kind === 'step') return stepHasToolCalls(unit) ? 'toolCall' : 'final'
   const m = unit.message
   if (m.role === 'tool') return m.toolResult?.isError ? 'toolError' : 'toolResult'
   if (m.role === 'user') return 'user'
   return 'neutral' // system/developer
 }
 
+/** Resting fill per kind — dimmed to opacity-60 in the strip. */
 const BAR: Record<BarKind, string> = {
   user: 'bg-blue-400',
-  neutral: 'bg-slate-200',
-  toolCall: 'bg-emerald-400',
+  neutral: 'bg-slate-300',
+  toolCall: 'bg-indigo-400',
   toolResult: 'bg-sky-300',
   toolError: 'bg-red-400',
   final: 'bg-emerald-400',
 }
 
-/** Label ink per segment color: readable on each fill. */
-const LABEL_INK: Record<BarKind, string> = {
-  user: 'text-blue-950/70',
-  neutral: 'text-slate-500',
-  toolCall: 'text-emerald-950/70',
-  toolResult: 'text-sky-950/70',
-  toolError: 'text-white/90',
-  final: 'text-emerald-950/70',
+/** Focused fill: a darker shade at full opacity so the current unit pops. */
+const BAR_FOCUS: Record<BarKind, string> = {
+  user: 'bg-blue-600',
+  neutral: 'bg-slate-500',
+  toolCall: 'bg-indigo-600',
+  toolResult: 'bg-sky-500',
+  toolError: 'bg-red-600',
+  final: 'bg-emerald-600',
 }
 
 function kindLabel(unit: RenderUnit): string {
@@ -38,11 +40,8 @@ function kindLabel(unit: RenderUnit): string {
 }
 
 const SAMPLE_CAP = 400
-const GAP = 1
-/** Every segment stays clickable; no single segment swallows the track. */
-const MIN_SEG = 6
-const MAX_SEG_SHARE = 0.35
-const LABEL_MIN_SEG = 14
+/** Log-scaled duration keeps big gaps legible; this is the floor so nothing vanishes. */
+const MIN_SEG = 4
 
 function sampleIndices(count: number, cap: number): number[] {
   if (count <= cap) return Array.from({ length: count }, (_, i) => i)
@@ -50,13 +49,13 @@ function sampleIndices(count: number, cap: number): number[] {
 }
 
 /**
- * Time-proportional vertical timeline beside the conversation. The strip fills
- * the available height; each unit's segment height is its share of total
- * wall-clock time (clamped to [6px, 35% of track] so everything stays
- * clickable and nothing swallows the strip), color = unit kind. The unit at
- * the viewport center gets a dock-style zoom + ring instead of a scroll thumb
- * (a thumb lies once segments are time-proportional while scrolling is
- * content-proportional). Clicking a segment jumps to its unit.
+ * Horizontal time strip sitting sticky at the top of the conversation scroll
+ * area. One segment per render unit, left→right in trace order; segment width is
+ * its log-scaled share of total wall-clock time (min 4px so everything stays
+ * clickable), color = unit kind. The unit at the viewport center is the focus:
+ * darkened + a slate-700 ring instead of a scroll thumb (a thumb lies once
+ * segments are time-proportional while scrolling is content-proportional).
+ * Clicking a segment jumps to its unit.
  */
 export function Minimap({
   units,
@@ -79,59 +78,24 @@ export function Minimap({
   scrollMargin: number
   onJump: (index: number) => void
 }) {
-  const trackRef = useRef<HTMLDivElement>(null)
-  const [trackHeight, setTrackHeight] = useState(0)
-
-  useLayoutEffect(() => {
-    const el = trackRef.current
-    if (!el) return
-    const update = () => setTrackHeight(el.clientHeight)
-    update()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
   const sampled = useMemo(() => sampleIndices(units.length, SAMPLE_CAP), [units.length])
   const n = sampled.length
 
-  const cumMs = useMemo(() => {
-    const out = new Array<number>(units.length + 1)
-    out[0] = 0
-    for (let i = 0; i < units.length; i++) out[i + 1] = out[i] + (unitDurationMs(units[i]) ?? 0)
-    return out
-  }, [units])
-
-  // Segment heights: proportional to time share, clamped, re-fit to the track.
-  const segHeights = useMemo(() => {
-    if (n === 0 || trackHeight <= 0) return []
-    const usable = Math.max(trackHeight - (n - 1) * GAP, n * MIN_SEG)
-    const total = cumMs[units.length]
-    let raw: number[]
-    if (total > 0) {
-      raw = sampled.map((index) => {
+  // Log-scaled duration weights drive flex-grow; 0-duration units fall back to
+  // their MIN_SEG floor. When no duration is known, everything shares equally.
+  const weights = useMemo(
+    () =>
+      sampled.map((index) => {
         const d = unitDurationMs(units[index]) ?? 0
-        return Math.min(Math.max(MIN_SEG, (d / total) * usable), usable * MAX_SEG_SHARE)
-      })
-    } else {
-      raw = sampled.map(() => usable / n)
-    }
-    const sum = raw.reduce((a, b) => a + b, 0)
-    const scale = usable / sum
-    return raw.map((h) => Math.max(MIN_SEG, h * scale))
-  }, [n, trackHeight, sampled, units, cumMs])
+        return d > 0 ? Math.log1p(d) : 0
+      }),
+    [sampled, units],
+  )
+  const anyWeight = weights.some((w) => w > 0)
 
-  const segTops = useMemo(() => {
-    const tops = new Array<number>(segHeights.length + 1)
-    tops[0] = 0
-    for (let i = 0; i < segHeights.length; i++) tops[i + 1] = tops[i] + segHeights[i] + GAP
-    return tops
-  }, [segHeights])
-
-  // Dock-style focus mapped over the REACHABLE scroll range (0 = top, 1 = end),
-  // so the last unit gets focus at the bottom — the viewport center alone never
-  // reaches the end of the content.
+  // Focus mapped over the REACHABLE scroll range (0 = top, 1 = end), so the last
+  // unit gets focus at the bottom — the viewport center alone never reaches the
+  // end of the content.
   const maxScroll = Math.max(totalSize - viewportHeight, 1)
   const progress = Math.min(Math.max((scrollOffset - scrollMargin) / maxScroll, 0), 1)
   const focusedUnit = units.length > 0 ? Math.round(progress * (units.length - 1)) : 0
@@ -143,51 +107,35 @@ export function Minimap({
   return (
     <div
       data-testid="timeline-minimap"
-      className="absolute top-2 right-3 bottom-20 z-10 flex w-6 flex-col"
+      className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 border-slate-200 border-b bg-white/95 px-2 py-1 backdrop-blur-sm"
     >
-      <div
-        className="shrink-0 pb-1 text-center font-mono text-[8px] leading-none text-slate-500"
-        title="Total duration"
-      >
-        {formatDuration(totalDurationMs)}
+      <div className="flex min-w-0 flex-1 items-stretch gap-px overflow-hidden">
+        {sampled.map((index, i) => {
+          const unit = units[index]
+          const d = unitDurationMs(unit)
+          const kind = barKind(unit)
+          const focused = i === focusedIdx
+          return (
+            <button
+              key={unit.id}
+              type="button"
+              data-testid={`timeline-seg-${index}`}
+              onClick={() => onJump(index)}
+              title={`#${index + 1} · ${kindLabel(unit)} · ${formatDuration(d)}`}
+              aria-label={`Jump to unit ${index + 1}`}
+              aria-current={focused ? 'true' : undefined}
+              className={`h-7 rounded-[2px] transition-opacity hover:opacity-100 ${
+                focused
+                  ? `${BAR_FOCUS[kind]} opacity-100 ring-[1.5px] ring-slate-700`
+                  : `${BAR[kind]} opacity-60`
+              }`}
+              style={{ flexGrow: anyWeight ? weights[i] : 1, flexBasis: 0, minWidth: MIN_SEG }}
+            />
+          )
+        })}
       </div>
-      <div className="min-h-0 flex-1 rounded-lg border border-slate-200/80 bg-slate-50 p-0.5">
-        <div ref={trackRef} className="relative h-full">
-          {sampled.map((index, i) => {
-            const unit = units[index]
-            const d = unitDurationMs(unit)
-            const kind = barKind(unit)
-            const h = segHeights[i] ?? MIN_SEG
-            const focused = i === focusedIdx
-            const showLabel = d !== undefined && d > 0 && h >= LABEL_MIN_SEG
-            return (
-              <button
-                key={unit.id}
-                type="button"
-                onClick={() => onJump(index)}
-                title={`#${index + 1} · ${kindLabel(unit)} · ${formatDuration(d)}`}
-                aria-label={`Jump to unit ${index + 1}`}
-                aria-current={focused ? 'true' : undefined}
-                className={`absolute inset-x-0 block ${focused ? 'z-10' : ''}`}
-                style={{ top: segTops[i], height: h }}
-              >
-                <span
-                  className={`block h-full w-full rounded-[3px] transition-all duration-150 hover:opacity-100 ${BAR[kind]} ${
-                    focused ? 'scale-x-[1.6] opacity-100 ring-1 ring-slate-500/50' : 'opacity-75'
-                  }`}
-                  style={focused ? { transformOrigin: 'right' } : undefined}
-                />
-                {showLabel && (
-                  <span
-                    className={`pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[7px] leading-none ${LABEL_INK[kind]}`}
-                  >
-                    {formatDuration(d)}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
+      <div className="shrink-0 font-mono text-[10px] text-slate-500" title="Total duration">
+        {formatDuration(totalDurationMs)}
       </div>
     </div>
   )
