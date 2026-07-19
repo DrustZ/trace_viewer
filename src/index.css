@@ -289,3 +289,76 @@ body {
 [data-theme="dark"] .from-white {
   background-image: linear-gradient(to top, var(--panel), transparent);
 }
+
+/* ---------------------------------------------------------------------------
+ * Code in dark mode. MarkdownContent bakes bg-slate-50/100 into DESCENDANT
+ * selectors ([&_pre], [&_code]), which the .bg-slate-* remap above can't reach —
+ * so fenced blocks and inline code stayed light (white boxes). And github.css
+ * (a LIGHT hljs theme) is imported globally, so its token colors are dark and
+ * unreadable on a dark surface. Override both here.
+ * ------------------------------------------------------------------------- */
+[data-theme="dark"] [data-testid="markdown-content"] pre {
+  background-color: #14120e;
+  border-color: var(--border);
+  color: var(--ink);
+}
+[data-theme="dark"] [data-testid="markdown-content"] code {
+  background-color: #2a2620;
+  color: var(--ink);
+}
+[data-theme="dark"] [data-testid="markdown-content"] pre code {
+  background-color: transparent;
+}
+
+/* highlight.js tokens → a GitHub-dark palette (readable on the dark code panel). */
+[data-theme="dark"] .hljs {
+  color: #c9d1d9;
+  background: transparent;
+}
+[data-theme="dark"] .hljs-comment,
+[data-theme="dark"] .hljs-quote {
+  color: #8b949e;
+}
+[data-theme="dark"] .hljs-keyword,
+[data-theme="dark"] .hljs-selector-tag,
+[data-theme="dark"] .hljs-doctag,
+[data-theme="dark"] .hljs-meta .hljs-keyword {
+  color: #ff7b72;
+}
+[data-theme="dark"] .hljs-string,
+[data-theme="dark"] .hljs-meta .hljs-string,
+[data-theme="dark"] .hljs-regexp,
+[data-theme="dark"] .hljs-addition {
+  color: #a5d6ff;
+}
+[data-theme="dark"] .hljs-number,
+[data-theme="dark"] .hljs-literal,
+[data-theme="dark"] .hljs-built_in,
+[data-theme="dark"] .hljs-type {
+  color: #79c0ff;
+}
+[data-theme="dark"] .hljs-title,
+[data-theme="dark"] .hljs-title.function_,
+[data-theme="dark"] .hljs-title.class_,
+[data-theme="dark"] .hljs-section {
+  color: #d2a8ff;
+}
+[data-theme="dark"] .hljs-attr,
+[data-theme="dark"] .hljs-attribute,
+[data-theme="dark"] .hljs-name,
+[data-theme="dark"] .hljs-variable,
+[data-theme="dark"] .hljs-template-variable {
+  color: #7ee787;
+}
+[data-theme="dark"] .hljs-symbol,
+[data-theme="dark"] .hljs-bullet,
+[data-theme="dark"] .hljs-link,
+[data-theme="dark"] .hljs-selector-attr {
+  color: #a5d6ff;
+}
+[data-theme="dark"] .hljs-emphasis {
+  font-style: italic;
+}
+[data-theme="dark"] .hljs-strong {
+  font-weight: 700;
+}
