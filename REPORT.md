@@ -3,6 +3,76 @@
 The brief: a tool for loading, reading, and debugging LLM traces, working well with code
 agents. This report explains what I chose to build, why, and what I deliberately did not.
 
+## TL;DR — design FAQ
+
+Skim this first; the numbered sections below go deeper.
+
+**What is it, in one line?** A local-first viewer for reading and debugging a *single* LLM/RL
+rollout trace — load it (paste / file / URL, or a run folder), read the agent conversation,
+inspect tokens / spans / reward, and diff two runs. It answers *"why did this rollout go
+wrong,"* not *"how is my app doing in production."*
+
+**Why local-first + in-memory, no database?** The corpus (~1.3k traces) loads into memory and
+aggregates in milliseconds; disk JSON under `data/runs/<run>/` is the source of truth, so
+traces stay greppable and shareable as files. The store sits behind a narrow interface — at
+100k+ traces you swap it for SQLite/DuckDB without touching anything else. Trade-off: boot
+waits on the initial scan and there's no cross-restart index — fine for a dev-time tool.
+
+**Why a normalized schema + connectors instead of per-format UI code?** One internal
+`Trace/Message` model (roles + harmony-style channels); connectors detect+parse foreign
+formats into it and *never throw*. Every view renders only the normalized model, so adding a
+format is one file and the UI never grows format branches. Unknown fields are preserved in
+`meta.extra` (shown in Metadata) and the Raw tab keeps original bytes — normalization never
+loses information.
+
+**Why are runs folders, not a field?** A run is a directory under `data/runs/`; the scanner
+derives the run id from the folder name. Adding a run = dropping in a folder — which is how RL
+runs actually land on disk, with no migration.
+
+**Why does the home load nothing until you pick a run?** A real corpus can hold thousands of
+runs; aggregating "everything" by default is neither useful nor cheap. An empty state forces
+intent, and curves / components / table / AI are all gated behind a selection — so corpus size
+never gates first paint.
+
+**Why is the URL the share unit?** Filters, sort, grouping, selected run/trace, and tab all
+serialize into the URL with one codec shared by the UI and API. Sharing a debugging state is
+copying the address bar; deep-linking from an AI finding is trivial. Trade-off: a busy query
+string.
+
+**Why chat-first, step-grouped?** RL rollouts *are* agent conversations. A flat message list is
+unreadable at 40 turns; grouping a response (reasoning → tool calls → answer) into one card
+fixes it. I tried chat-style left/right alignment and reverted it — the eye ping-pongs;
+uniform full-width, left-aligned, with color-coded kind chips reads better.
+
+**Why is import ephemeral (in-memory, no disk)?** Import means "load & view this one trace,"
+not corpus management. It's held in memory (re-importing just refreshes — never errors on a
+duplicate), opens in a drawer with the home kept on the left so you can keep importing/loading,
+and Raw still works from the in-memory copy. For a persistent corpus you drop files into
+`data/runs/`.
+
+**Why hide Timeline / Prev-Next / step-split for imported traces?** Honesty. A one-off import
+has no run/checkpoint/split, no list to page through, and often no timing — so rather than
+fabricate them (synthetic 1s span ticks, a "train" label, "1/1344"), the UI shows what exists
+and hides what doesn't. Evolution stays, rendering a graceful "only one checkpoint" state so
+the view is still consistent with loaded-run traces.
+
+**Why synthetic data, not real traces?** Deterministic (same seed → byte-identical, unit-tested),
+no licenses/downloads, dataset-shaped across six components, with failure modes worth finding
+(malformed tool JSON, truncation, budget/cancel, wrong answers) and a 400-turn stress trace.
+Realistic semantics matter: `executing` traces exist only in the in-progress run.
+
+**Biggest bug?** An AI query — "which groups at step 125 average < 0.5" — returned only
+score-0 traces: the filter DSL is per-trace, but the question is per-group. Fixed by giving the
+analysis agent an `aggregate_instances` tool (group → avg) instead of filtering rows. The same
+"don't fabricate / don't conflate" theme recurred in the Timeline (synthetic durations →
+"order only · no timing") and in a dedup pass (I over-removed the component analytics table,
+then restored it — dedup ≠ deleting a genuinely distinct view).
+
+**Key trade-offs.** In-memory store (speed/simplicity vs scale/persistence); synthetic logprobs
+(renders the full token UI vs not real logits); CSS-variable dark remap (pragmatic vs
+bespoke-designed); Compare fixed at A/B (simple vs n-run, though the model is n-ready); no
+component unit tests (a heavily-tested pure-function core + Playwright QA vs no view tests).
+
 ## 1. Problem framing & user
 
 I built for the user I know best from production RL work: **a researcher reading rollout
