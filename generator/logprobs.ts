@@ -128,19 +128,58 @@ function buildTopk(tokens: TokenLogprob[], index: number, rng: Rng): TokenLogpro
   return topk
 }
 
+/** Tokens above this logprob (p ≈ 1) count toward a zero-logprob span. */
+export const ZERO_LOGPROB_THRESHOLD = -0.0005
+
+/** Consecutive near-zero tokens needed to flag a zero-logprob span. */
+export const ZERO_LOGPROB_RUN = 3
+
 export function buildTokens(
   text: string,
   rng: Rng,
   region?: { start: number; end: number },
 ): TokenLogprob[] {
-  const tokens: TokenLogprob[] = tokenize(text).map(({ token, start }) => {
-    const suspicious = region ? start < region.end && start + token.length > region.start : false
-    return { token, logprob: sampleLogprob(rng, suspicious), id: tokenId(token) }
-  })
+  const spans = tokenize(text)
+  const suspicious = spans.map(({ token, start }) =>
+    region ? start < region.end && start + token.length > region.start : false,
+  )
+  const tokens: TokenLogprob[] = spans.map(({ token }, i) => ({
+    token,
+    logprob: sampleLogprob(rng, suspicious[i]),
+    id: tokenId(token),
+  }))
+  // Occasionally a confident span: consecutive near-zero logprobs, like a model
+  // copying boilerplate verbatim. Powers meta.extra.zero_logprob_span downstream.
+  // Suspicious (failure-region) tokens are never overwritten.
+  if (tokens.length >= ZERO_LOGPROB_RUN && rng.bernoulli(0.3)) {
+    const len = Math.min(tokens.length, rng.int(ZERO_LOGPROB_RUN, 6))
+    const start = rng.int(0, tokens.length - len)
+    for (let i = start; i < start + len; i++) {
+      if (!suspicious[i]) {
+        tokens[i].logprob = -Math.round((0.0001 + rng.next() * 0.0003) * 10000) / 10000
+      }
+    }
+  }
   for (let i = 0; i < tokens.length; i++) {
     if (tokens[i].logprob < TOPK_LOGPROB_CEILING) tokens[i].topk = buildTopk(tokens, i, rng)
   }
   return tokens
+}
+
+/**
+ * True when any message's attached tokens contain >= ZERO_LOGPROB_RUN
+ * consecutive tokens with logprob above ZERO_LOGPROB_THRESHOLD.
+ */
+export function hasZeroLogprobSpan(messages: readonly Message[]): boolean {
+  for (const m of messages) {
+    if (!m.tokens) continue
+    let run = 0
+    for (const t of m.tokens) {
+      run = t.logprob > ZERO_LOGPROB_THRESHOLD ? run + 1 : 0
+      if (run >= ZERO_LOGPROB_RUN) return true
+    }
+  }
+  return false
 }
 
 /**

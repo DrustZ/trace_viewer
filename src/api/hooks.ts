@@ -17,6 +17,8 @@ import type {
   TraceSummary,
 } from '@shared/schema/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+// Type-only import — erased at build time, so the client bundle never pulls in server code.
+import type { AnalysisResponse } from '../../server/ai/analyst'
 import { apiGet, apiPost } from './client'
 
 /** Canonical list-query params, serialized identically for every endpoint that filters. */
@@ -153,6 +155,12 @@ export function useImportTrace() {
 export function useAiFilter() {
   return useMutation({
     mutationFn: (query: string) => apiPost<AiFilterResponse>('/api/ai-filter', { query }),
+  })
+}
+
+export function useAnalysis() {
+  return useMutation({
+    mutationFn: (query: string) => apiPost<AnalysisResponse>('/api/analysis', { query }),
   })
 }
 

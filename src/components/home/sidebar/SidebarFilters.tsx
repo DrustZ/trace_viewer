@@ -1,9 +1,38 @@
 import { decodeFilterSet, encodeFilterSet } from '@shared/filter/parse'
+import type { FilterCondition } from '@shared/filter/types'
 import { useEffect, useState } from 'react'
 import { type ListParams, useMeta } from '../../../api/hooks'
-import type { ListParamKey } from '../../../state/filterParams'
+import { type ListParamKey, useListParams } from '../../../state/filterParams'
 import { AiFilterInput } from '../AiFilterInput'
 import { FilterConditionBuilder } from '../FilterConditionBuilder'
+
+function c(
+  key: string,
+  op: FilterCondition['op'],
+  value: string | number | boolean,
+): FilterCondition {
+  return { key, op, value }
+}
+
+/**
+ * One-click investigation starting points. Applying replaces the filters/sort/
+ * order params wholesale (absent fields clear back to the defaults); the select
+ * itself is stateless and snaps back to the placeholder.
+ */
+const PRESETS: Array<{
+  label: string
+  conditions?: FilterCondition[]
+  sort?: string
+  order?: 'asc' | 'desc'
+}> = [
+  { label: 'Shortest successes', conditions: [c('score', 'gt', 0)], sort: 'turns', order: 'asc' },
+  { label: 'Shortest failures', conditions: [c('score', 'eq', 0)], sort: 'turns', order: 'asc' },
+  { label: 'Longest running', sort: 'durationMs', order: 'desc' },
+  { label: 'KL outliers', conditions: [c('kl', 'gt', 1)] },
+  { label: 'Zero-logprob spans', conditions: [c('zeroLogprobSpan', 'eq', true)] },
+  { label: 'Format errors', conditions: [c('formatErrors', 'eq', true)] },
+  { label: 'High context use', conditions: [c('contextUtil', 'gt', 0.5)] },
+]
 
 const SELECT_CLASS =
   'w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400'
@@ -71,6 +100,9 @@ export function SidebarFilters({
   clearAll: () => void
 }) {
   const meta = useMeta()
+  // Presets patch filters+sort+order atomically; sequential setParam calls
+  // in one tick would clobber each other (see useListParams).
+  const { setParams } = useListParams()
   const [instanceKw, setInstanceKw] = useState(() => instanceKeywordFrom(params.filters))
   const [traceKw, setTraceKw] = useState(params.q ?? '')
 
@@ -93,6 +125,16 @@ export function SidebarFilters({
     const v = traceKw.trim()
     if (v === (params.q ?? '')) return
     setParam('q', v || undefined)
+  }
+
+  const applyPreset = (label: string) => {
+    const preset = PRESETS.find((p) => p.label === label)
+    if (preset === undefined) return
+    setParams({
+      filters: preset.conditions ? encodeFilterSet({ conditions: preset.conditions }) : undefined,
+      sort: preset.sort,
+      order: preset.order,
+    })
   }
 
   const grouped = params.groupBy === 'instance'
@@ -154,6 +196,22 @@ export function SidebarFilters({
         />
       </Field>
       <AiFilterInput setParam={setParam} />
+      <Field label="Presets">
+        <select
+          className={SELECT_CLASS}
+          data-testid="filter-presets"
+          aria-label="Presets"
+          value=""
+          onChange={(e) => applyPreset(e.target.value)}
+        >
+          <option value="">None</option>
+          {PRESETS.map((p) => (
+            <option key={p.label} value={p.label}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </Field>
       <FilterConditionBuilder params={params} setParam={setParam} />
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-xs text-slate-600">

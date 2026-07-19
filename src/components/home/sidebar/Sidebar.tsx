@@ -1,4 +1,6 @@
+import { decodeFilterSet, encodeFilterSet } from '@shared/filter/parse'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { type ListParams, useMeta, useRefresh } from '../../../api/hooks'
 import type { ListParamKey, ListParamPatch } from '../../../state/filterParams'
 import { formatNumber } from '../../common/format'
@@ -48,6 +50,50 @@ function ReloadIcon({ spinning }: { spinning: boolean }) {
 
 const BTN =
   'inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50'
+
+/** Known training runs. Static, time-boxed: the corpus is generated with exactly these. */
+const RUNS = ['run-a', 'run-b']
+
+function runFromFilters(filters: string | undefined): string {
+  const cond = decodeFilterSet(filters).conditions.find((c) => c.key === 'run' && c.op === 'eq')
+  return cond && !Array.isArray(cond.value) ? String(cond.value) : ''
+}
+
+/** 'RUN' selector: applies/removes a `run.eq.<x>` condition on the filters param. */
+function RunSection({
+  params,
+  setParam,
+}: {
+  params: ListParams
+  setParam: (key: ListParamKey, value: string | undefined) => void
+}) {
+  const setRun = (value: string) => {
+    const others = decodeFilterSet(params.filters).conditions.filter(
+      (c) => !(c.key === 'run' && c.op === 'eq'),
+    )
+    const conditions = value === '' ? others : [...others, { key: 'run', op: 'eq' as const, value }]
+    setParam('filters', encodeFilterSet({ conditions }) || undefined)
+  }
+  return (
+    <section data-testid="run-section" className="flex flex-col gap-1.5">
+      <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Run</h2>
+      <select
+        className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        data-testid="run-select"
+        aria-label="Run"
+        value={runFromFilters(params.filters)}
+        onChange={(e) => setRun(e.target.value)}
+      >
+        <option value="">All runs</option>
+        {RUNS.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+      </select>
+    </section>
+  )
+}
 
 export function Sidebar({
   open,
@@ -133,10 +179,14 @@ export function Sidebar({
             <ReloadIcon spinning={refresh.isPending} />
             Reload
           </button>
+          <Link to="/compare" data-testid="compare-link" className={BTN}>
+            Compare runs
+          </Link>
         </div>
         <GlobalSearchBox />
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-3">
+        <RunSection params={params} setParam={setParam} />
         <SelectionStats params={params} />
         <CategoryTree params={params} setParams={setParams} />
         <SidebarFilters params={params} setParam={setParam} clearAll={clearAll} />

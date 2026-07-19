@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnalysisPanel } from '../components/home/AnalysisPanel'
 import { RunStatusBar } from '../components/home/RunStatusBar'
 import { Sidebar } from '../components/home/sidebar/Sidebar'
 import { TopPanel } from '../components/home/TopPanel'
@@ -47,6 +48,7 @@ export default function HomePage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <RunStatusBar params={params} sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
         <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-3">
+          <AnalysisPanel setParam={setParam} />
           <TopPanel params={params} setParam={setParam} />
           <TraceTableArea params={params} setParams={setParams} />
         </main>

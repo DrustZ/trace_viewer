@@ -2,6 +2,7 @@ import type { Trace } from '@shared/schema/types'
 import { ConversationView } from './ConversationView'
 import { EvolutionTab } from './EvolutionTab'
 import { MetadataTab } from './MetadataTab'
+import { PlaygroundTab } from './PlaygroundTab'
 import { RawTab } from './RawTab'
 import { TimelineTab } from './TimelineTab'
 import { TraceChat } from './TraceChat'
@@ -51,6 +52,12 @@ export function TraceView({
         {tab === 'evolution' && (
           <div className="h-full overflow-y-auto">
             <EvolutionTab trace={trace} onNavigate={onNavigate} />
+          </div>
+        )}
+        {tab === 'playground' && (
+          <div className="h-full overflow-y-auto">
+            {/* Keyed by trace: controls (cut message id, step) are trace-specific state. */}
+            <PlaygroundTab key={trace.meta.traceId} trace={trace} />
           </div>
         )}
         {tab === 'raw' && <RawTab traceId={trace.meta.traceId} active />}

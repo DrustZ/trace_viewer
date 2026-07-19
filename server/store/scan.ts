@@ -7,7 +7,7 @@ import type { ParsedTrace } from '../../shared/connectors/types'
 import type { TraceMeta, TraceStats } from '../../shared/schema/types'
 import type { TraceStore } from './traceStore'
 
-export const DEFAULT_ROOTS = ['data/traces', 'data/imported']
+export const DEFAULT_ROOTS = ['data/traces', 'data/traces_runb', 'data/imported']
 
 const TRACE_EXTENSIONS: ReadonlySet<string> = new Set(connectors.flatMap((c) => c.extensions))
 

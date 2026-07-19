@@ -8,6 +8,26 @@ interface KeyEntry {
   get: KeyAccessor
 }
 
+/** Typed reads over the untyped meta.extra bag; wrong-typed or missing values ⇒ undefined. */
+function extraOf(s: TraceSummary, key: string): unknown {
+  return s.meta.extra?.[key]
+}
+
+function extraNumber(s: TraceSummary, key: string): number | undefined {
+  const v = extraOf(s, key)
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined
+}
+
+function extraBoolean(s: TraceSummary, key: string): boolean | undefined {
+  const v = extraOf(s, key)
+  return typeof v === 'boolean' ? v : undefined
+}
+
+function extraString(s: TraceSummary, key: string): string | undefined {
+  const v = extraOf(s, key)
+  return typeof v === 'string' ? v : undefined
+}
+
 const ENTRIES: KeyEntry[] = [
   {
     def: {
@@ -183,6 +203,81 @@ const ENTRIES: KeyEntry[] = [
       description: 'Name of the model that generated the trace',
     },
     get: (s) => s.stats.model?.name,
+  },
+  {
+    def: {
+      id: 'kl',
+      label: 'KL divergence',
+      type: 'number',
+      description:
+        'KL divergence of the policy from the reference model for this rollout; unset when the trainer did not report it',
+    },
+    get: (s) => extraNumber(s, 'kl'),
+  },
+  {
+    def: {
+      id: 'trainerBatch',
+      label: 'Trainer batch',
+      type: 'number',
+      description: 'Trainer batch index that produced this rollout; unset when unknown',
+    },
+    get: (s) => extraNumber(s, 'trainer_batch'),
+  },
+  {
+    def: {
+      id: 'contextUtil',
+      label: 'Context utilization',
+      type: 'number',
+      description:
+        "Total tokens divided by the model's context window, in [0, 1]; 0 when the context window is unknown",
+    },
+    get: (s) => {
+      const util = s.stats.totalTokens / (s.stats.model?.contextWindow ?? Infinity)
+      return Math.round(util * 10_000) / 10_000
+    },
+  },
+  {
+    def: {
+      id: 'zeroLogprobSpan',
+      label: 'Zero-logprob span',
+      type: 'boolean',
+      description:
+        'True when the trace contains a suspicious run of tokens with logprob exactly 0 (possible training anomaly)',
+    },
+    get: (s) => extraBoolean(s, 'zero_logprob_span'),
+  },
+  {
+    def: {
+      id: 'formatErrors',
+      label: 'Format errors',
+      type: 'boolean',
+      description:
+        'True when any assistant tool call had malformed (unparseable) arguments in this trace',
+    },
+    get: (s) => {
+      const count = extraNumber(s, 'format_errors')
+      return count === undefined ? undefined : count > 0
+    },
+  },
+  {
+    def: {
+      id: 'endReason',
+      label: 'End reason',
+      type: 'string',
+      description:
+        "Why the rollout ended, e.g. 'solved', 'gave_up', 'context_limit', 'tool_failure'; unset when unknown",
+    },
+    get: (s) => extraString(s, 'end_reason'),
+  },
+  // Owned by Track v1.2 (cross-run comparison) — keep as the LAST entry.
+  {
+    def: {
+      id: 'run',
+      label: 'Run',
+      type: 'string',
+      description: "Training run name (meta.extra.run), e.g. 'run-a'; absent ⇒ 'run-a'",
+    },
+    get: (s) => (typeof s.meta.extra?.run === 'string' ? s.meta.extra.run : 'run-a'),
   },
 ]
 

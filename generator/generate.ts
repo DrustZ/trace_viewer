@@ -9,7 +9,7 @@ import { writeHarmony } from './emit/harmony'
 import { writeNative } from './emit/native'
 import { writeOpenAI } from './emit/openai'
 import { pickFailure } from './failures'
-import { attachLogprobs } from './logprobs'
+import { attachLogprobs, hasZeroLogprobSpan } from './logprobs'
 import { hashSeed, mulberry32 } from './rng'
 import { browsecomp } from './scenarios/browsecomp'
 import { deepscalerMath } from './scenarios/deepscalerMath'
@@ -155,7 +155,22 @@ export interface GenerateOptions {
   seed: number
   out: string
   scale: number
+  /** Training run this corpus belongs to (meta.extra.run). Default 'run-a'. */
+  runName?: string
   quiet?: boolean
+}
+
+export const DEFAULT_RUN_NAME = 'run-a'
+
+/**
+ * Non-default runs prefix every traceId with the run's first letter ('run-b' →
+ * 'b-...') so corpora can coexist in one store; instanceIds stay unprefixed so
+ * the same instance joins across runs.
+ */
+export function traceIdPrefix(runName: string): string {
+  if (runName === DEFAULT_RUN_NAME) return ''
+  const tag = runName.startsWith('run-') ? runName.slice('run-'.length) : runName
+  return `${tag.slice(0, 1)}-`
 }
 
 export interface GenerateSummary {
@@ -186,8 +201,13 @@ export function runGenerate(opts: GenerateOptions): GenerateSummary {
   mkdirSync(join(out, 'harmony'), { recursive: true })
   mkdirSync(join(out, 'openai'), { recursive: true })
 
+  const runName = opts.runName ?? DEFAULT_RUN_NAME
+  const idPrefix = traceIdPrefix(runName)
   const scenarioByShort = new Map(COMPONENTS.map((c) => [c.short, c.scenario]))
   const plans = buildPlans(seed, scale)
+  // Prefix after planning so instanceIds (and thus instance overlap across
+  // runs) are untouched; only trace identity gets namespaced per run.
+  if (idPrefix !== '') for (const plan of plans) plan.traceId = idPrefix + plan.traceId
 
   const summary: GenerateSummary = {
     totalBytes: 0,
@@ -256,10 +276,19 @@ export function runGenerate(opts: GenerateOptions): GenerateSummary {
       -Math.round((trace.stats.outputTokens / contextWindow) * 0.1 * 10000) / 10000
     // Observability profile: built after finalize so spans see annotated
     // messages (ids + stepIndex) and the computed stats.
+    // Malformed tool-call arguments (parseError) per trace — a cheap corpus-wide
+    // "format error" signal for filtering.
+    const formatErrors = trace.messages.reduce(
+      (acc, m) => acc + (m.toolCalls?.filter((c) => c.parseError !== undefined).length ?? 0),
+      0,
+    )
     trace.meta.extra = {
       ...trace.meta.extra,
+      run: runName,
       kl,
       trainer_batch: Math.floor(plan.step / 25),
+      format_errors: formatErrors,
+      ...(gotLogprobs && hasZeroLogprobSpan(trace.messages) ? { zero_logprob_span: true } : {}),
       ...(score !== null
         ? {
             reward_breakdown: {
@@ -302,10 +331,11 @@ export function runGenerate(opts: GenerateOptions): GenerateSummary {
 
   const manifest = {
     seed,
+    run: runName,
     base_timestamp: BASE_TIMESTAMP,
     counts: summary.counts,
     showcase: summary.showcase,
-    huge_trace: HUGE_TRACE_ID,
+    huge_trace: idPrefix + HUGE_TRACE_ID,
     corrupt_file: CORRUPT_FILE,
     approx_bytes: summary.totalBytes,
     notes: [
@@ -366,11 +396,13 @@ if (isMain) {
       seed: { type: 'string', default: '42' },
       out: { type: 'string', default: 'data/traces' },
       scale: { type: 'string', default: '1' },
+      run: { type: 'string', default: DEFAULT_RUN_NAME },
     },
   })
   runGenerate({
     seed: Number(values.seed),
     out: values.out,
     scale: Number(values.scale),
+    runName: values.run,
   })
 }

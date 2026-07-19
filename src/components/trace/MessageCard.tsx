@@ -1,10 +1,12 @@
 import type { Message } from '@shared/schema/types'
+import { useMemo } from 'react'
 import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import { formatDuration, formatTimestamp } from '../common/format'
 import { MarkdownContent, RichRawToggle, useViewMode } from '../common/MarkdownContent'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { TokenLogprobText } from './TokenLogprobText'
 import { ToolResultBlock } from './ToolResultBlock'
+import { bpeTokens } from './tokenize'
 
 /** Content above this length is clamped behind the fold control. */
 const CLAMP = 2500
@@ -190,11 +192,22 @@ function Body({
 }) {
   const [view, setView] = useViewMode(message.id)
   const card = `rounded-lg border border-l-4 px-2 py-1.5 ${CARD[kind]}`
-  if (kind === 'toolResult' || kind === 'toolError') return <ToolResultBlock message={message} />
 
   // Per the logprob contract: an active token view replaces rich/plain text rendering.
   const tokenMode = logprobMode === 'off' ? undefined : logprobMode
-  const tokens = message.tokens !== undefined && message.tokens.length > 0 ? message.tokens : null
+  const real = message.tokens !== undefined && message.tokens.length > 0 ? message.tokens : null
+  // 'tokens' mode falls back to client-side BPE segmentation when the message
+  // has no real token data; 'probs' stays off (no real probabilities to show).
+  const synthetic = useMemo(
+    () =>
+      tokenMode === 'tokens' && real === null && kind !== 'toolResult' && kind !== 'toolError'
+        ? bpeTokens(message.content)
+        : [],
+    [tokenMode, real, kind, message.content],
+  )
+  if (kind === 'toolResult' || kind === 'toolError') return <ToolResultBlock message={message} />
+
+  const tokens = real ?? (synthetic.length > 0 ? synthetic : null)
   if (tokenMode && tokens) {
     return (
       <div className={card}>

@@ -1,0 +1,60 @@
+{
+  "seed": 43,
+  "run": "run-b",
+  "base_timestamp": "2026-03-01T00:00:00.000Z",
+  "counts": {
+    "total": 241,
+    "byComponent": {
+      "stem/deepscaler-math": 40,
+      "stem/nemotron-science": 40,
+      "swe/swebench-verified-mini": 40,
+      "terminal/terminal-bench": 41,
+      "code/leetcode": 40,
+      "search/browsecomp-plus": 40
+    },
+    "bySplit": {
+      "train": 193,
+      "test": 48
+    },
+    "byStatus": {
+      "completed": 231,
+      "failed": 9,
+      "executing": 1
+    },
+    "byFailureKind": {
+      "truncation": 19,
+      "wrong_answer": 14,
+      "tool_timeout_retry": 5,
+      "budget_exceeded": 3,
+      "cancelled": 9,
+      "malformed_tool_json": 2
+    },
+    "withLogprobs": 51
+  },
+  "showcase": {
+    "harmony": [
+      "b-deepscaler-i03-s250-r01",
+      "b-nemotron-i04-s265-r02",
+      "b-swebench-i04-s245-r01",
+      "b-termbench-i02-s15-r01",
+      "b-leetcode-i05-s125-r01",
+      "b-browsecomp-i04-s165-r02"
+    ],
+    "openai": [
+      "b-deepscaler-i05-s75-r01",
+      "b-nemotron-i04-s230-r02",
+      "b-swebench-i05-s175-r01",
+      "b-termbench-i02-s10-r01",
+      "b-leetcode-i03-s85-r02",
+      "b-browsecomp-i03-s20-r02"
+    ]
+  },
+  "huge_trace": "b-termbench-ihuge-s150-r01",
+  "corrupt_file": "native/corrupt-example.json",
+  "approx_bytes": 7034243,
+  "notes": [
+    "native/corrupt-example.json is deliberately invalid JSON to exercise scanner tolerance; it is not a trace.",
+    "termbench-ihuge-s150-r01 (instance termbench-ihuge) is a single-rollout ~3-4MB stress trace, exempt from the >=3-checkpoint-steps-per-instance convention.",
+    "Showcase traces exist only under harmony/ and openai/ — they are excluded from native/ so traceIds are unique across the corpus."
+  ]
+}

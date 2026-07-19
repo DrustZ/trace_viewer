@@ -1,5 +1,6 @@
 import type { Message, ToolCall } from '@shared/schema/types'
 import { messageTokens } from '@shared/stats/computeStats'
+import { useMemo } from 'react'
 import { FoldSection } from '../common/CollapsibleText'
 import { formatDuration, formatNumber, formatScore, formatTimestamp } from '../common/format'
 import {
@@ -12,6 +13,7 @@ import {
 } from './MessageCard'
 import { TokenLogprobText } from './TokenLogprobText'
 import { ToolCallBlock } from './ToolCallBlock'
+import { bpeTokens } from './tokenize'
 import { type StepUnit, stepScore, unitDurationMs } from './unitize'
 
 const SUMMARY_ARGS_CHARS = 90
@@ -28,8 +30,16 @@ function firstToolCall(unit: StepUnit): ToolCall | undefined {
 function ResponsePiece({ message, logprobMode }: { message: Message; logprobMode: LogprobMode }) {
   // Per the logprob contract: an active token view replaces rich/plain text rendering.
   const tokenMode = logprobMode === 'off' ? undefined : logprobMode
-  const tokens = message.tokens !== undefined && message.tokens.length > 0 ? message.tokens : null
+  const real = message.tokens !== undefined && message.tokens.length > 0 ? message.tokens : null
   const isToolCall = message.toolCalls !== undefined && message.toolCalls.length > 0
+  // 'tokens' mode falls back to client-side BPE segmentation of the final text
+  // when the message has no real token data; 'probs' stays off (no real probs).
+  const synthetic = useMemo(
+    () =>
+      tokenMode === 'tokens' && real === null && !isToolCall ? bpeTokens(message.content) : [],
+    [tokenMode, real, isToolCall, message.content],
+  )
+  const tokens = real ?? (synthetic.length > 0 ? synthetic : null)
   return (
     <div data-testid="step-response" data-kind={isToolCall ? 'toolCall' : 'final'}>
       {isToolCall ? (

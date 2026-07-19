@@ -1,0 +1,310 @@
+{
+  "meta": {
+    "traceId": "b-browsecomp-i03-s295-r01",
+    "instanceId": "browsecomp-i03",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-13T07:18:16.213Z",
+    "checkpointStep": 295,
+    "split": "train",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 1
+    },
+    "extra": {
+      "ground_truth": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research.",
+      "golden_response": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research.\n\nSource hint: Nobel Prize awarded women — NobelPrize.org — https://www.nobelprize.org/prizes/lists/nobel-prize-awarded-women/",
+      "run": "run-b",
+      "kl": 0.2868,
+      "trainer_batch": 11,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-browsecomp-i03-s295-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 16412,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 9,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 167,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 387,
+          "durationMs": 7275,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 387,
+          "durationMs": 3758,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 25
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 4250,
+          "durationMs": 1251,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 5551,
+          "durationMs": 2111,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 7860,
+          "durationMs": 5667,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 7860,
+          "durationMs": 3068,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 23
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-8",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 11077,
+          "durationMs": 1723,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-8",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 12839,
+          "durationMs": 688,
+          "status": "ok",
+          "messageId": "m-7"
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 13847,
+          "durationMs": 2490,
+          "status": "ok"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-12",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 13847,
+          "durationMs": 2490,
+          "status": "ok",
+          "messageId": "m-8",
+          "detail": {
+            "tokens_out": 61
+          }
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-1",
+          "name": "answer_match",
+          "kind": "grader",
+          "startMs": 16411,
+          "durationMs": 1,
+          "status": "ok",
+          "detail": {
+            "verdict": "correct"
+          }
+        }
+      ]
+    }
+  },
+  "stats": {
+    "score": 1,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 329,
+    "outputTokens": 109,
+    "thinkingTokens": 48,
+    "totalTokens": 438,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.44036697247706424,
+    "durationMs": 16337,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You answer multi-hop factual questions by searching the web. Do not rely on memory alone: confirm names, dates, and figures in retrieved snippets before committing. Give one final answer covering every part of the question.",
+      "id": "m-0",
+      "timestamp": "2026-03-13T07:18:16.213Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "The first woman to win a Nobel Prize won it jointly with her husband. In which year, in which category, and with whom did she share it besides her husband?",
+      "id": "m-1",
+      "timestamp": "2026-03-13T07:18:16.380Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "This is Marie Curie; the joint prize with Pierre was Physics. Need the year and the third laureate.",
+      "id": "m-2",
+      "timestamp": "2026-03-13T07:18:16.600Z",
+      "durationMs": 3758,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"first woman Nobel Prize year\"}",
+          "parsedArguments": {
+            "query": "first woman Nobel Prize year"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-13T07:18:20.463Z",
+      "durationMs": 1251,
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Nobel Prize awarded women — NobelPrize.org — https://www.nobelprize.org/prizes/lists/nobel-prize-awarded-women/\n   Marie Curie was the first woman to be awarded a Nobel Prize, in Physics in 1903, and remains the only woman honoured twice.\n\n2. Marie Curie — Facts — https://www.nobelprize.org/prizes/physics/1903/marie-curie/facts/\n   The Nobel Prize in Physics 1903 was divided, one half to Henri Becquerel, the other half jointly to Pierre and Marie Curie.\n\n3. Marie Curie — Wikipedia — https://en.wikipedia.org/wiki/Marie_Curie\n   In 1911 she won a second Nobel, in Chemistry, for the discovery of radium and polonium.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 2111
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-13T07:18:21.764Z",
+      "durationMs": 2111,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "1903 Physics, shared with Henri Becquerel — verifying the split on the official Nobel page.",
+      "id": "m-5",
+      "timestamp": "2026-03-13T07:18:24.073Z",
+      "durationMs": 3068,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"Nobel Prize Physics 1903 laureates Becquerel Curie\"}",
+          "parsedArguments": {
+            "query": "Nobel Prize Physics 1903 laureates Becquerel Curie"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-13T07:18:27.290Z",
+      "durationMs": 1723,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. The Nobel Prize in Physics 1903 — https://www.nobelprize.org/prizes/physics/1903/summary/\n   Antoine Henri Becquerel \"for his discovery of spontaneous radioactivity\"; Pierre Curie and Marie Curie, née Sklodowska, \"for their joint researches on the radiation phenomena discovered by Professor Henri Becquerel\".",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 688
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-13T07:18:29.052Z",
+      "durationMs": 688,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research.",
+      "id": "m-8",
+      "timestamp": "2026-03-13T07:18:30.060Z",
+      "durationMs": 2490,
+      "stepIndex": 3
+    }
+  ]
+}

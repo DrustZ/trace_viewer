@@ -1,0 +1,245 @@
+{
+  "meta": {
+    "traceId": "b-nemotron-i05-s200-r01",
+    "instanceId": "nemotron-i05",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2026-03-09T08:02:09.122Z",
+    "checkpointStep": 200,
+    "split": "test",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "judge": 1
+    },
+    "extra": {
+      "ground_truth": "Ionic bond",
+      "golden_response": "Correct answer: Ionic bond\n\nThe electronegativity difference between Na (0.93) and Cl (3.16) exceeds ~1.7, so electron transfer dominates over sharing. Na+ and Cl- form an ionic lattice; there is no discrete molecule with a shared pair.",
+      "judge": {
+        "verdict": 1,
+        "reasoning": "The reference (golden) answer for this question is \"Ionic bond\". The candidate response commits to \"Ionic bond\". The response contains no contradictory statements elsewhere that would override its committed answer. The response identifies the bond as ionic and justifies it with the electronegativity gap and lattice structure. Verdict: correct.",
+        "model": "judge-llm-v2"
+      },
+      "run": "run-b",
+      "kl": 0.1188,
+      "trainer_batch": 8,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0002,
+        "final_reward": 0.9998
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-nemotron-i05-s200-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 22270,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 229,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 447,
+          "durationMs": 19508,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 447,
+          "durationMs": 14259,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 192
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 15038,
+          "durationMs": 4917,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 5
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 20018,
+          "durationMs": 2252,
+          "status": "ok",
+          "detail": {
+            "verdict": "correct"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 20131,
+          "durationMs": 2027,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 240
+          }
+        }
+      ]
+    }
+  },
+  "stats": {
+    "score": 1,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 64,
+    "outputTokens": 197,
+    "thinkingTokens": 192,
+    "totalTokens": 261,
+    "turns": 1,
+    "toolUses": 0,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.9746192893401016,
+    "durationMs": 19955,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a careful STEM question-answering assistant. Check units and definitions before committing to an option. Keep the final answer concise so it can be matched against the reference.",
+      "id": "m-0",
+      "timestamp": "2026-03-09T08:02:09.122Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "What type of chemical bond holds Na and Cl together in solid NaCl?",
+      "id": "m-1",
+      "timestamp": "2026-03-09T08:02:09.351Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "The electronegativity difference between Na (0.93) and Cl (3.16) exceeds ~1.7, so electron transfer dominates over sharing.\n\nNa+ and Cl- form an ionic lattice; there is no discrete molecule with a shared pair.\n\nRecalling the standard textbook treatment of this topic to anchor the answer.\n\nThe distractor options are plausible but each fails on one specific criterion, which I will spell out.\n\nCross-checking against the definition to make sure the terms are not being conflated.\n\nEliminating options one by one is safer than pattern-matching on keywords here.\n\nUnits check: the quantities combine to the expected dimension, so the relation is applied correctly.\n\nThis is a classic point of confusion; the key distinction is worth stating explicitly before answering.",
+      "id": "m-2",
+      "timestamp": "2026-03-09T08:02:09.569Z",
+      "durationMs": 14259,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Answer: Ionic bond.",
+      "id": "m-3",
+      "timestamp": "2026-03-09T08:02:24.160Z",
+      "durationMs": 4917,
+      "score": 1,
+      "judgeOutput": "The response identifies the bond as ionic and justifies it with the electronegativity gap and lattice structure. Verdict: correct.",
+      "tokens": [
+        {
+          "token": "Answer",
+          "logprob": -0.0026,
+          "id": 98784
+        },
+        {
+          "token": ":",
+          "logprob": -0.8396,
+          "id": 138294,
+          "topk": [
+            {
+              "token": ":",
+              "logprob": -0.8396,
+              "id": 138294
+            },
+            {
+              "token": " the",
+              "logprob": -1.9814,
+              "id": 80255
+            },
+            {
+              "token": "s",
+              "logprob": -2.9551,
+              "id": 33127
+            }
+          ]
+        },
+        {
+          "token": " Ionic",
+          "logprob": -0.6811,
+          "id": 91088,
+          "topk": [
+            {
+              "token": " Ionic",
+              "logprob": -0.6811,
+              "id": 91088
+            },
+            {
+              "token": " (",
+              "logprob": -1.2083,
+              "id": 168926
+            },
+            {
+              "token": " =",
+              "logprob": -2.6307,
+              "id": 170427
+            },
+            {
+              "token": "ed",
+              "logprob": -3.8236,
+              "id": 170985
+            }
+          ]
+        },
+        {
+          "token": " bond",
+          "logprob": -0.0172,
+          "id": 13047
+        },
+        {
+          "token": ".",
+          "logprob": -0.0102,
+          "id": 86890
+        }
+      ],
+      "stepIndex": 1
+    }
+  ]
+}

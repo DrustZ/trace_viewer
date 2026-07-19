@@ -1,0 +1,310 @@
+{
+  "meta": {
+    "traceId": "b-browsecomp-i05-s150-r01",
+    "instanceId": "browsecomp-i05",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-07T06:18:55.528Z",
+    "checkpointStep": 150,
+    "split": "test",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 1
+    },
+    "extra": {
+      "ground_truth": "The first YouTube video was \"Me at the zoo\", a 19-second clip filmed at the San Diego Zoo, uploaded by co-founder Jawed Karim in April 2005 (April 23, 2005).",
+      "golden_response": "The first YouTube video was \"Me at the zoo\", a 19-second clip filmed at the San Diego Zoo, uploaded by co-founder Jawed Karim in April 2005 (April 23, 2005).\n\nSource hint: Me at the zoo — Wikipedia — https://en.wikipedia.org/wiki/Me_at_the_zoo",
+      "run": "run-b",
+      "kl": 0.0668,
+      "trainer_batch": 6,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-browsecomp-i05-s150-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 13659,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 198,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 253,
+          "durationMs": 4167,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 253,
+          "durationMs": 1544,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 24
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 2141,
+          "durationMs": 1302,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 3603,
+          "durationMs": 817,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 4583,
+          "durationMs": 6539,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 4583,
+          "durationMs": 3233,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 23
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-8",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 8032,
+          "durationMs": 1551,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-8",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 9867,
+          "durationMs": 1255,
+          "status": "ok",
+          "messageId": "m-7"
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 11170,
+          "durationMs": 2411,
+          "status": "ok"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-12",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 11170,
+          "durationMs": 2411,
+          "status": "ok",
+          "messageId": "m-8",
+          "detail": {
+            "tokens_out": 40
+          }
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-1",
+          "name": "answer_match",
+          "kind": "grader",
+          "startMs": 13652,
+          "durationMs": 7,
+          "status": "ok",
+          "detail": {
+            "verdict": "correct"
+          }
+        }
+      ]
+    }
+  },
+  "stats": {
+    "score": 1,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 200,
+    "outputTokens": 87,
+    "thinkingTokens": 47,
+    "totalTokens": 287,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.5402298850574713,
+    "durationMs": 13581,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You answer multi-hop factual questions by searching the web. Do not rely on memory alone: confirm names, dates, and figures in retrieved snippets before committing. Give one final answer covering every part of the question.",
+      "id": "m-0",
+      "timestamp": "2026-03-07T06:18:55.528Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "What was the first video ever uploaded to YouTube, who uploaded it, and in what month and year?",
+      "id": "m-1",
+      "timestamp": "2026-03-07T06:18:55.726Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Well-known trivia: \"Me at the zoo\" by co-founder Jawed Karim. Confirming the date, April 2005.",
+      "id": "m-2",
+      "timestamp": "2026-03-07T06:18:55.781Z",
+      "durationMs": 1544,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"first video uploaded to YouTube\"}",
+          "parsedArguments": {
+            "query": "first video uploaded to YouTube"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-07T06:18:57.669Z",
+      "durationMs": 1302,
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Me at the zoo — Wikipedia — https://en.wikipedia.org/wiki/Me_at_the_zoo\n   \"Me at the zoo\" is the first video uploaded to YouTube, on April 23, 2005, by co-founder Jawed Karim.\n\n2. YouTube's first video turns 18 — https://www.theverge.com/youtube-me-at-the-zoo-anniversary\n   The 19-second clip shows Karim at the San Diego Zoo elephant enclosure.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 817
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-07T06:18:59.131Z",
+      "durationMs": 817,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Verifying with two independent sources since anniversary articles sometimes shift the date.",
+      "id": "m-5",
+      "timestamp": "2026-03-07T06:19:00.111Z",
+      "durationMs": 3233,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"\\\"Me at the zoo\\\" upload date April 2005\"}",
+          "parsedArguments": {
+            "query": "\"Me at the zoo\" upload date April 2005"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-07T06:19:03.560Z",
+      "durationMs": 1551,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. Me at the zoo — YouTube — https://www.youtube.com/watch?v=jNQXAC9IVRw\n   Uploaded Apr 23, 2005. The first video on YouTube.",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 1255
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-07T06:19:05.395Z",
+      "durationMs": 1255,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "The first YouTube video was \"Me at the zoo\", a 19-second clip filmed at the San Diego Zoo, uploaded by co-founder Jawed Karim in April 2005 (April 23, 2005).",
+      "id": "m-8",
+      "timestamp": "2026-03-07T06:19:06.698Z",
+      "durationMs": 2411,
+      "stepIndex": 3
+    }
+  ]
+}

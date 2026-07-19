@@ -1,0 +1,179 @@
+{
+  "meta": {
+    "traceId": "b-nemotron-i05-s175-r01",
+    "instanceId": "nemotron-i05",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2026-03-08T07:20:54.464Z",
+    "checkpointStep": 175,
+    "split": "test",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "judge": 0
+    },
+    "extra": {
+      "ground_truth": "Ionic bond",
+      "golden_response": "Correct answer: Ionic bond\n\nThe electronegativity difference between Na (0.93) and Cl (3.16) exceeds ~1.7, so electron transfer dominates over sharing. Na+ and Cl- form an ionic lattice; there is no discrete molecule with a shared pair.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"Ionic bond\". The candidate response commits to \"Covalent bond\". I compared the stated justification against the reference reasoning point by point rather than keyword-matching. The response calls the bond covalent, but the large electronegativity difference (~2.2) makes NaCl the textbook ionic solid. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "run": "run-b",
+      "kl": 0.2332,
+      "trainer_batch": 7,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0002,
+        "final_reward": -0.0002
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-nemotron-i05-s175-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 7981,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 178,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 273,
+          "durationMs": 6551,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 273,
+          "durationMs": 2077,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 190
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 2655,
+          "durationMs": 4169,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 6
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 6871,
+          "durationMs": 1110,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 6927,
+          "durationMs": 999,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 122
+          }
+        }
+      ]
+    }
+  },
+  "stats": {
+    "score": 0,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 69,
+    "outputTokens": 196,
+    "thinkingTokens": 190,
+    "totalTokens": 265,
+    "turns": 1,
+    "toolUses": 0,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.9693877551020408,
+    "durationMs": 6824,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a science tutor answering exam-style questions across physics, chemistry, and biology. Reason from definitions and standard formulas rather than surface keywords. Give a single, direct final answer.",
+      "id": "m-0",
+      "timestamp": "2026-03-08T07:20:54.464Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "What type of chemical bond holds Na and Cl together in solid NaCl?",
+      "id": "m-1",
+      "timestamp": "2026-03-08T07:20:54.642Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "The electronegativity difference between Na (0.93) and Cl (3.16) exceeds ~1.7, so electron transfer dominates over sharing.\n\nOn reflection, the stronger candidate is covalent bond — committing to that.\n\nThis is a classic point of confusion; the key distinction is worth stating explicitly before answering.\n\nCross-checking against the definition to make sure the terms are not being conflated.\n\nRecalling the standard textbook treatment of this topic to anchor the answer.\n\nUnits check: the quantities combine to the expected dimension, so the relation is applied correctly.\n\nEliminating options one by one is safer than pattern-matching on keywords here.\n\nThe distractor options are plausible but each fails on one specific criterion, which I will spell out.",
+      "id": "m-2",
+      "timestamp": "2026-03-08T07:20:54.737Z",
+      "durationMs": 2077,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Answer: Covalent bond.",
+      "id": "m-3",
+      "timestamp": "2026-03-08T07:20:57.119Z",
+      "durationMs": 4169,
+      "score": 0,
+      "judgeOutput": "The response calls the bond covalent, but the large electronegativity difference (~2.2) makes NaCl the textbook ionic solid. Verdict: incorrect.",
+      "stepIndex": 1
+    }
+  ]
+}

@@ -98,6 +98,40 @@ describe('generator', () => {
     expect(() => JSON.parse(corrupt)).toThrow()
   })
 
+  it('stamps meta.extra.run and a numeric format_errors on every native trace', () => {
+    const nativeTraces = walk(dirA).filter(
+      (f) => f.startsWith('native/') && f.endsWith('.json') && !f.endsWith('corrupt-example.json'),
+    )
+    for (const rel of nativeTraces) {
+      const trace = JSON.parse(readFileSync(join(dirA, rel), 'utf8'))
+      expect(trace.meta.extra?.run, rel).toBe('run-a')
+      expect(typeof trace.meta.extra?.format_errors, rel).toBe('number')
+    }
+  })
+
+  it('non-default runs prefix traceIds but keep instanceIds unprefixed', () => {
+    const dirC = mkdtempSync(join(tmpdir(), 'trace-gen-c-'))
+    try {
+      runGenerate({ seed: 43, out: dirC, scale: SCALE, runName: 'run-b', quiet: true })
+      const nativeTraces = walk(dirC).filter(
+        (f) =>
+          f.startsWith('native/') && f.endsWith('.json') && !f.endsWith('corrupt-example.json'),
+      )
+      expect(nativeTraces.length).toBeGreaterThan(0)
+      for (const rel of nativeTraces) {
+        const trace = JSON.parse(readFileSync(join(dirC, rel), 'utf8'))
+        expect(trace.meta.traceId, rel).toMatch(/^b-/)
+        expect(trace.meta.instanceId, rel).not.toMatch(/^b-/)
+        expect(trace.meta.extra?.run, rel).toBe('run-b')
+      }
+      const manifest = JSON.parse(readFileSync(join(dirC, 'manifest.json'), 'utf8'))
+      expect(manifest.run).toBe('run-b')
+      expect(manifest.huge_trace).toBe('b-termbench-ihuge-s150-r01')
+    } finally {
+      rmSync(dirC, { recursive: true, force: true })
+    }
+  })
+
   it('every native trace carries meta.extra.spans with exactly one root', () => {
     const nativeTraces = walk(dirA).filter(
       (f) => f.startsWith('native/') && f.endsWith('.json') && !f.endsWith('corrupt-example.json'),

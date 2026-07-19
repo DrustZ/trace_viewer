@@ -2,11 +2,13 @@ import path from 'node:path'
 import express, { type ErrorRequestHandler, type Express } from 'express'
 import { aggregatesRoutes } from './routes/aggregates'
 import { aiFilterRoutes } from './routes/aiFilter'
+import { analysisRoutes } from './routes/analysis'
 import { chatRoutes } from './routes/chat'
 import { isRecord, type RouteCtx } from './routes/context'
 import { evolutionRoutes } from './routes/evolution'
 import { importRoutes } from './routes/importRoute'
 import { metaRoutes } from './routes/meta'
+import { playgroundRoutes } from './routes/playground'
 import { refreshRoutes } from './routes/refresh'
 import { searchRoutes } from './routes/search'
 import { tracesRoutes } from './routes/traces'
@@ -56,6 +58,8 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use(metaRoutes(ctx))
   app.use(tracesRoutes(ctx))
   app.use(chatRoutes(ctx))
+  app.use(analysisRoutes(ctx))
+  app.use(playgroundRoutes(ctx))
   app.use(aggregatesRoutes(ctx))
   app.use(evolutionRoutes(ctx))
   app.use(searchRoutes(ctx))
