@@ -1,19 +1,15 @@
 import type { Message, ToolCall } from '@shared/schema/types'
 import { messageTokens } from '@shared/stats/computeStats'
-import { useMemo } from 'react'
 import { FoldSection } from '../common/CollapsibleText'
 import { formatDuration, formatNumber, formatScore, formatTimestamp } from '../common/format'
+import { FOLD_TONES, JudgeCallout, MessageMeta, messageNumber, RichTextBlock } from './MessageCard'
 import {
-  FOLD_TONES,
-  JudgeCallout,
-  type LogprobMode,
-  MessageMeta,
-  messageNumber,
-  RichTextBlock,
-} from './MessageCard'
-import { TokenLogprobText } from './TokenLogprobText'
+  MessageViewHeader,
+  RawMessageJson,
+  TokenInspector,
+  useMessageViewTab,
+} from './TokenInspector'
 import { ToolCallBlock } from './ToolCallBlock'
-import { bpeTokens } from './tokenize'
 import { type StepUnit, stepScore, unitDurationMs } from './unitize'
 
 const SUMMARY_ARGS_CHARS = 90
@@ -27,58 +23,61 @@ function firstToolCall(unit: StepUnit): ToolCall | undefined {
 }
 
 /** One response piece: a commentary message's tool call(s) or the final text. */
-function ResponsePiece({ message, logprobMode }: { message: Message; logprobMode: LogprobMode }) {
-  // Per the logprob contract: an active token view replaces rich/plain text rendering.
-  const tokenMode = logprobMode === 'off' ? undefined : logprobMode
-  const real = message.tokens !== undefined && message.tokens.length > 0 ? message.tokens : null
+function ResponsePiece({ message }: { message: Message }) {
+  const [tab, setTab] = useMessageViewTab(message.id)
   const isToolCall = message.toolCalls !== undefined && message.toolCalls.length > 0
-  // 'tokens' mode falls back to client-side BPE segmentation of the final text
-  // when the message has no real token data; 'probs' stays off (no real probs).
-  const synthetic = useMemo(
-    () =>
-      tokenMode === 'tokens' && real === null && !isToolCall ? bpeTokens(message.content) : [],
-    [tokenMode, real, isToolCall, message.content],
-  )
-  const tokens = real ?? (synthetic.length > 0 ? synthetic : null)
   return (
     <div data-testid="step-response" data-kind={isToolCall ? 'toolCall' : 'final'}>
-      {isToolCall ? (
+      <MessageViewHeader
+        message={message}
+        tab={tab}
+        onChange={setTab}
+        // Harmony semantics: the final piece ends with <|return|>, other pieces with <|end|>.
+        termination={isToolCall ? 'end' : 'return'}
+        className="mb-0.5 px-1.5 pt-0.5"
+      />
+      {tab === 'raw' ? (
+        <RawMessageJson message={message} />
+      ) : tab === 'tokens' ? (
+        // For commentary pieces the recorded tokens cover the tool-call arguments.
+        <TokenInspector message={message} className="px-1.5 py-0.5" />
+      ) : isToolCall ? (
         <div className="space-y-2">
           {message.content && (
-            <RichTextBlock
-              id={message.id}
-              text={message.content}
-              label="COMMENTARY"
-              tone={FOLD_TONES.toolCall}
-            />
+            <RichTextBlock text={message.content} label="COMMENTARY" tone={FOLD_TONES.toolCall} />
           )}
           {message.toolCalls?.map((call) => (
             <ToolCallBlock key={call.id} call={call} />
           ))}
-          {tokenMode && tokens && (
-            <div
-              className="rounded-md border border-indigo-200 bg-indigo-50/30 px-2 py-1.5"
-              data-testid="arguments-logprobs"
-            >
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
-                Arguments logprobs
-              </p>
-              <TokenLogprobText tokens={tokens} mode={tokenMode} />
-            </div>
-          )}
         </div>
-      ) : tokenMode && tokens ? (
-        <TokenLogprobText tokens={tokens} mode={tokenMode} className="px-1.5 py-0.5" />
       ) : (
-        <RichTextBlock
-          id={message.id}
-          text={message.content}
-          label="ASSISTANT RESPONSE"
-          tone={FOLD_TONES.final}
-        />
+        <RichTextBlock text={message.content} label="ASSISTANT RESPONSE" tone={FOLD_TONES.final} />
       )}
       {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
-      <MessageMeta message={message} logprobMode={logprobMode} light />
+      <MessageMeta message={message} light />
+    </div>
+  )
+}
+
+/** One analysis message inside the expanded reasoning fold, with its own view tabs. */
+function AnalysisPiece({ message }: { message: Message }) {
+  const [tab, setTab] = useMessageViewTab(message.id)
+  return (
+    <div data-testid="analysis-piece">
+      <MessageViewHeader
+        message={message}
+        tab={tab}
+        onChange={setTab}
+        termination="end"
+        className="mb-0.5"
+      />
+      {tab === 'raw' ? (
+        <RawMessageJson message={message} />
+      ) : tab === 'tokens' ? (
+        <TokenInspector message={message} className="py-0.5" />
+      ) : (
+        <div className="whitespace-pre-wrap break-words text-sm">{message.content}</div>
+      )}
     </div>
   )
 }
@@ -128,14 +127,12 @@ export function StepCard({
   onToggle,
   reasoningOpen,
   onToggleReasoning,
-  logprobMode = 'off',
 }: {
   unit: StepUnit
   expanded: boolean
   onToggle: () => void
   reasoningOpen: boolean
   onToggleReasoning: () => void
-  logprobMode?: LogprobMode
 }) {
   const first = unit.messages[0]
   const number = first ? messageNumber(first.id) : undefined
@@ -207,6 +204,13 @@ export function StepCard({
                   expanded={reasoningOpen}
                   onToggle={onToggleReasoning}
                   testId="reasoning-toggle"
+                  renderText={() => (
+                    <div className="space-y-2">
+                      {unit.analysis.map((m) => (
+                        <AnalysisPiece key={m.id} message={m} />
+                      ))}
+                    </div>
+                  )}
                 />
               </div>
             )}
@@ -214,7 +218,7 @@ export function StepCard({
               (m) => m.judgeOutput && <JudgeCallout key={m.id} text={m.judgeOutput} />,
             )}
             {unit.responses.map((m) => (
-              <ResponsePiece key={m.id} message={m} logprobMode={logprobMode} />
+              <ResponsePiece key={m.id} message={m} />
             ))}
           </div>
         ) : (

@@ -2,14 +2,6 @@ import { useEffect, useState } from 'react'
 
 const DEBOUNCE_MS = 250
 
-export type LogprobMode = 'off' | 'tokens' | 'probs'
-
-const LOGPROB_OPTIONS: ReadonlyArray<{ value: LogprobMode; label: string }> = [
-  { value: 'off', label: 'Off' },
-  { value: 'tokens', label: 'Tokens' },
-  { value: 'probs', label: 'Probs' },
-]
-
 function ToggleButton({
   pressed,
   onClick,
@@ -68,8 +60,6 @@ export function ConversationToolbar({
   onNextMatch,
   onExpandAll,
   onCollapseAll,
-  logprobMode,
-  onLogprobModeChange,
   timelineOpen,
   onToggleTimeline,
 }: {
@@ -84,8 +74,6 @@ export function ConversationToolbar({
   onExpandAll: () => void
   /** Collapses every step card and system/developer fold, and closes all reasoning widgets. */
   onCollapseAll: () => void
-  logprobMode: LogprobMode
-  onLogprobModeChange: (mode: LogprobMode) => void
   timelineOpen: boolean
   onToggleTimeline: () => void
 }) {
@@ -154,30 +142,6 @@ export function ConversationToolbar({
           Collapse all
         </ActionButton>
         <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
-        <div
-          data-testid="logprob-mode"
-          className="flex h-7 items-stretch overflow-hidden rounded border border-slate-200 bg-white"
-        >
-          <span className="flex items-center pr-1 pl-2 text-xs font-medium text-slate-400">
-            LP:
-          </span>
-          {LOGPROB_OPTIONS.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={logprobMode === value}
-              data-testid={`logprob-mode-${value}`}
-              onClick={() => onLogprobModeChange(value)}
-              className={`px-2 text-xs font-medium transition-colors ${
-                logprobMode === value
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
         <ToggleButton pressed={timelineOpen} onClick={onToggleTimeline} testId="toggle-timeline">
           Timeline
         </ToggleButton>

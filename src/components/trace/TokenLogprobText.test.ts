@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import {
   chipParts,
+  confidence80,
   probsTitle,
   TOKEN_RENDER_CAP,
   tokensTitle,
   visualizeWhitespace,
 } from './TokenLogprobText'
+
+describe('confidence80', () => {
+  it('buckets by p ≥ 0.8 high, p ≥ 0.5 med, else low', () => {
+    expect(confidence80(Math.log(0.95))).toBe('high')
+    expect(confidence80(Math.log(0.8))).toBe('high')
+    expect(confidence80(Math.log(0.79))).toBe('med')
+    expect(confidence80(Math.log(0.5))).toBe('med')
+    expect(confidence80(Math.log(0.49))).toBe('low')
+    expect(confidence80(Math.log(0.01))).toBe('low')
+  })
+
+  it('maps a missing logprob (synthetic BPE tokens) to na', () => {
+    expect(confidence80(undefined)).toBe('na')
+  })
+})
 
 describe('chipParts', () => {
   it('trims leading spaces but keeps interior spaces as-is', () => {

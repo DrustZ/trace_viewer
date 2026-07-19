@@ -3,9 +3,23 @@ import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } 
 import {
   CONFIDENCE_CHIP_CLASSES,
   CONFIDENCE_LABELS,
+  type Confidence,
   confidenceOf,
   TOKEN_CYCLE_CLASSES,
 } from './logprobColor'
+
+/**
+ * Token-inspector confidence thresholds: p ≥ 0.8 high, p ≥ 0.5 med, else low.
+ * Missing logprob (synthetic BPE tokens) → 'na'. Lives alongside confidenceOf
+ * (0.7/0.3 buckets) which the legacy probs view keeps using.
+ */
+export function confidence80(logprob: number | undefined): Confidence {
+  if (logprob === undefined) return 'na'
+  const p = Math.exp(logprob)
+  if (p >= 0.8) return 'high'
+  if (p >= 0.5) return 'med'
+  return 'low'
+}
 
 /** Past this many tokens the remainder renders as plain text (a span per token gets slow). */
 export const TOKEN_RENDER_CAP = 1500
@@ -98,7 +112,8 @@ export function TokenLogprobText({
     if (wrap === null || Number.isNaN(index)) return
     const rect = el.getBoundingClientRect()
     const wrapRect = wrap.getBoundingClientRect()
-    const flip = rect.bottom + POPOVER_EST_HEIGHT > window.innerHeight && rect.top > POPOVER_EST_HEIGHT
+    const flip =
+      rect.bottom + POPOVER_EST_HEIGHT > window.innerHeight && rect.top > POPOVER_EST_HEIGHT
     setPopover((prev) =>
       prev?.index === index
         ? null

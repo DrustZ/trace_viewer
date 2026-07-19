@@ -1,18 +1,18 @@
 import type { Message } from '@shared/schema/types'
-import { useMemo } from 'react'
 import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import { formatDuration, formatTimestamp } from '../common/format'
-import { MarkdownContent, RichRawToggle, useViewMode } from '../common/MarkdownContent'
+import { MarkdownContent } from '../common/MarkdownContent'
 import { ScoreBadge } from '../common/ScoreBadge'
-import { TokenLogprobText } from './TokenLogprobText'
+import {
+  MessageViewHeader,
+  RawMessageJson,
+  TokenInspector,
+  useMessageViewTab,
+} from './TokenInspector'
 import { ToolResultBlock } from './ToolResultBlock'
-import { bpeTokens } from './tokenize'
 
 /** Content above this length is clamped behind the fold control. */
 const CLAMP = 2500
-
-/** Tri-state logprob view owned by ConversationView; 'off' renders normal rich/raw text. */
-export type LogprobMode = 'off' | 'tokens' | 'probs'
 
 /** Message id 'm-<idx>' (assigned by finalizeTrace) → 1-based '#<n>'; unknown ids omit it. */
 export function messageNumber(id: string): number | undefined {
@@ -84,40 +84,23 @@ export const FOLD_TONES = {
   },
 } satisfies Record<string, FoldTone>
 
-/** Always-expanded content; only long text gets the fold control (clamped, expandable). */
-export function LongText({ text, label, tone }: { text: string; label: string; tone: FoldTone }) {
-  if (text.length <= CLAMP) {
-    return <div className="whitespace-pre-wrap break-words px-1.5 py-0.5 text-sm">{text}</div>
-  }
-  return <FoldSection label={label} text={text} tone={tone} blockPreview previewChars={CLAMP} />
-}
-
 /**
- * A plain-text content block with the per-message Rich/Raw pill: markdown by default,
- * the original whitespace-pre-wrap text on 'Raw'. The choice is keyed by message id in
- * a session-level store so it survives virtualization recycling. Long rich content keeps
- * the fold control; the collapsed preview stays plain text.
+ * The Rendered view for a plain-text content block: markdown, folded behind the
+ * clamp control when long (the collapsed preview stays plain text). The Raw and
+ * Tokens views are handled by the per-message tabs in the card header.
  */
 export function RichTextBlock({
-  id,
   text,
   label,
   tone,
 }: {
-  id: string
   text: string
   label: string
   tone: FoldTone
 }) {
-  const [view, setView] = useViewMode(id)
   return (
-    <div data-testid="rich-text-block" data-view={view}>
-      <div className="-mb-1 flex justify-end px-1.5 pt-0.5">
-        <RichRawToggle mode={view} onChange={setView} />
-      </div>
-      {view === 'raw' ? (
-        <LongText text={text} label={label} tone={tone} />
-      ) : text.length <= CLAMP ? (
+    <div data-testid="rich-text-block">
+      {text.length <= CLAMP ? (
         <MarkdownContent text={text} className="px-1.5 py-0.5" />
       ) : (
         <FoldSection
@@ -143,33 +126,21 @@ export function JudgeCallout({ text }: { text: string }) {
   )
 }
 
-/** Per-message meta row: logprobs hint, timestamp, duration, score. */
+/** Per-message meta row: timestamp, duration, score. */
 export function MessageMeta({
   message,
-  logprobMode,
   light = false,
 }: {
   message: Message
-  logprobMode: LogprobMode
   /** Smaller type for rows nested inside a StepCard. */
   light?: boolean
 }) {
-  const hasTokens = message.tokens !== undefined && message.tokens.length > 0
   return (
     <div
       className={`mt-1 flex items-center justify-end gap-2 text-slate-400 ${
         light ? 'text-[10px]' : 'text-xs'
       }`}
     >
-      {hasTokens && logprobMode === 'off' && (
-        <span
-          className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
-          title="Per-token logprobs available — enable the logprobs toggle to view"
-          data-testid="logprobs-available"
-        >
-          logprobs
-        </span>
-      )}
       <span>{formatTimestamp(message.timestamp)}</span>
       {message.durationMs !== undefined && <span>· {formatDuration(message.durationMs)}</span>}
       {message.score !== undefined && <ScoreBadge score={message.score} />}
@@ -177,8 +148,20 @@ export function MessageMeta({
   )
 }
 
-/** Role chip + message number, rendered on the card's header line (no left gutter). */
-function CardHeader({ kind, number }: { kind: Kind; number: number | undefined }) {
+/** Role chip + message number on the left; view tabs (+ token chips) on the right. */
+function CardHeader({
+  kind,
+  number,
+  message,
+  tab,
+  onTabChange,
+}: {
+  kind: Kind
+  number: number | undefined
+  message: Message
+  tab: 'rendered' | 'raw' | 'tokens'
+  onTabChange: (tab: 'rendered' | 'raw' | 'tokens') => void
+}) {
   const chip = CHIP[kind]
   return (
     <div className="flex items-center gap-2 px-1.5 pt-0.5 pb-1">
@@ -192,6 +175,13 @@ function CardHeader({ kind, number }: { kind: Kind; number: number | undefined }
           #{number}
         </span>
       )}
+      <MessageViewHeader
+        message={message}
+        tab={tab}
+        onChange={onTabChange}
+        termination={kind === 'final' ? 'return' : undefined}
+        className="ml-auto"
+      />
     </div>
   )
 }
@@ -202,47 +192,51 @@ function Body({
   number,
   expanded,
   onToggle,
-  logprobMode,
 }: {
   message: Message
   kind: Kind
   number: number | undefined
   expanded: boolean
   onToggle: () => void
-  logprobMode: LogprobMode
 }) {
-  const [view, setView] = useViewMode(message.id)
+  const [tab, setTab] = useMessageViewTab(message.id)
   const card = `rounded-lg border border-l-4 px-2 py-1.5 ${CARD[kind]}`
-  const header = <CardHeader kind={kind} number={number} />
-
-  // Per the logprob contract: an active token view replaces rich/plain text rendering.
-  const tokenMode = logprobMode === 'off' ? undefined : logprobMode
-  const real = message.tokens !== undefined && message.tokens.length > 0 ? message.tokens : null
-  // 'tokens' mode falls back to client-side BPE segmentation when the message
-  // has no real token data; 'probs' stays off (no real probabilities to show).
-  const synthetic = useMemo(
-    () =>
-      tokenMode === 'tokens' && real === null && kind !== 'toolResult' && kind !== 'toolError'
-        ? bpeTokens(message.content)
-        : [],
-    [tokenMode, real, kind, message.content],
+  const header = (
+    <CardHeader kind={kind} number={number} message={message} tab={tab} onTabChange={setTab} />
   )
+
   // ToolResultBlock draws its own card, so its header line sits just above it.
   if (kind === 'toolResult' || kind === 'toolError') {
     return (
       <div>
         {header}
-        <ToolResultBlock message={message} />
+        {tab === 'raw' ? (
+          <RawMessageJson message={message} />
+        ) : tab === 'tokens' ? (
+          <TokenInspector
+            message={message}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5"
+          />
+        ) : (
+          <ToolResultBlock message={message} />
+        )}
       </div>
     )
   }
 
-  const tokens = real ?? (synthetic.length > 0 ? synthetic : null)
-  if (tokenMode && tokens) {
+  if (tab === 'raw') {
     return (
       <div className={card}>
         {header}
-        <TokenLogprobText tokens={tokens} mode={tokenMode} className="px-1.5 py-0.5" />
+        <RawMessageJson message={message} />
+      </div>
+    )
+  }
+  if (tab === 'tokens') {
+    return (
+      <div className={card}>
+        {header}
+        <TokenInspector message={message} className="px-1.5 py-1" />
       </div>
     )
   }
@@ -253,11 +247,6 @@ function Body({
       return (
         <div className={card}>
           {header}
-          {expanded && (
-            <div className="-mb-1 flex justify-end px-1.5 pt-0.5">
-              <RichRawToggle mode={view} onChange={setView} />
-            </div>
-          )}
           <FoldSection
             label={kind === 'system' ? 'SYSTEM PROMPT' : 'DEVELOPER'}
             text={message.content}
@@ -265,7 +254,7 @@ function Body({
             mono
             expanded={expanded}
             onToggle={onToggle}
-            renderText={view === 'rich' ? (t) => <MarkdownContent text={t} /> : undefined}
+            renderText={(t) => <MarkdownContent text={t} />}
           />
         </div>
       )
@@ -273,12 +262,7 @@ function Body({
       return (
         <div className={card}>
           {header}
-          <RichTextBlock
-            id={message.id}
-            text={message.content}
-            label="USER MESSAGE"
-            tone={FOLD_TONES.user}
-          />
+          <RichTextBlock text={message.content} label="USER MESSAGE" tone={FOLD_TONES.user} />
         </div>
       )
     default:
@@ -286,7 +270,6 @@ function Body({
         <div className={card}>
           {header}
           <RichTextBlock
-            id={message.id}
             text={message.content}
             label="ASSISTANT RESPONSE"
             tone={FOLD_TONES.final}
@@ -301,12 +284,10 @@ export function MessageCard({
   message,
   bodyExpanded,
   onToggleBody,
-  logprobMode = 'off',
 }: {
   message: Message
   bodyExpanded: boolean
   onToggleBody: () => void
-  logprobMode?: LogprobMode
 }) {
   const kind = kindOf(message)
   return (
@@ -317,10 +298,9 @@ export function MessageCard({
         number={messageNumber(message.id)}
         expanded={bodyExpanded}
         onToggle={onToggleBody}
-        logprobMode={logprobMode}
       />
       {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
-      <MessageMeta message={message} logprobMode={logprobMode} />
+      <MessageMeta message={message} />
     </div>
   )
 }
