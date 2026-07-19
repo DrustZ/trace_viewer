@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { type ListParams, useImportTrace, useMeta, useRefresh } from '../../../api/hooks'
-import type { ListParamKey, ListParamPatch } from '../../../state/filterParams'
+import {
+  hasActiveSelection,
+  type ListParamKey,
+  type ListParamPatch,
+} from '../../../state/filterParams'
 import { formatNumber } from '../../common/format'
 import { ImportDialog } from '../ImportDialog'
 import { CategoryTree } from './CategoryTree'
@@ -185,8 +189,10 @@ export function Sidebar({
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-3">
         <RunTree params={params} setParam={setParam} />
-        <SelectionStats params={params} />
-        <CategoryTree params={params} setParams={setParams} />
+        {/* Current-selection stats and the component tree only make sense once a
+            run/filter narrows the corpus — hidden until then (mirrors the main pane). */}
+        {hasActiveSelection(params) && <SelectionStats params={params} />}
+        {hasActiveSelection(params) && <CategoryTree params={params} setParams={setParams} />}
         <SidebarFilters params={params} setParam={setParam} clearAll={clearAll} />
       </div>
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
