@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "traceId": "nemotron-i08-s50-r01",
+    "instanceId": "nemotron-i08",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2026-03-03T02:27:53.012Z",
+    "checkpointStep": 50,
+    "split": "train",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "judge": 0
+    }
+  },
+  "stats": {
+    "score": 0,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 25,
+    "outputTokens": 155,
+    "thinkingTokens": 152,
+    "totalTokens": 180,
+    "turns": 1,
+    "toolUses": 0,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.9806451612903225,
+    "durationMs": 11574,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "A 24 g sample of a radioactive isotope has a half-life of 5 years. How much remains after 15 years?",
+      "id": "m-0",
+      "timestamp": "2026-03-03T02:27:53.012Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "15 years is exactly 3 half-lives, so the remaining mass is 24 / 2^3.\n\nOn reflection, the stronger candidate is 6 g — committing to that.\n\nUnits check: the quantities combine to the expected dimension, so the relation is applied correctly.\n\nThis is a classic point of confusion; the key distinction is worth stating explicitly before answering.\n\nThe distractor options are plausible but each fails on one specific criterion, which I will spell out.\n\nEliminating options one by one is safer than pattern-matching on keywords here.\n\nRecalling the standard textbook treatment of this topic to anchor the answer.",
+      "id": "m-1",
+      "timestamp": "2026-03-03T02:27:53.230Z",
+      "durationMs": 10285,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Answer: 6 g.",
+      "id": "m-2",
+      "timestamp": "2026-03-03T02:28:03.701Z",
+      "durationMs": 885,
+      "score": 0,
+      "judgeOutput": "The response gives 6 g, which corresponds to only 2 half-lives; 15 years is 3 half-lives of 5 years, leaving 3 g. Verdict: incorrect.",
+      "stepIndex": 1
+    }
+  ]
+}

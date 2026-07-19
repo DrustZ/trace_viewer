@@ -1,0 +1,177 @@
+{
+  "meta": {
+    "traceId": "browsecomp-i07-s25-r03",
+    "instanceId": "browsecomp-i07",
+    "component": "search/browsecomp-plus",
+    "status": "failed",
+    "timestamp": "2026-03-02T01:01:23.625Z",
+    "checkpointStep": 25,
+    "split": "train",
+    "sourceFormat": "native"
+  },
+  "stats": {
+    "score": null,
+    "hasError": true,
+    "truncated": false,
+    "inputTokens": 144,
+    "outputTokens": 59,
+    "thinkingTokens": 46,
+    "totalTokens": 203,
+    "turns": 2,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.7796610169491526,
+    "durationMs": 9037,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "The deepest point in the ocean was first reached by a crewed vessel in 1960. Name the vessel, its two crew members, and the approximate depth reached.",
+      "id": "m-0",
+      "timestamp": "2026-03-02T01:01:23.625Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Challenger Deep, bathyscaphe Trieste, 1960. Crew: Jacques Piccard and Don Walsh. Depth ~10,900 m.",
+      "id": "m-1",
+      "timestamp": "2026-03-02T01:01:23.681Z",
+      "durationMs": 1807,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"first crewed descent Challenger Deep 1960\"}",
+          "parsedArguments": {
+            "query": "first crewed descent Challenger Deep 1960"
+          }
+        }
+      ],
+      "id": "m-2",
+      "timestamp": "2026-03-02T01:01:25.770Z",
+      "durationMs": 848,
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Trieste (bathyscaphe) — Wikipedia — https://en.wikipedia.org/wiki/Trieste_(bathyscaphe)\n   On 23 January 1960, Trieste, crewed by Jacques Piccard and Don Walsh, reached the bottom of the Challenger Deep at about 10,911 m (35,797 ft).\n\n2. 60 years since the deepest dive — https://www.bbc.com/future/trieste-deepest-dive\n   Piccard and Walsh spent 20 minutes on the bottom of the Mariana Trench.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 491
+      },
+      "id": "m-3",
+      "timestamp": "2026-03-02T01:01:26.756Z",
+      "durationMs": 491,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Verifying the depth figure — sources quote 10,911 m or ~35,800 ft for the 1960 dive.",
+      "id": "m-4",
+      "timestamp": "2026-03-02T01:01:27.515Z",
+      "durationMs": 2805,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"Trieste 1960 depth 10911 meters Challenger Deep\"}",
+          "parsedArguments": {
+            "query": "Trieste 1960 depth 10911 meters Challenger Deep"
+          }
+        }
+      ],
+      "id": "m-5",
+      "timestamp": "2026-03-02T01:01:30.561Z",
+      "durationMs": 476,
+      "tokens": [
+        {
+          "token": "{",
+          "logprob": -0.4719
+        },
+        {
+          "token": "\"query",
+          "logprob": -0.0304
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0386
+        },
+        {
+          "token": ":",
+          "logprob": -0.0443
+        },
+        {
+          "token": "\"Trieste",
+          "logprob": -4.5944
+        },
+        {
+          "token": "1960",
+          "logprob": -0.3705
+        },
+        {
+          "token": "depth",
+          "logprob": -0.0328
+        },
+        {
+          "token": "10911",
+          "logprob": -0.0246
+        },
+        {
+          "token": "meters",
+          "logprob": -0.0168
+        },
+        {
+          "token": "Challenger",
+          "logprob": -0.0356
+        },
+        {
+          "token": "Deep",
+          "logprob": -0.0389
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0181
+        },
+        {
+          "token": "}",
+          "logprob": -0.0294
+        }
+      ],
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "CancelledError: SIGINT",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": true,
+        "durationMs": 1425
+      },
+      "id": "m-6",
+      "timestamp": "2026-03-02T01:01:31.237Z",
+      "durationMs": 1425,
+      "stepIndex": 2
+    }
+  ]
+}

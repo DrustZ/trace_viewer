@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "traceId": "nemotron-i05-s300-r01",
+    "instanceId": "nemotron-i05",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2026-03-13T12:00:21.747Z",
+    "checkpointStep": 300,
+    "split": "train",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "judge": 1
+    }
+  },
+  "stats": {
+    "score": 1,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 17,
+    "outputTokens": 155,
+    "thinkingTokens": 150,
+    "totalTokens": 172,
+    "turns": 1,
+    "toolUses": 0,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.967741935483871,
+    "durationMs": 3166,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "What type of chemical bond holds Na and Cl together in solid NaCl?",
+      "id": "m-0",
+      "timestamp": "2026-03-13T12:00:21.747Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "The electronegativity difference between Na (0.93) and Cl (3.16) exceeds ~1.7, so electron transfer dominates over sharing.\n\nNa+ and Cl- form an ionic lattice; there is no discrete molecule with a shared pair.\n\nRecalling the standard textbook treatment of this topic to anchor the answer.\n\nThis is a classic point of confusion; the key distinction is worth stating explicitly before answering.\n\nUnits check: the quantities combine to the expected dimension, so the relation is applied correctly.\n\nThe distractor options are plausible but each fails on one specific criterion, which I will spell out.",
+      "id": "m-1",
+      "timestamp": "2026-03-13T12:00:21.920Z",
+      "durationMs": 2140,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Answer: Ionic bond.",
+      "id": "m-2",
+      "timestamp": "2026-03-13T12:00:24.265Z",
+      "durationMs": 648,
+      "score": 1,
+      "judgeOutput": "The response identifies the bond as ionic and justifies it with the electronegativity gap and lattice structure. Verdict: correct.",
+      "tokens": [
+        {
+          "token": "Answer",
+          "logprob": -0.0362
+        },
+        {
+          "token": ":",
+          "logprob": -0.0255
+        },
+        {
+          "token": "Ionic",
+          "logprob": -0.0186
+        },
+        {
+          "token": "bond",
+          "logprob": -0.0073
+        },
+        {
+          "token": ".",
+          "logprob": -0.0063
+        }
+      ],
+      "stepIndex": 1
+    }
+  ]
+}

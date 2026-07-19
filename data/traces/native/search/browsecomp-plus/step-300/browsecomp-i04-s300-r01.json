@@ -1,0 +1,415 @@
+{
+  "meta": {
+    "traceId": "browsecomp-i04-s300-r01",
+    "instanceId": "browsecomp-i04",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-13T12:25:34.904Z",
+    "checkpointStep": 300,
+    "split": "train",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 1
+    }
+  },
+  "stats": {
+    "score": 1,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 225,
+    "outputTokens": 146,
+    "thinkingTokens": 77,
+    "totalTokens": 371,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.5273972602739726,
+    "durationMs": 12708,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Which is taller when measured from base to summit: Mauna Kea or Mount Everest, and by roughly how much, using commonly cited figures?",
+      "id": "m-0",
+      "timestamp": "2026-03-13T12:25:34.904Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Everest wins on elevation above sea level, but Mauna Kea measured from its underwater base is taller overall. Need both figures.",
+      "id": "m-1",
+      "timestamp": "2026-03-13T12:25:35.223Z",
+      "durationMs": 3415,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"Mauna Kea height base to summit total\"}",
+          "parsedArguments": {
+            "query": "Mauna Kea height base to summit total"
+          }
+        }
+      ],
+      "id": "m-2",
+      "timestamp": "2026-03-13T12:25:38.817Z",
+      "durationMs": 913,
+      "tokens": [
+        {
+          "token": "{",
+          "logprob": -0.0021
+        },
+        {
+          "token": "\"query",
+          "logprob": -1.1895
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0476
+        },
+        {
+          "token": ":",
+          "logprob": -0.0339
+        },
+        {
+          "token": "\"Mauna",
+          "logprob": -0.0346
+        },
+        {
+          "token": "Kea",
+          "logprob": -0.0354
+        },
+        {
+          "token": "height",
+          "logprob": -0.0226
+        },
+        {
+          "token": "base",
+          "logprob": -0.5357
+        },
+        {
+          "token": "to",
+          "logprob": -0.0445
+        },
+        {
+          "token": "summit",
+          "logprob": -0.0038
+        },
+        {
+          "token": "total",
+          "logprob": -0.0234
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0434
+        },
+        {
+          "token": "}",
+          "logprob": -0.0143
+        }
+      ],
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Mauna Kea — Wikipedia — https://en.wikipedia.org/wiki/Mauna_Kea\n   Measured from its base on the ocean floor, Mauna Kea is about 10,210 m (33,500 ft) tall — the tallest mountain on Earth — though only 4,207 m of it is above sea level.\n\n2. Is Mauna Kea taller than Everest? — USGS — https://www.usgs.gov/faqs/mauna-kea-taller-everest\n   Mauna Kea is the tallest mountain from base to peak; Mount Everest has the highest altitude.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 939
+      },
+      "id": "m-3",
+      "timestamp": "2026-03-13T12:25:39.899Z",
+      "durationMs": 939,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Commonly cited: Mauna Kea ~10,210 m base-to-summit vs Everest 8,849 m; the base-to-summit figure for Everest is much smaller, but the usual comparison uses its sea-level elevation.",
+      "id": "m-4",
+      "timestamp": "2026-03-13T12:25:41.134Z",
+      "durationMs": 3148,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"Mount Everest elevation 8849\"}",
+          "parsedArguments": {
+            "query": "Mount Everest elevation 8849"
+          }
+        }
+      ],
+      "id": "m-5",
+      "timestamp": "2026-03-13T12:25:44.659Z",
+      "durationMs": 514,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. Mount Everest — Wikipedia — https://en.wikipedia.org/wiki/Mount_Everest\n   Everest's elevation of 8,848.86 m (29,031.7 ft) was jointly announced by China and Nepal in 2020.\n\n2. How tall is Mount Everest, really? — https://www.nationalgeographic.com/everest-height\n   The 2020 survey settled on 8,848.86 metres above sea level.",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 1283
+      },
+      "id": "m-6",
+      "timestamp": "2026-03-13T12:25:45.523Z",
+      "durationMs": 1283,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Measured base-to-summit, Mauna Kea is taller: about 10,210 m from its ocean-floor base, versus Everest’s 8,849 m above sea level. Using those commonly cited figures, Mauna Kea is roughly 1,360 m \"taller\", even though Everest remains the highest point on Earth.",
+      "id": "m-7",
+      "timestamp": "2026-03-13T12:25:46.922Z",
+      "durationMs": 690,
+      "tokens": [
+        {
+          "token": "Measured",
+          "logprob": -4.645
+        },
+        {
+          "token": "base",
+          "logprob": -0.0401
+        },
+        {
+          "token": "-to",
+          "logprob": -0.009
+        },
+        {
+          "token": "-summit",
+          "logprob": -0.046
+        },
+        {
+          "token": ",",
+          "logprob": -0.0286
+        },
+        {
+          "token": "Mauna",
+          "logprob": -0.0303
+        },
+        {
+          "token": "Kea",
+          "logprob": -0.0219
+        },
+        {
+          "token": "is",
+          "logprob": -0.0296
+        },
+        {
+          "token": "taller",
+          "logprob": -1.1548
+        },
+        {
+          "token": ":",
+          "logprob": -0.0302
+        },
+        {
+          "token": "about",
+          "logprob": -0.0141
+        },
+        {
+          "token": "10",
+          "logprob": -0.0291
+        },
+        {
+          "token": ",210",
+          "logprob": -0.0259
+        },
+        {
+          "token": "m",
+          "logprob": -0.0328
+        },
+        {
+          "token": "from",
+          "logprob": -0.0235
+        },
+        {
+          "token": "its",
+          "logprob": -2.6071
+        },
+        {
+          "token": "ocean",
+          "logprob": -0.0366
+        },
+        {
+          "token": "-floor",
+          "logprob": -0.0411
+        },
+        {
+          "token": "base",
+          "logprob": -0.7513
+        },
+        {
+          "token": ",",
+          "logprob": -5.6133
+        },
+        {
+          "token": "versus",
+          "logprob": -0.0098
+        },
+        {
+          "token": "Everest",
+          "logprob": -0.0476
+        },
+        {
+          "token": "’s",
+          "logprob": -0.0086
+        },
+        {
+          "token": "8",
+          "logprob": -0.0151
+        },
+        {
+          "token": ",849",
+          "logprob": -0.0148
+        },
+        {
+          "token": "m",
+          "logprob": -0.0343
+        },
+        {
+          "token": "above",
+          "logprob": -0.0282
+        },
+        {
+          "token": "sea",
+          "logprob": -0.0286
+        },
+        {
+          "token": "level",
+          "logprob": -1.1812
+        },
+        {
+          "token": ".",
+          "logprob": -0.0215
+        },
+        {
+          "token": "Using",
+          "logprob": -0.0331
+        },
+        {
+          "token": "those",
+          "logprob": -0.0381
+        },
+        {
+          "token": "commonly",
+          "logprob": -1.4114
+        },
+        {
+          "token": "cited",
+          "logprob": -0.0084
+        },
+        {
+          "token": "figures",
+          "logprob": -0.0452
+        },
+        {
+          "token": ",",
+          "logprob": -0.0227
+        },
+        {
+          "token": "Mauna",
+          "logprob": -0.0069
+        },
+        {
+          "token": "Kea",
+          "logprob": -0.0027
+        },
+        {
+          "token": "is",
+          "logprob": -0.0243
+        },
+        {
+          "token": "roughly",
+          "logprob": -0.0305
+        },
+        {
+          "token": "1",
+          "logprob": -0.0282
+        },
+        {
+          "token": ",360",
+          "logprob": -0.0019
+        },
+        {
+          "token": "m",
+          "logprob": -0.0255
+        },
+        {
+          "token": "\"taller",
+          "logprob": -0.0279
+        },
+        {
+          "token": "\"",
+          "logprob": -1.2544
+        },
+        {
+          "token": ",",
+          "logprob": -0.0038
+        },
+        {
+          "token": "even",
+          "logprob": -0.006
+        },
+        {
+          "token": "though",
+          "logprob": -0.0481
+        },
+        {
+          "token": "Everest",
+          "logprob": -0.03
+        },
+        {
+          "token": "remains",
+          "logprob": -0.0489
+        },
+        {
+          "token": "the",
+          "logprob": -0.0137
+        },
+        {
+          "token": "highest",
+          "logprob": -0.0038
+        },
+        {
+          "token": "point",
+          "logprob": -0.0433
+        },
+        {
+          "token": "on",
+          "logprob": -0.0201
+        },
+        {
+          "token": "Earth",
+          "logprob": -0.0227
+        },
+        {
+          "token": ".",
+          "logprob": -0.0375
+        }
+      ],
+      "stepIndex": 3
+    }
+  ]
+}

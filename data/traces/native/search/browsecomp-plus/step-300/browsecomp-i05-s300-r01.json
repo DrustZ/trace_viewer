@@ -1,0 +1,331 @@
+{
+  "meta": {
+    "traceId": "browsecomp-i05-s300-r01",
+    "instanceId": "browsecomp-i05",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-13T12:05:22.886Z",
+    "checkpointStep": 300,
+    "split": "train",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 1
+    }
+  },
+  "stats": {
+    "score": 1,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 187,
+    "outputTokens": 95,
+    "thinkingTokens": 47,
+    "totalTokens": 282,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.49473684210526314,
+    "durationMs": 12285,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "What was the first video ever uploaded to YouTube, who uploaded it, and in what month and year?",
+      "id": "m-0",
+      "timestamp": "2026-03-13T12:05:22.886Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Well-known trivia: \"Me at the zoo\" by co-founder Jawed Karim. Confirming the date, April 2005.",
+      "id": "m-1",
+      "timestamp": "2026-03-13T12:05:22.956Z",
+      "durationMs": 1749,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"first video uploaded to YouTube\"}",
+          "parsedArguments": {
+            "query": "first video uploaded to YouTube"
+          }
+        }
+      ],
+      "id": "m-2",
+      "timestamp": "2026-03-13T12:05:24.838Z",
+      "durationMs": 891,
+      "tokens": [
+        {
+          "token": "{",
+          "logprob": -0.0215
+        },
+        {
+          "token": "\"query",
+          "logprob": -0.0024
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0159
+        },
+        {
+          "token": ":",
+          "logprob": -2.3466
+        },
+        {
+          "token": "\"first",
+          "logprob": -0.0307
+        },
+        {
+          "token": "video",
+          "logprob": -0.8373
+        },
+        {
+          "token": "uploaded",
+          "logprob": -0.0291
+        },
+        {
+          "token": "to",
+          "logprob": -0.0238
+        },
+        {
+          "token": "YouTube",
+          "logprob": -0.0075
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0031
+        },
+        {
+          "token": "}",
+          "logprob": -0.013
+        }
+      ],
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Me at the zoo — Wikipedia — https://en.wikipedia.org/wiki/Me_at_the_zoo\n   \"Me at the zoo\" is the first video uploaded to YouTube, on April 23, 2005, by co-founder Jawed Karim.\n\n2. YouTube's first video turns 18 — https://www.theverge.com/youtube-me-at-the-zoo-anniversary\n   The 19-second clip shows Karim at the San Diego Zoo elephant enclosure.\n\n3. Jawed Karim — Wikipedia — https://en.wikipedia.org/wiki/Jawed_Karim\n   Karim uploaded the first YouTube video after co-founding the site with Chad Hurley and Steve Chen.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 474
+      },
+      "id": "m-3",
+      "timestamp": "2026-03-13T12:05:25.882Z",
+      "durationMs": 474,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Verifying with two independent sources since anniversary articles sometimes shift the date.",
+      "id": "m-4",
+      "timestamp": "2026-03-13T12:05:26.637Z",
+      "durationMs": 3511,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"\\\"Me at the zoo\\\" upload date April 2005\"}",
+          "parsedArguments": {
+            "query": "\"Me at the zoo\" upload date April 2005"
+          }
+        }
+      ],
+      "id": "m-5",
+      "timestamp": "2026-03-13T12:05:30.206Z",
+      "durationMs": 1114,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. Me at the zoo — YouTube — https://www.youtube.com/watch?v=jNQXAC9IVRw\n   Uploaded Apr 23, 2005. The first video on YouTube.",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 1342
+      },
+      "id": "m-6",
+      "timestamp": "2026-03-13T12:05:31.606Z",
+      "durationMs": 1342,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "The first YouTube video was \"Me at the zoo\", a 19-second clip filmed at the San Diego Zoo, uploaded by co-founder Jawed Karim in April 2005 (April 23, 2005).",
+      "id": "m-7",
+      "timestamp": "2026-03-13T12:05:33.090Z",
+      "durationMs": 2081,
+      "tokens": [
+        {
+          "token": "The",
+          "logprob": -0.0263
+        },
+        {
+          "token": "first",
+          "logprob": -0.0206
+        },
+        {
+          "token": "YouTube",
+          "logprob": -0.0402
+        },
+        {
+          "token": "video",
+          "logprob": -0.0126
+        },
+        {
+          "token": "was",
+          "logprob": -0.0395
+        },
+        {
+          "token": "\"Me",
+          "logprob": -0.0108
+        },
+        {
+          "token": "at",
+          "logprob": -0.3311
+        },
+        {
+          "token": "the",
+          "logprob": -0.0413
+        },
+        {
+          "token": "zoo",
+          "logprob": -0.046
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0469
+        },
+        {
+          "token": ",",
+          "logprob": -0.0215
+        },
+        {
+          "token": "a",
+          "logprob": -0.0248
+        },
+        {
+          "token": "19",
+          "logprob": -0.0318
+        },
+        {
+          "token": "-second",
+          "logprob": -0.0439
+        },
+        {
+          "token": "clip",
+          "logprob": -0.045
+        },
+        {
+          "token": "filmed",
+          "logprob": -0.0183
+        },
+        {
+          "token": "at",
+          "logprob": -0.0239
+        },
+        {
+          "token": "the",
+          "logprob": -0.0179
+        },
+        {
+          "token": "San",
+          "logprob": -0.0462
+        },
+        {
+          "token": "Diego",
+          "logprob": -0.0472
+        },
+        {
+          "token": "Zoo",
+          "logprob": -0.0078
+        },
+        {
+          "token": ",",
+          "logprob": -0.0412
+        },
+        {
+          "token": "uploaded",
+          "logprob": -0.0156
+        },
+        {
+          "token": "by",
+          "logprob": -0.0286
+        },
+        {
+          "token": "co",
+          "logprob": -0.8287
+        },
+        {
+          "token": "-founder",
+          "logprob": -0.0411
+        },
+        {
+          "token": "Jawed",
+          "logprob": -0.0303
+        },
+        {
+          "token": "Karim",
+          "logprob": -0.0403
+        },
+        {
+          "token": "in",
+          "logprob": -0.0299
+        },
+        {
+          "token": "April",
+          "logprob": -0.0336
+        },
+        {
+          "token": "2005",
+          "logprob": -0.024
+        },
+        {
+          "token": "(April",
+          "logprob": -0.0321
+        },
+        {
+          "token": "23",
+          "logprob": -0.0382
+        },
+        {
+          "token": ",",
+          "logprob": -0.0469
+        },
+        {
+          "token": "2005",
+          "logprob": -0.016
+        },
+        {
+          "token": ")",
+          "logprob": -1.2851
+        },
+        {
+          "token": ".",
+          "logprob": -0.0299
+        }
+      ],
+      "stepIndex": 3
+    }
+  ]
+}

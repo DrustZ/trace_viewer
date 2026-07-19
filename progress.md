@@ -16,6 +16,29 @@ gotchas and decisions we must not lose track of.
 
 **Next**: M1 scaffold after PLAN.md review.
 
+## 2026-07-18 — M1: scaffold (done, commit 0a67ee1)
+
+**Done**
+- Single-package repo: Vite + React 19 + TS strict + Tailwind v4, Express 5 API (`server/app.ts`
+  factory + `server/index.ts`), `npm run dev` boots both behind one command with a `/api` proxy
+  (zero CORS); production mode serves `dist/` + API from one port
+- Contract frozen: `shared/schema/types.ts` (Trace/Message/aggregates),
+  `shared/connectors/types.ts`, `shared/filter/types.ts`, and `shared/stats/computeStats.ts`
+  (single metrics definition, 8 unit tests green)
+- Toolchain checks all green: `tsc --noEmit`, `vitest run`, `biome check`
+
+**Notes to remember**
+- Dependencies resolved to current majors: React 19, Express 5, zod 4, recharts 3,
+  react-router 7, Biome 2, Vitest 4, TS 6. Express 5 route wildcards need RegExp form
+  (`app.get(/^\/(?!api\/).*/)`) — string `*` patterns are gone.
+- TS 6 removed `baseUrl`; path aliases must be relative (`"@shared/*": ["./shared/*"]`).
+- Biome 2 config: `files.includes` with `!` negations; Tailwind needs
+  `css.parser.tailwindDirectives: true`.
+- A "turn" = one contiguous assistant message block (one model invocation); tool results
+  belong to the step that invoked them (`stepIndex`).
+- `.env` holds ANTHROPIC_API_KEY (gitignored); `.env.example` documents it. AI filter model
+  default: claude-sonnet-5.
+
 **Notes to remember**
 - System `node` on this machine is v16 (EOL). Use Homebrew Node 22:
   `export PATH="/opt/homebrew/bin:$PATH"` before any npm/npx. `package.json` sets

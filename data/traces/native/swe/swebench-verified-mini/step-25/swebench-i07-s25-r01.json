@@ -1,0 +1,308 @@
+{
+  "meta": {
+    "traceId": "swebench-i07-s25-r01",
+    "instanceId": "swebench-i07",
+    "component": "swe/swebench-verified-mini",
+    "status": "failed",
+    "timestamp": "2026-03-02T01:03:24.385Z",
+    "checkpointStep": 25,
+    "split": "train",
+    "sourceFormat": "native"
+  },
+  "stats": {
+    "score": null,
+    "hasError": true,
+    "truncated": false,
+    "inputTokens": 445,
+    "outputTokens": 192,
+    "thinkingTokens": 177,
+    "totalTokens": 637,
+    "turns": 5,
+    "toolUses": 5,
+    "sandboxExecutions": 5,
+    "thinkingPortion": 0.921875,
+    "durationMs": 53569,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "[psf/requests] Session ignores per-request timeout when a transport adapter sets max_retries\n\nWith an HTTPAdapter configured with max_retries=3, a per-request timeout is\ndropped on retried requests:\n\n    s = requests.Session()\n    s.mount('https://', HTTPAdapter(max_retries=3))\n    s.get('https://httpbin.org/delay/10', timeout=1)  # hangs ~30s\n\nTraceback (KeyboardInterrupt during hang):\n  File \"requests/adapters.py\", line 487, in send\n    resp = conn.urlopen(\n  File \"urllib3/connectionpool.py\", line 787, in urlopen\n    retries = retries.increment(\n  File \"urllib3/connectionpool.py\", line 941, in urlopen\n    return self.urlopen(method, url, body=body, headers=headers, timeout=_DEFAULT_TIMEOUT, ...)",
+      "id": "m-0",
+      "timestamp": "2026-03-02T01:03:24.385Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "urllib3 resets timeout to _DEFAULT_TIMEOUT on the recursive retry call unless a total budget is set on the Timeout object. requests builds the TimeoutSauce without total, so only the first attempt is bounded.",
+      "id": "m-1",
+      "timestamp": "2026-03-02T01:03:24.464Z",
+      "durationMs": 8328,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "bash",
+          "arguments": "{\"command\":\"grep -rn 'def send' requests/adapters.py\"}",
+          "parsedArguments": {
+            "command": "grep -rn 'def send' requests/adapters.py"
+          }
+        }
+      ],
+      "id": "m-2",
+      "timestamp": "2026-03-02T01:03:32.842Z",
+      "durationMs": 1761,
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "requests/adapters.py:434:    def send(",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 2443
+      },
+      "id": "m-3",
+      "timestamp": "2026-03-02T01:03:34.866Z",
+      "durationMs": 2443,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Setting total on the constructed TimeoutSauce gives urllib3 a cross-retry budget; the tuple branch may need the same treatment, but the scalar branch is what the repro hits.",
+      "id": "m-4",
+      "timestamp": "2026-03-02T01:03:37.689Z",
+      "durationMs": 13696,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "bash",
+          "arguments": "{\"command\":\"sed -n '470,495p' requests/adapters.py\"}",
+          "parsedArguments": {
+            "command": "sed -n '470,495p' requests/adapters.py"
+          }
+        }
+      ],
+      "id": "m-5",
+      "timestamp": "2026-03-02T01:03:51.440Z",
+      "durationMs": 677,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "        try:\n            resp = conn.urlopen(\n                method=request.method,\n                url=url,\n                body=request.body,\n                headers=request.headers,\n                redirect=False,\n                assert_same_host=False,\n                preload_content=False,\n                decode_content=False,\n                retries=self.max_retries,\n                timeout=timeout,\n            )",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 1154
+      },
+      "id": "m-6",
+      "timestamp": "2026-03-02T01:03:52.390Z",
+      "durationMs": 1154,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Scanning for other call sites of this helper to make sure the change cannot regress a sibling code path.",
+      "id": "m-7",
+      "timestamp": "2026-03-02T01:03:53.651Z",
+      "durationMs": 1003,
+      "stepIndex": 3
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-3",
+          "name": "bash",
+          "arguments": "{\"command\":\"grep -rn 'TimeoutSauce' requests/adapters.py | head -4\"}",
+          "parsedArguments": {
+            "command": "grep -rn 'TimeoutSauce' requests/adapters.py | head -4"
+          }
+        }
+      ],
+      "id": "m-8",
+      "timestamp": "2026-03-02T01:03:54.817Z",
+      "durationMs": 672,
+      "stepIndex": 3
+    },
+    {
+      "role": "tool",
+      "content": "requests/adapters.py:24:from .models import Response\nrequests/adapters.py:439:        if isinstance(timeout, tuple):\nrequests/adapters.py:447:            timeout = TimeoutSauce(connect=timeout, read=timeout)",
+      "toolResult": {
+        "toolCallId": "call-3",
+        "isError": false,
+        "durationMs": 2695
+      },
+      "id": "m-9",
+      "timestamp": "2026-03-02T01:03:55.532Z",
+      "durationMs": 2695,
+      "stepIndex": 3
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Before editing, re-running the failing selector to capture the exact assertion text for comparison after the fix.",
+      "id": "m-10",
+      "timestamp": "2026-03-02T01:03:58.419Z",
+      "durationMs": 2976,
+      "stepIndex": 4
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-4",
+          "name": "bash",
+          "arguments": "{\"command\":\"sed -n '439,452p' requests/adapters.py\"}",
+          "parsedArguments": {
+            "command": "sed -n '439,452p' requests/adapters.py"
+          }
+        }
+      ],
+      "id": "m-11",
+      "timestamp": "2026-03-02T01:04:01.523Z",
+      "durationMs": 1242,
+      "stepIndex": 4
+    },
+    {
+      "role": "tool",
+      "content": "        if isinstance(timeout, tuple):\n            try:\n                connect, read = timeout\n                timeout = TimeoutSauce(connect=connect, read=read)\n            except ValueError:\n                raise ValueError(...)\n        elif isinstance(timeout, TimeoutSauce):\n            pass\n        else:\n            timeout = TimeoutSauce(connect=timeout, read=timeout)",
+      "toolResult": {
+        "toolCallId": "call-4",
+        "isError": false,
+        "durationMs": 3039
+      },
+      "id": "m-12",
+      "timestamp": "2026-03-02T01:04:03.032Z",
+      "durationMs": 3039,
+      "stepIndex": 4
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Scanning for other call sites of this helper to make sure the change cannot regress a sibling code path.",
+      "id": "m-13",
+      "timestamp": "2026-03-02T01:04:06.398Z",
+      "durationMs": 6967,
+      "stepIndex": 5
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-5",
+          "name": "bash",
+          "arguments": "{\"command\":\"python -m pytest tests/test_adapters.py -q -k retries_timeout\"}",
+          "parsedArguments": {
+            "command": "python -m pytest tests/test_adapters.py -q -k retries_timeout"
+          }
+        }
+      ],
+      "id": "m-14",
+      "timestamp": "2026-03-02T01:04:13.653Z",
+      "durationMs": 1419,
+      "tokens": [
+        {
+          "token": "{",
+          "logprob": -1.0601
+        },
+        {
+          "token": "\"command",
+          "logprob": -0.0106
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0342
+        },
+        {
+          "token": ":",
+          "logprob": -0.0458
+        },
+        {
+          "token": "\"python",
+          "logprob": -0.0317
+        },
+        {
+          "token": "-m",
+          "logprob": -0.0323
+        },
+        {
+          "token": "pytest",
+          "logprob": -0.0327
+        },
+        {
+          "token": "tests",
+          "logprob": -0.0473
+        },
+        {
+          "token": "/test_adapters",
+          "logprob": -0.0367
+        },
+        {
+          "token": ".py",
+          "logprob": -0.0465
+        },
+        {
+          "token": "-q",
+          "logprob": -0.0427
+        },
+        {
+          "token": "-k",
+          "logprob": -0.0107
+        },
+        {
+          "token": "retries_timeout",
+          "logprob": -0.0297
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0111
+        },
+        {
+          "token": "}",
+          "logprob": -0.0324
+        }
+      ],
+      "stepIndex": 5
+    },
+    {
+      "role": "tool",
+      "content": "CancelledError: SIGINT",
+      "toolResult": {
+        "toolCallId": "call-5",
+        "isError": true,
+        "durationMs": 2543
+      },
+      "id": "m-15",
+      "timestamp": "2026-03-02T01:04:15.411Z",
+      "durationMs": 2543,
+      "stepIndex": 5
+    }
+  ]
+}
