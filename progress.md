@@ -160,3 +160,13 @@ verify at the end):
   14.6s), playground replay (3.9s)
 - M6: brief-organized acceptance sweep (six Suggestions + edge cases + production mode),
   then packaging via `git archive` (committed content only — no node_modules/.env/imported)
+
+## 2026-07-19 — Final acceptance round (commits 30f2896…final)
+
+User live-review fixes, each committed on completion: editor-style minimap iterated to its
+final form (time-proportional full-height segments, card-matched palette, dock-style focus
+zoom over the reachable scroll range, measurement-corrected click-jump, clears scrollbar and
+Ask AI button), uniform full-width message cards, light-emerald nested reasoning, compact-rail
+kind markers, run-scoped evolution/siblings, selection-consistent home panels, per-message
+search index (deep-content hits), encoded trace-id URLs, scan auto-refresh, honest partial
+comparison, atomic imports. Final gate: tsc clean · 273 tests · production build passing.
