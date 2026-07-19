@@ -4,10 +4,9 @@ import { type RenderUnit, stepHasToolCalls, unitDurationMs } from './unitize'
 
 type BarKind = 'user' | 'neutral' | 'toolCall' | 'toolResult' | 'toolError' | 'final'
 
-// Mirrors the card colors for continuity: a step's bar takes the color of its
-// response (indigo when it calls tools, emerald for a final answer).
+// Mirrors the card colors for continuity: assistant reads green like the cards.
 function barKind(unit: RenderUnit): BarKind {
-  if (unit.kind === 'step') return 'final' // assistant steps read green, like the cards
+  if (unit.kind === 'step') return 'final'
   const m = unit.message
   if (m.role === 'tool') return m.toolResult?.isError ? 'toolError' : 'toolResult'
   if (m.role === 'user') return 'user'
@@ -23,7 +22,7 @@ const BAR: Record<BarKind, string> = {
   final: 'bg-emerald-400',
 }
 
-/** Label ink per segment color: white on the saturated fills, slate on the light ones. */
+/** Label ink per segment color: readable on each fill. */
 const LABEL_INK: Record<BarKind, string> = {
   user: 'text-blue-950/70',
   neutral: 'text-slate-500',
@@ -40,7 +39,9 @@ function kindLabel(unit: RenderUnit): string {
 
 const SAMPLE_CAP = 400
 const GAP = 1
-const MIN_SEG = 3
+/** Every segment stays clickable; no single segment swallows the track. */
+const MIN_SEG = 6
+const MAX_SEG_SHARE = 0.35
 const LABEL_MIN_SEG = 14
 
 function sampleIndices(count: number, cap: number): number[] {
@@ -49,11 +50,13 @@ function sampleIndices(count: number, cap: number): number[] {
 }
 
 /**
- * Time-proportional vertical timeline pinned to the right edge of the
- * conversation scroll area. The strip always fills the available height;
- * each unit's segment height is its share of the total wall-clock time
- * (min 3px so instant steps stay visible), color = unit kind. A draggable
- * translucent overlay marks the visible window; clicking a segment jumps.
+ * Time-proportional vertical timeline beside the conversation. The strip fills
+ * the available height; each unit's segment height is its share of total
+ * wall-clock time (clamped to [6px, 35% of track] so everything stays
+ * clickable and nothing swallows the strip), color = unit kind. The unit at
+ * the viewport center gets a dock-style zoom + ring instead of a scroll thumb
+ * (a thumb lies once segments are time-proportional while scrolling is
+ * content-proportional). Clicking a segment jumps to its unit.
  */
 export function Minimap({
   units,
@@ -63,7 +66,6 @@ export function Minimap({
   totalSize,
   scrollMargin,
   onJump,
-  onScrollTo,
 }: {
   units: RenderUnit[]
   totalDurationMs: number | undefined
@@ -76,14 +78,9 @@ export function Minimap({
   /** Virtualizer scrollMargin — list offset inside the scroll container (px). */
   scrollMargin: number
   onJump: (index: number) => void
-  /** Scrolls the conversation container to the given scrollTop (px). */
-  onScrollTo: (offset: number) => void
 }) {
   const trackRef = useRef<HTMLDivElement>(null)
   const [trackHeight, setTrackHeight] = useState(0)
-  // Pointer-capture drag on the window overlay; tooltip follows the cursor.
-  const dragging = useRef(false)
-  const [dragY, setDragY] = useState<number | null>(null)
 
   useLayoutEffect(() => {
     const el = trackRef.current
@@ -99,18 +96,14 @@ export function Minimap({
   const sampled = useMemo(() => sampleIndices(units.length, SAMPLE_CAP), [units.length])
   const n = sampled.length
 
-  // Cumulative duration before each unit — drives the drag tooltip ('+42s').
   const cumMs = useMemo(() => {
     const out = new Array<number>(units.length + 1)
     out[0] = 0
     for (let i = 0; i < units.length; i++) out[i + 1] = out[i] + (unitDurationMs(units[i]) ?? 0)
     return out
   }, [units])
-  const hasDurations = cumMs[units.length] > 0
 
-  // Segment heights: proportional to each unit's share of total time, filling
-  // the whole track. Min 3px keeps instant steps visible; a final scale pass
-  // re-fits the clamped heights to the track exactly.
+  // Segment heights: proportional to time share, clamped, re-fit to the track.
   const segHeights = useMemo(() => {
     if (n === 0 || trackHeight <= 0) return []
     const usable = Math.max(trackHeight - (n - 1) * GAP, n * MIN_SEG)
@@ -119,7 +112,7 @@ export function Minimap({
     if (total > 0) {
       raw = sampled.map((index) => {
         const d = unitDurationMs(units[index]) ?? 0
-        return Math.max(MIN_SEG, (d / total) * usable)
+        return Math.min(Math.max(MIN_SEG, (d / total) * usable), usable * MAX_SEG_SHARE)
       })
     } else {
       raw = sampled.map(() => usable / n)
@@ -135,65 +128,22 @@ export function Minimap({
     for (let i = 0; i < segHeights.length; i++) tops[i + 1] = tops[i] + segHeights[i] + GAP
     return tops
   }, [segHeights])
-  const blockHeight = segTops[segHeights.length] ?? 0
 
-  // Scroll thumb: a small slider knob at the current scroll progress — it must
-  // never cover a large stretch of segments (they stay clickable).
-  const maxScroll = Math.max(totalSize - viewportHeight, 1)
-  const progress = Math.min(Math.max((scrollOffset - scrollMargin) / maxScroll, 0), 1)
-  const windowHeight = Math.min(
-    Math.max((viewportHeight / Math.max(totalSize, 1)) * blockHeight, 12),
-    28,
-  )
-  const windowTop = progress * Math.max(blockHeight - windowHeight, 0)
-
-  const yToIndex = (y: number): number => {
-    for (let i = 0; i < segHeights.length; i++) {
-      if (y < segTops[i + 1]) return i
-    }
-    return Math.max(segHeights.length - 1, 0)
-  }
-
-  const moveTooltip = (clientY: number) => {
-    const rect = trackRef.current?.getBoundingClientRect()
-    if (rect) setDragY(Math.min(Math.max(clientY - rect.top, 0), blockHeight))
-  }
-
-  const onWindowPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    dragging.current = true
-    moveTooltip(e.clientY)
-  }
-
-  const onWindowPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current || blockHeight <= 0 || n === 0) return
-    const rect = trackRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const y = Math.min(Math.max(e.clientY - rect.top, 0), blockHeight)
-    // Thumb position → scroll progress → container offset.
-    const p =
-      blockHeight > windowHeight
-        ? Math.min(Math.max((y - windowHeight / 2) / (blockHeight - windowHeight), 0), 1)
-        : 0
-    onScrollTo(p * maxScroll + scrollMargin)
-    moveTooltip(e.clientY)
-  }
-
-  const onWindowPointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    dragging.current = false
-    setDragY(null)
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    }
-  }
-
-  const tooltipLabel = (y: number): string => `+${formatDuration(cumMs[sampled[yToIndex(y)] ?? 0])}`
+  // Dock-style focus: the unit at the viewport center, mapped through sampling.
+  const centerPx = scrollOffset - scrollMargin + viewportHeight / 2
+  const focusedUnit =
+    totalSize > 0 && units.length > 0
+      ? Math.min(Math.max(Math.floor((centerPx / totalSize) * units.length), 0), units.length - 1)
+      : 0
+  const focusedIdx =
+    n === units.length
+      ? focusedUnit
+      : Math.min(Math.floor((focusedUnit / units.length) * n), Math.max(n - 1, 0))
 
   return (
     <div
       data-testid="timeline-minimap"
-      className="absolute top-2 right-1 bottom-2 z-10 flex w-6 flex-col"
+      className="absolute top-2 right-3 bottom-2 z-10 flex w-6 flex-col"
     >
       <div
         className="shrink-0 pb-1 text-center font-mono text-[8px] leading-none text-slate-500"
@@ -208,6 +158,7 @@ export function Minimap({
             const d = unitDurationMs(unit)
             const kind = barKind(unit)
             const h = segHeights[i] ?? MIN_SEG
+            const focused = i === focusedIdx
             const showLabel = d !== undefined && d > 0 && h >= LABEL_MIN_SEG
             return (
               <button
@@ -216,11 +167,17 @@ export function Minimap({
                 onClick={() => onJump(index)}
                 title={`#${index + 1} · ${kindLabel(unit)} · ${formatDuration(d)}`}
                 aria-label={`Jump to unit ${index + 1}`}
-                className="absolute inset-x-0 block"
+                aria-current={focused ? 'true' : undefined}
+                className={`absolute inset-x-0 block ${focused ? 'z-10' : ''}`}
                 style={{ top: segTops[i], height: h }}
               >
                 <span
-                  className={`block h-full w-full rounded-[3px] opacity-75 transition-opacity duration-100 hover:opacity-100 ${BAR[kind]}`}
+                  className={`block h-full w-full rounded-[3px] transition-all duration-150 hover:opacity-100 ${BAR[kind]} ${
+                    focused
+                      ? 'scale-x-[1.6] opacity-100 shadow-sm ring-1 ring-slate-500/50'
+                      : 'opacity-75'
+                  }`}
+                  style={focused ? { transformOrigin: 'right' } : undefined}
                 />
                 {showLabel && (
                   <span
@@ -232,25 +189,6 @@ export function Minimap({
               </button>
             )
           })}
-          <div
-            data-testid="minimap-window"
-            onPointerDown={onWindowPointerDown}
-            onPointerMove={onWindowPointerMove}
-            onPointerUp={onWindowPointerEnd}
-            onPointerCancel={onWindowPointerEnd}
-            className={`absolute inset-x-[-2px] touch-none rounded-full border border-slate-400/80 bg-white/70 shadow backdrop-blur-[1px] ${
-              dragY !== null ? 'cursor-grabbing' : 'cursor-grab'
-            }`}
-            style={{ top: windowTop, height: windowHeight }}
-          />
-          {dragY !== null && hasDurations && (
-            <div
-              className="pointer-events-none absolute right-full z-20 mr-1.5 -translate-y-1/2 whitespace-nowrap rounded bg-slate-800 px-1 py-0.5 font-mono text-[9px] leading-none text-white shadow-sm"
-              style={{ top: dragY }}
-            >
-              {tooltipLabel(dragY)}
-            </div>
-          )}
         </div>
       </div>
     </div>
