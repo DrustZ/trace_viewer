@@ -16,7 +16,7 @@ import type {
   Trace,
   TraceSummary,
 } from '@shared/schema/types'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type UseQueryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 // Type-only import — erased at build time, so the client bundle never pulls in server code.
 import type { AnalysisResponse } from '../../server/ai/analyst'
 import { apiGet, apiPost } from './client'
@@ -45,8 +45,12 @@ function listQueryString(params: ListParams): string {
   return s ? `?${s}` : ''
 }
 
-export function useMeta() {
-  return useQuery({ queryKey: ['meta'], queryFn: () => apiGet<MetaResponse>('/api/meta') })
+export function useMeta(options?: Pick<UseQueryOptions<MetaResponse>, 'refetchInterval'>) {
+  return useQuery({
+    queryKey: ['meta'],
+    queryFn: () => apiGet<MetaResponse>('/api/meta'),
+    ...options,
+  })
 }
 
 export function useTraces(params: ListParams) {
@@ -61,7 +65,7 @@ export function useTraces(params: ListParams) {
 export function useTrace(traceId: string | undefined) {
   return useQuery({
     queryKey: ['trace', traceId],
-    queryFn: () => apiGet<Trace>(`/api/traces/${traceId}`),
+    queryFn: () => apiGet<Trace>(`/api/traces/${encodeURIComponent(traceId ?? '')}`),
     enabled: !!traceId,
   })
 }
@@ -70,7 +74,7 @@ export function useTraceRaw(traceId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: ['trace-raw', traceId],
     queryFn: async () => {
-      const res = await fetch(`/api/traces/${traceId}/raw`)
+      const res = await fetch(`/api/traces/${encodeURIComponent(traceId ?? '')}/raw`)
       if (!res.ok) throw new Error(`raw unavailable (${res.status})`)
       return res.text()
     },
@@ -83,11 +87,13 @@ export function useNeighbors(traceId: string | undefined, params: ListParams) {
   const qs = listQueryString(params)
   return useQuery({
     queryKey: ['neighbors', traceId, qs],
-    queryFn: () => apiGet<NeighborsResponse>(`/api/traces/${traceId}/neighbors${qs}`),
+    queryFn: () =>
+      apiGet<NeighborsResponse>(`/api/traces/${encodeURIComponent(traceId ?? '')}/neighbors${qs}`),
     enabled: !!traceId,
   })
 }
 
+// FIXME(encode): traceId is interpolated unencoded below — wrap with encodeURIComponent (hook owned by another track).
 export function useSiblings(traceId: string | undefined) {
   return useQuery({
     queryKey: ['siblings', traceId],
@@ -106,7 +112,9 @@ export function useTiles(params: ListParams) {
 }
 
 export function useComponentAggregates(params: ListParams) {
-  const qs = listQueryString({ split: params.split, step: params.step })
+  // Pass the full selection; the server drops component conditions so the
+  // table always lists every component under the current run/status filters.
+  const qs = listQueryString(params)
   return useQuery({
     queryKey: ['component-aggregates', qs],
     queryFn: () => apiGet<ComponentAggregate[]>(`/api/aggregates/components${qs}`),
@@ -114,10 +122,19 @@ export function useComponentAggregates(params: ListParams) {
   })
 }
 
-export function useRewardCurves(components?: string[]) {
-  const qs = components?.length
-    ? `?${components.map((c) => `component=${encodeURIComponent(c)}`).join('&')}`
-    : ''
+export function useRewardCurves(components?: string[], params: ListParams = {}) {
+  // filters/q/status scope the curves; the server ignores step/split/component
+  // conditions (x-axis, the two series, and the ?component selector below).
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries({
+    filters: params.filters,
+    q: params.q,
+    status: params.status,
+  })) {
+    if (value !== undefined && value !== '') search.set(key, value)
+  }
+  for (const c of components ?? []) search.append('component', c)
+  const qs = search.size > 0 ? `?${search.toString()}` : ''
   return useQuery({
     queryKey: ['curves', qs],
     queryFn: () => apiGet<RewardCurves>(`/api/aggregates/curves${qs}`),
@@ -125,11 +142,12 @@ export function useRewardCurves(components?: string[]) {
   })
 }
 
-export function useEvolution(instanceId: string | undefined) {
+export function useEvolution(instanceId: string | undefined, run?: string) {
+  const qs = run ? `?run=${encodeURIComponent(run)}` : ''
   return useQuery({
-    queryKey: ['evolution', instanceId],
+    queryKey: ['evolution', instanceId, run],
     queryFn: () =>
-      apiGet<EvolutionSeries>(`/api/evolution/${encodeURIComponent(instanceId ?? '')}`),
+      apiGet<EvolutionSeries>(`/api/evolution/${encodeURIComponent(instanceId ?? '')}${qs}`),
     enabled: !!instanceId,
   })
 }

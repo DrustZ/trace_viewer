@@ -91,7 +91,7 @@ export function RewardCurveChart({
   setParam: (key: ListParamKey, value: string | undefined) => void
 }) {
   const [mode, setMode] = useState<SeriesMode>('both')
-  const curves = useRewardCurves(params.component ? [params.component] : undefined)
+  const curves = useRewardCurves(params.component ? [params.component] : undefined, params)
   const rows = useMemo(
     () => buildRows(curves.data?.train ?? [], curves.data?.test ?? []),
     [curves.data],

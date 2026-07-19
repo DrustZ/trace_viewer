@@ -1,4 +1,6 @@
 import type { MetaResponse } from '@shared/schema/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import { type ListParams, useMeta, useTiles, useTraces } from '../../api/hooks'
 import { formatNumber } from '../common/format'
 
@@ -32,11 +34,33 @@ export function RunStatusBar({
   sidebarOpen: boolean
   onToggleSidebar: () => void
 }) {
-  const meta = useMeta()
+  const queryClient = useQueryClient()
+  // Progressive scan: poll meta while the backend reports scanning, stop when done.
+  const meta = useMeta({
+    refetchInterval: (query) =>
+      (query.state.data as MetaWithScan | undefined)?.scanning === true ? 1200 : false,
+  })
   const tiles = useTiles(params)
   const executing = useTraces({ status: 'executing', limit: 1 })
 
   const scan = meta.data as MetaWithScan | undefined
+  const scanning = scan?.scanning === true
+  const dataVersion = meta.data?.dataVersion
+
+  // Each scan batch bumps dataVersion — invalidate so tables/tiles pick up new traces.
+  const prev = useRef<{ version: number | undefined; scanning: boolean }>({
+    version: dataVersion,
+    scanning,
+  })
+  useEffect(() => {
+    const last = prev.current
+    prev.current = { version: dataVersion, scanning }
+    if (dataVersion === undefined || last.version === undefined) return
+    // Also fire on the batch where scanning flips false, so the final chunk lands.
+    if (dataVersion !== last.version && (scanning || last.scanning)) {
+      queryClient.invalidateQueries()
+    }
+  }, [dataVersion, scanning, queryClient])
   const maxStep = meta.data?.steps.length ? Math.max(...meta.data.steps) : null
   const executingTotal = executing.data && 'total' in executing.data ? executing.data.total : 0
   const runInProgress = executingTotal > 0

@@ -144,3 +144,19 @@ verify at the end):
 - The 'run' filter key defaults absent extra.run to 'run-a'.
 - Waves used minimal inline gates (tsc+vitest+regen) instead of per-wave verify agents —
   final full verify happens in M6.
+
+## 2026-07-19 — Final stretch: FIX-C, v1.5, cleanup, M6 (commits 298c9f1, 78e1981, 23618c4, …)
+
+- FIX-C: per-message Rendered|Raw|Tokens tabs + inline token inspector (confidence ≥80%
+  thresholds, Top-K/Probs/#/↵ toggles, selected-token panel with top alternatives, BPE
+  synthetic fallback, full-message raw JSON) — replaces the global logprob toggle
+- v1.5: S2-inspired compact three-pane mode (turn rail with warning badges, focused center,
+  metrics panel with token-breakdown bar and avg neg log-prob)
+- Dead-code sweep; .env.example completed; REPORT gained the scale path (path to millions:
+  progressive scan shipped; lazy-body LRU and SQLite/FTS documented at the store seam) and
+  a brief-coverage map
+- AI features live-verified end to end: filter (sonnet-5 DSL), trace chat (diagnosed a wrong
+  answer with cause + #N citation), analysis agent (grounded findings + suggested filter,
+  14.6s), playground replay (3.9s)
+- M6: brief-organized acceptance sweep (six Suggestions + edge cases + production mode),
+  then packaging via `git archive` (committed content only — no node_modules/.env/imported)

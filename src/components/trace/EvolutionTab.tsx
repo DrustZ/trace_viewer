@@ -208,7 +208,10 @@ export function EvolutionTab({
   onNavigate?: (traceId: string) => void
 }) {
   const { traceId, instanceId, checkpointStep } = trace.meta
-  const evolution = useEvolution(instanceId)
+  const evolution = useEvolution(
+    instanceId,
+    typeof trace.meta.extra?.run === 'string' ? trace.meta.extra.run : 'run-a',
+  )
   const siblings = useSiblings(traceId)
   // Tagging the selection with its trace lets a stale selection from a previous trace
   // fall back to the new trace's own checkpoint without an effect.

@@ -68,6 +68,25 @@ function itemsOf(data: unknown): TraceSummary[] {
     : []
 }
 
+function totalOf(data: unknown): number {
+  return data && typeof data === 'object' && 'total' in data
+    ? Number((data as { total: unknown }).total)
+    : 0
+}
+
+/** Amber warning when the server holds more rollouts than the capped fetch returned. */
+function TruncationNote({ shown, total, label }: { shown: number; total: number; label?: string }) {
+  if (!(total > shown)) return null
+  return (
+    <p
+      data-testid="truncation-note"
+      className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+    >
+      {label ? `${label}: ` : ''}showing first {shown} of {total} rollouts
+    </p>
+  )
+}
+
 function Note({ children }: { children: React.ReactNode }) {
   return (
     <p className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-xs text-slate-400">
@@ -175,17 +194,17 @@ export default function ComparePage() {
   }
 
   // Instance picker options: distinct instanceIds from a broad summaries query.
-  const allTraces = useTraces({ limit: 500 })
+  const allTraces = useTraces({ limit: 5000 })
   const instanceOptions = useMemo(
     () => [...new Set(itemsOf(allTraces.data).map((s) => s.meta.instanceId))].sort(),
     [allTraces.data],
   )
 
   const queryA = useTraces(
-    instance === '' ? { limit: 0 } : { filters: instanceRunFilters(instance, runA), limit: 200 },
+    instance === '' ? { limit: 0 } : { filters: instanceRunFilters(instance, runA), limit: 1000 },
   )
   const queryB = useTraces(
-    instance === '' ? { limit: 0 } : { filters: instanceRunFilters(instance, runB), limit: 200 },
+    instance === '' ? { limit: 0 } : { filters: instanceRunFilters(instance, runB), limit: 1000 },
   )
   const rowsA = useMemo(() => buildStepRows(itemsOf(queryA.data)), [queryA.data])
   const rowsB = useMemo(() => buildStepRows(itemsOf(queryB.data)), [queryB.data])
@@ -225,7 +244,7 @@ export default function ComparePage() {
     </label>
   )
 
-  const column = (run: string, rows: StepRow[], testId: string) => (
+  const column = (run: string, rows: StepRow[], data: unknown, testId: string) => (
     <section className="flex min-w-0 flex-col gap-2" data-testid={testId}>
       <h2 className="text-sm font-semibold text-slate-700">{run}</h2>
       {loading ? (
@@ -233,7 +252,10 @@ export default function ComparePage() {
       ) : rows.length === 0 ? (
         <Note>No traces for {run} on this instance.</Note>
       ) : (
-        <StepTable rows={rows} />
+        <>
+          <TruncationNote shown={itemsOf(data).length} total={totalOf(data)} />
+          <StepTable rows={rows} />
+        </>
       )}
     </section>
   )
@@ -279,13 +301,19 @@ export default function ComparePage() {
           </datalist>
         </label>
 
+        <TruncationNote
+          shown={itemsOf(allTraces.data).length}
+          total={totalOf(allTraces.data)}
+          label="instance list may be incomplete"
+        />
+
         {instance === '' ? (
           <Note>Pick an instance above to compare its rollouts across runs.</Note>
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2">
-              {column(runA, rowsA, 'compare-col-a')}
-              {column(runB, rowsB, 'compare-col-b')}
+              {column(runA, rowsA, queryA.data, 'compare-col-a')}
+              {column(runB, rowsB, queryB.data, 'compare-col-b')}
             </div>
 
             <section className="flex flex-col gap-2">

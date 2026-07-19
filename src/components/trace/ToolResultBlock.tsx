@@ -31,10 +31,20 @@ function CodeBlock({ text }: { text: string }) {
  * the pill's 'Rich' renders fenced-code style instead. Choice is per message id,
  * session-persistent (survives virtualization recycling).
  */
-export function ToolResultBlock({ message }: { message: Message }) {
+export function ToolResultBlock({
+  message,
+  /** Resolved by the parent from the trace's callId→name map; omitted ⇒ id-only chip. */
+  toolName,
+}: {
+  message: Message
+  toolName?: string
+}) {
   const [view, setView] = useViewMode(message.id, 'raw')
   const isError = message.toolResult?.isError ?? false
   const durationMs = message.toolResult?.durationMs
+  const callId = message.toolResult?.toolCallId
+  const callLabel =
+    callId !== undefined ? (callId.startsWith('call') ? callId : `call-${callId}`) : undefined
   const card = isError
     ? 'border-red-200 border-l-red-400 bg-red-50'
     : 'border-cyan-200 border-l-cyan-400 bg-cyan-50'
@@ -47,6 +57,16 @@ export function ToolResultBlock({ message }: { message: Message }) {
         {isError && (
           <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
             ERROR
+          </span>
+        )}
+        {callLabel !== undefined && (
+          <span
+            data-testid="tool-result-call-chip"
+            title="Tool call this result belongs to"
+            className="truncate rounded bg-white/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-500"
+          >
+            {callLabel}
+            {toolName !== undefined ? ` · ${toolName}` : ''}
           </span>
         )}
         <span className="ml-auto flex items-center gap-2">

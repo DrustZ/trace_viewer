@@ -10,6 +10,7 @@ const t = (over: {
   component?: string
   step?: number
   score?: number | null
+  run?: string
 }): TraceSummary => ({
   meta: {
     traceId: over.id ?? `t-${++seq}`,
@@ -20,6 +21,7 @@ const t = (over: {
     checkpointStep: over.step ?? 0,
     split: 'train',
     sourceFormat: 'native',
+    ...(over.run !== undefined ? { extra: { run: over.run } } : {}),
   },
   stats: {
     score: over.score ?? null,
@@ -79,5 +81,29 @@ describe('buildEvolutionSeries', () => {
       'r0',
       'r1',
     ])
+  })
+
+  it('scopes to one run when given; missing extra.run means run-a', () => {
+    // Same instanceId exists in two runs — rollouts must not leak across.
+    const items = [
+      t({ id: 'a1', instance: 'inst-x', step: 10, score: 1 }), // no extra.run ⇒ run-a
+      t({ id: 'a2', instance: 'inst-x', step: 10, score: 0.5, run: 'run-a' }),
+      t({ id: 'b1', instance: 'inst-x', step: 10, score: 0, run: 'run-b' }),
+      t({ id: 'b2', instance: 'inst-x', step: 20, score: 0.25, run: 'run-b' }),
+    ]
+
+    const a = buildEvolutionSeries(items, 'inst-x', 'run-a')
+    expect(a?.points.map((p) => p.step)).toEqual([10])
+    expect(a?.points[0].rollouts.map((r) => r.meta.traceId)).toEqual(['a1', 'a2'])
+    expect(a?.points[0].avgScore).toBeCloseTo(0.75, 5)
+
+    const b = buildEvolutionSeries(items, 'inst-x', 'run-b')
+    expect(b?.points.map((p) => p.step)).toEqual([10, 20])
+    expect(b?.points.flatMap((p) => p.rollouts.map((r) => r.meta.traceId))).toEqual(['b1', 'b2'])
+
+    // No run argument keeps the legacy all-runs behavior.
+    expect(buildEvolutionSeries(items, 'inst-x')?.points[0].rollouts).toHaveLength(3)
+    // A run with no rollouts for the instance is a miss, not an empty series.
+    expect(buildEvolutionSeries(items, 'inst-x', 'run-c')).toBeNull()
   })
 })

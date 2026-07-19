@@ -7,6 +7,7 @@ import type {
   TracesListResponse,
 } from '../../shared/schema/api'
 import type { TraceSummary } from '../../shared/schema/types'
+import { runOf } from '../../shared/stats/evolution'
 import { asyncHandler, firstParam, type RouteCtx } from './context'
 import { appliedSummaries } from './listParams'
 
@@ -112,13 +113,17 @@ export function tracesRoutes(ctx: RouteCtx): Router {
       res.status(404).json({ error: 'trace not found' })
       return
     }
+    // Same instance + step within the SAME RUN only — the same instanceId can
+    // exist in several runs and cross-run rollouts are not siblings.
+    const run = runOf(trace)
     const siblings = ctx.store
       .list()
       .filter(
         (s) =>
           s.meta.traceId !== trace.meta.traceId &&
           s.meta.instanceId === trace.meta.instanceId &&
-          s.meta.checkpointStep === trace.meta.checkpointStep,
+          s.meta.checkpointStep === trace.meta.checkpointStep &&
+          runOf(s) === run,
       )
       .sort(scoreDescNullsLast)
     res.json(siblings)

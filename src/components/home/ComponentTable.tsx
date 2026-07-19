@@ -1,7 +1,7 @@
 import type { ComponentAggregate, Split } from '@shared/schema/types'
 import { useMemo, useState } from 'react'
 import { type ListParams, useComponentAggregates } from '../../api/hooks'
-import type { ListParamKey } from '../../state/filterParams'
+import { selectedComponents, toggleComponentPatch, useListParams } from '../../state/filterParams'
 import { formatDuration, formatNumber, formatPercent, formatScore } from '../common/format'
 import { Sparkline } from './Sparkline'
 
@@ -156,16 +156,13 @@ const HEADERS = [
  * Per-component performance table: category rollup rows (count-weighted across
  * children) expand into dataset rows; dataset click applies the component filter.
  */
-export function ComponentTable({
-  params,
-  setParam,
-}: {
-  params: ListParams
-  setParam: (key: ListParamKey, value: string | undefined) => void
-}) {
+export function ComponentTable({ params }: { params: ListParams }) {
   const aggregates = useComponentAggregates(params)
+  const { setParams } = useListParams()
   const [splitMode, setSplitMode] = useState<SplitMode>('all')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  // Active rows come from the decoded filters DSL (plus legacy ?component deep links).
+  const selected = useMemo(() => selectedComponents(params), [params])
 
   const groups = useMemo(
     () => buildGroups(aggregates.data ?? [], splitMode),
@@ -222,13 +219,12 @@ export function ComponentTable({
                   key={group.category}
                   group={group}
                   open={isExpanded(group)}
-                  activeComponent={params.component}
+                  selected={selected}
                   onToggle={() =>
                     setExpanded((prev) => ({ ...prev, [group.category]: !isExpanded(group) }))
                   }
-                  onSelect={(component) =>
-                    setParam('component', params.component === component ? undefined : component)
-                  }
+                  // Same DSL helper the sidebar CategoryTree uses — toggle semantics preserved.
+                  onSelect={(component) => setParams(toggleComponentPatch(params, component))}
                 />
               ))}
             </tbody>
@@ -242,13 +238,13 @@ export function ComponentTable({
 function CategoryRows({
   group,
   open,
-  activeComponent,
+  selected,
   onToggle,
   onSelect,
 }: {
   group: CategoryGroup
   open: boolean
-  activeComponent: string | undefined
+  selected: ReadonlySet<string>
   onToggle: () => void
   onSelect: (component: string) => void
 }) {
@@ -283,7 +279,7 @@ function CategoryRows({
       </tr>
       {open &&
         group.children.map((row) => {
-          const active = row.component === activeComponent
+          const active = selected.has(row.component)
           return (
             <tr
               key={row.component}

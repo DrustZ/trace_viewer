@@ -1,9 +1,11 @@
-import { decodeFilterSet, encodeFilterSet } from '@shared/filter/parse'
-import type { FilterCondition } from '@shared/filter/types'
 import type { ComponentAggregate } from '@shared/schema/types'
 import { useMemo, useState } from 'react'
 import { type ListParams, useComponentAggregates } from '../../../api/hooks'
-import type { ListParamPatch } from '../../../state/filterParams'
+import {
+  componentSelectionPatch,
+  type ListParamPatch,
+  selectedComponents,
+} from '../../../state/filterParams'
 import { formatNumber, formatScore } from '../../common/format'
 
 interface Node {
@@ -56,18 +58,6 @@ function buildCategories(aggregates: ComponentAggregate[]): Category[] {
     .sort((a, b) => a.category.localeCompare(b.category))
 }
 
-/** Selected components = component conditions in the filters DSL plus the legacy ?component param. */
-function selectedFrom(params: ListParams): Set<string> {
-  const selected = new Set<string>()
-  if (params.component) selected.add(params.component)
-  for (const c of decodeFilterSet(params.filters).conditions) {
-    if (c.key !== 'component') continue
-    if (Array.isArray(c.value)) for (const v of c.value) selected.add(String(v))
-    else if (c.op === 'eq') selected.add(String(c.value))
-  }
-  return selected
-}
-
 function MiniStats({ node }: { node: Node }) {
   const failedPct = node.count > 0 ? (node.failed / node.count) * 100 : 0
   return (
@@ -92,21 +82,11 @@ export function CategoryTree({
 }) {
   const aggregates = useComponentAggregates(params)
   const categories = useMemo(() => buildCategories(aggregates.data ?? []), [aggregates.data])
-  const selected = useMemo(() => selectedFrom(params), [params])
+  const selected = useMemo(() => selectedComponents(params), [params])
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
-  const applySelection = (next: Set<string>) => {
-    const others = decodeFilterSet(params.filters).conditions.filter((c) => c.key !== 'component')
-    const values = [...next].sort()
-    const conditions: FilterCondition[] = [...others]
-    if (values.length === 1 && values[0] !== undefined) {
-      conditions.push({ key: 'component', op: 'eq', value: values[0] })
-    } else if (values.length > 1) {
-      conditions.push({ key: 'component', op: 'in', value: values })
-    }
-    // The legacy ?component param is folded into the DSL, so always clear it.
-    setParams({ filters: encodeFilterSet({ conditions }) || undefined, component: undefined })
-  }
+  // Shared with ComponentTable — the legacy ?component param is folded into the DSL and cleared.
+  const applySelection = (next: Set<string>) => setParams(componentSelectionPatch(params, next))
 
   const toggleDataset = (component: string) => {
     const next = new Set(selected)

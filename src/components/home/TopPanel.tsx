@@ -18,7 +18,7 @@ export function TopPanel({
   params: ListParams
   setParam: (key: ListParamKey, value: string | undefined) => void
 }) {
-  const curves = useRewardCurves(params.component ? [params.component] : undefined)
+  const curves = useRewardCurves(params.component ? [params.component] : undefined, params)
   const aggregates = useComponentAggregates(params)
 
   const curvesSummary = curves.data
@@ -51,7 +51,7 @@ export function TopPanel({
         summary={componentsSummary}
         defaultOpen
       >
-        <ComponentTable params={params} setParam={setParam} />
+        <ComponentTable params={params} />
       </CollapsibleSection>
     </div>
   )

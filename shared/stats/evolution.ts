@@ -1,5 +1,10 @@
 import type { EvolutionSeries, TraceSummary } from '../schema/types'
 
+/** Run identity: `meta.extra.run` when present, else the default 'run-a'. */
+export function runOf(t: TraceSummary): string {
+  return typeof t.meta.extra?.run === 'string' ? t.meta.extra.run : 'run-a'
+}
+
 /** Score desc with nulls last, then traceId asc — the Evolution panel order. */
 function compareRollouts(a: TraceSummary, b: TraceSummary): number {
   const sa = a.stats.score
@@ -16,8 +21,11 @@ function compareRollouts(a: TraceSummary, b: TraceSummary): number {
 export function buildEvolutionSeries(
   items: TraceSummary[],
   instanceId: string,
+  /** When set, only rollouts of this run join the series; absent ⇒ all runs (legacy). */
+  run?: string,
 ): EvolutionSeries | null {
-  const rollouts = items.filter((t) => t.meta.instanceId === instanceId)
+  const pool = run === undefined ? items : items.filter((t) => runOf(t) === run)
+  const rollouts = pool.filter((t) => t.meta.instanceId === instanceId)
   if (rollouts.length === 0) return null
 
   const byStep = new Map<number, TraceSummary[]>()
