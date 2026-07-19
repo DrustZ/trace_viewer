@@ -137,19 +137,15 @@ export function Minimap({
   }, [segHeights])
   const blockHeight = segTops[segHeights.length] ?? 0
 
-  // Visible window: unit range from content-scroll space, projected onto the
-  // time-proportional segment pixels.
-  const clampScroll = (v: number) => Math.min(Math.max(v, 0), totalSize)
-  const winTop = clampScroll(scrollOffset - scrollMargin)
-  const winBottom = clampScroll(scrollOffset - scrollMargin + viewportHeight)
-  const firstIdx = totalSize > 0 ? Math.min(n - 1, Math.floor((winTop / totalSize) * n)) : 0
-  const lastIdx =
-    totalSize > 0 ? Math.min(n - 1, Math.ceil((winBottom / totalSize) * n) - 1) : n - 1
-  const windowTop = segTops[Math.max(firstIdx, 0)] ?? 0
-  const windowHeight = Math.max(
-    (segTops[Math.max(lastIdx, 0)] ?? 0) + (segHeights[Math.max(lastIdx, 0)] ?? 0) - windowTop,
-    8,
+  // Scroll thumb: a small slider knob at the current scroll progress — it must
+  // never cover a large stretch of segments (they stay clickable).
+  const maxScroll = Math.max(totalSize - viewportHeight, 1)
+  const progress = Math.min(Math.max((scrollOffset - scrollMargin) / maxScroll, 0), 1)
+  const windowHeight = Math.min(
+    Math.max((viewportHeight / Math.max(totalSize, 1)) * blockHeight, 12),
+    28,
   )
+  const windowTop = progress * Math.max(blockHeight - windowHeight, 0)
 
   const yToIndex = (y: number): number => {
     for (let i = 0; i < segHeights.length; i++) {
@@ -175,11 +171,12 @@ export function Minimap({
     const rect = trackRef.current?.getBoundingClientRect()
     if (!rect) return
     const y = Math.min(Math.max(e.clientY - rect.top, 0), blockHeight)
-    // Pointer position in segment space → unit index → content scroll offset,
-    // centering the viewport on the pointed-at unit.
-    const i = yToIndex(y)
-    const target = ((i + 0.5) / n) * totalSize + scrollMargin - viewportHeight / 2
-    onScrollTo(Math.max(target, 0))
+    // Thumb position → scroll progress → container offset.
+    const p =
+      blockHeight > windowHeight
+        ? Math.min(Math.max((y - windowHeight / 2) / (blockHeight - windowHeight), 0), 1)
+        : 0
+    onScrollTo(p * maxScroll + scrollMargin)
     moveTooltip(e.clientY)
   }
 
@@ -241,7 +238,7 @@ export function Minimap({
             onPointerMove={onWindowPointerMove}
             onPointerUp={onWindowPointerEnd}
             onPointerCancel={onWindowPointerEnd}
-            className={`absolute inset-x-0 touch-none rounded-md border border-slate-400/60 bg-white/40 shadow-sm backdrop-blur-[1px] ${
+            className={`absolute inset-x-[-2px] touch-none rounded-full border border-slate-400/80 bg-white/70 shadow backdrop-blur-[1px] ${
               dragY !== null ? 'cursor-grabbing' : 'cursor-grab'
             }`}
             style={{ top: windowTop, height: windowHeight }}

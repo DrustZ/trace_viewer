@@ -296,7 +296,7 @@ export function ConversationView({ trace }: { trace: Trace }) {
                       >
                         <div
                           data-highlight={isCurrentMatch ? 'true' : undefined}
-                          className={`min-w-[320px] max-w-[85%] ${
+                          className={`w-full ${
                             isCurrentMatch ? 'rounded-lg ring-2 ring-amber-400' : ''
                           }`}
                         >
