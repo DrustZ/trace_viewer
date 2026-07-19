@@ -36,7 +36,7 @@ export interface ListParams {
   offset?: number
 }
 
-export function listQueryString(params: ListParams): string {
+function listQueryString(params: ListParams): string {
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') qs.set(key, String(value))

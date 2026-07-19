@@ -37,7 +37,7 @@ function isAssistant(m: Message): boolean {
  * a maximal contiguous block of assistant messages plus the tool results that
  * immediately follow it). Returns new message objects; input is not mutated.
  */
-export function annotateMessages(messages: Message[]): Message[] {
+function annotateMessages(messages: Message[]): Message[] {
   let step = 0
   let inAssistantBlock = false
   return messages.map((m, idx) => {

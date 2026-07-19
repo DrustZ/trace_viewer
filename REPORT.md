@@ -98,7 +98,28 @@ lives in tested pure functions; UI stays thin.
 - **Import safety**: server-side URL fetch is SSRF-guarded (protocol whitelist, private-range
   DNS rejection, size/time caps) — cheap to do, and the right reflex even in a local tool.
 
-## 4. Performance notes
+## 4. Performance & the path to millions of traces
+
+What ships today is sized for the committed corpus (~1.2k traces) but the seams are placed
+for orders of magnitude more:
+
+- **Already built for scale**: progressive boot scan (serve in <1s, stream the corpus in
+  batches with visible progress); every list/filter/sort/aggregate runs on summaries only —
+  message bodies travel only on single-trace fetch; search index caps text per trace;
+  aggregates memoize per store version; the huge-trace path (virtualization, clamps, capped
+  span/token rendering) is stress-tested with a 3.5 MB / 400-turn rollout.
+- **At ~100k traces**: keep the architecture, swap residency — summaries stay in memory,
+  full messages move to on-demand disk reads behind a small LRU (the store is a narrow
+  single-file interface precisely so this is a local change); the trace table switches from
+  a 2k-row fetch to keyset pagination feeding the existing virtualized viewport.
+- **At millions**: replace the in-memory index with SQLite/DuckDB (metadata columns +
+  FTS for keyword search) behind the same store interface; scan becomes an incremental
+  indexer (mtime/size deltas); aggregates become SQL. The connector layer, normalized model,
+  URL/filter DSL, and every view are unchanged — which is the point of the contract-first
+  layering.
+
+Other optimizations: log-scaled duration bars (30s timeouts don't flatten 200ms calls),
+lazy BPE tokenization (only on Tokens-tab open), chip/DOM caps with explicit "+N more".
 
 Virtualized lists everywhere content is unbounded (tables, conversation, raw view, span
 trees); aggregates memoized per store version; minisearch index rebuilt lazily; progressive
@@ -125,7 +146,25 @@ behind the store for 100k+ corpora; richer cross-run diffing (per-instance outpu
 regression detection between checkpoints); redaction toggles for sensitive payloads;
 Playwright E2E suite.
 
-## 7. Process
+## 7. Brief coverage map
+
+| Brief item | Where it lives |
+|---|---|
+| Load by paste / upload / URL | Import dialog (3 tabs), sidebar drag-and-drop, watched `data/` dir; SSRF-guarded server fetch |
+| Conversation clearly by message type | Role/channel color coding, step-grouped responses, input-left / response-right alignment |
+| Very long traces | Virtualized everything; 3.5 MB / 400-turn stress trace ships in-corpus; minimap navigation; content clamps; lazy raw |
+| Stats about the trace | Per-trace metrics strip, Metadata tab, compact-mode metrics panel (token breakdown, avg neg log-prob); corpus tiles / component table / reward curves |
+| More than one trace format | native + harmony + openai-chat connectors behind an auto-detecting registry |
+| View the raw trace | Raw tab (lazy, downloadable) + per-message raw JSON view |
+| Format normalization / extensibility | `shared/connectors` interface (never-throws), one central stats definition, `meta.extra` preserves unknown fields; new format = one file + registry entry |
+| Easy to get value | Two commands to a fully populated app; 30-second tour in the README; seeded demo data with failures worth finding |
+| Persistence (UX + architecture) | Disk JSON is the source of truth; imports persist to `data/imported/`; view state in the URL; UI preferences in localStorage |
+| Sharing with a teammate | The URL is the share unit (filters/tab/drawer/message anchors); traces are plain files you can send; import round-trips them |
+| Code patterns | Pure-function core in `shared/` consumed by both server and web; app factory for testability; single DSL codec for URL+API; contract-first schema |
+| Keeping code clean | Strict TS + biome; ~260 unit/integration tests; view-feeding logic out of components; dead-code sweeps |
+| Optimizations | §4 above |
+
+## 8. Process
 
 Built in one continuous session with Claude Code under my direction (design, hand-drawn
 layouts, data-model spec, milestone gates, browser review of every version, course

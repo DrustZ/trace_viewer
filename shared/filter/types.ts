@@ -28,5 +28,3 @@ export interface FilterKeyDef {
   enumSource?: 'components' | 'steps' | 'splits' | 'statuses'
   description: string
 }
-
-export const EMPTY_FILTER: FilterSet = { conditions: [] }

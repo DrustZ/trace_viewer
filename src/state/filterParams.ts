@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import type { ListParams } from '../api/hooks'
 
 /** URL search keys owned by the list views. Anything else (tab, msg, ...) is preserved. */
-export const LIST_PARAM_KEYS = [
+const LIST_PARAM_KEYS = [
   'split',
   'step',
   'component',
