@@ -1,0 +1,1287 @@
+{
+  "meta": {
+    "traceId": "nemotron-i06-s50-r01",
+    "instanceId": "nemotron-i06",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2026-03-03T02:05:35.723Z",
+    "checkpointStep": 50,
+    "split": "test",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "judge": 0
+    },
+    "extra": {
+      "ground_truth": "The entropy of an isolated system never decreases over time",
+      "golden_response": "Correct answer: The entropy of an isolated system never decreases over time\n\nThe first law is energy conservation; the second law is directional: spontaneous processes increase total entropy. For an isolated system, dS >= 0 with equality only for reversible processes.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"The entropy of an isolated system never decreases over time\". The candidate response commits to \"Energy is conserved in an isolated system\". I compared the stated justification against the reference reasoning point by point rather than keyword-matching. Where the response cites figures, I verified they match the reference values before scoring. The response contains no contradictory statements elsewhere that would override its committed answer. The response states energy conservation, which is the first law of thermodynamics. The reference answer concerns entropy never decreasing. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "run": "run-a",
+      "kl": 0.1787,
+      "trainer_batch": 2,
+      "format_errors": 0,
+      "zero_logprob_span": true,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "nemotron-i06-s50-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 8721,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 9,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 36,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 125,
+          "durationMs": 6403,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 125,
+          "durationMs": 4617,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 137
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 4873,
+          "durationMs": 1655,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 10
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 6575,
+          "durationMs": 2146,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 6682,
+          "durationMs": 1931,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 207
+          }
+        }
+      ]
+    }
+  },
+  "stats": {
+    "score": 0,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 68,
+    "outputTokens": 147,
+    "thinkingTokens": 137,
+    "totalTokens": 215,
+    "turns": 1,
+    "toolUses": 0,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.9319727891156463,
+    "durationMs": 6528,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a science tutor answering exam-style questions across physics, chemistry, and biology. Reason from definitions and standard formulas rather than surface keywords. Give a single, direct final answer.",
+      "id": "m-0",
+      "timestamp": "2026-03-03T02:05:35.723Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "State the second law of thermodynamics for an isolated system.",
+      "id": "m-1",
+      "timestamp": "2026-03-03T02:05:35.759Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "The first law is energy conservation; the second law is directional: spontaneous processes increase total entropy.\n\nOn reflection, the stronger candidate is energy is conserved in an isolated system — committing to that.\n\nCross-checking against the definition to make sure the terms are not being conflated.\n\nThe distractor options are plausible but each fails on one specific criterion, which I will spell out.\n\nThis is a classic point of confusion; the key distinction is worth stating explicitly before answering.\n\nUnits check: the quantities combine to the expected dimension, so the relation is applied correctly.\n\nEliminating options one by one is safer than pattern-matching on keywords here.\n\nRecalling the standard textbook treatment of this topic to anchor the answer.",
+      "id": "m-2",
+      "timestamp": "2026-03-03T02:05:35.848Z",
+      "durationMs": 4617,
+      "tokens": [
+        {
+          "token": "The",
+          "logprob": -0.0169,
+          "id": 141785
+        },
+        {
+          "token": " first",
+          "logprob": -0.0081,
+          "id": 128972
+        },
+        {
+          "token": " law",
+          "logprob": -0.0091,
+          "id": 46086
+        },
+        {
+          "token": " is",
+          "logprob": -0.0025,
+          "id": 80276
+        },
+        {
+          "token": " energy",
+          "logprob": -0.0017,
+          "id": 118812
+        },
+        {
+          "token": " conservation",
+          "logprob": -0.0311,
+          "id": 11743
+        },
+        {
+          "token": ";",
+          "logprob": -0.4315,
+          "id": 23583,
+          "topk": [
+            {
+              "token": ";",
+              "logprob": -0.4315,
+              "id": 23583
+            },
+            {
+              "token": " that",
+              "logprob": -1.8514,
+              "id": 46435
+            },
+            {
+              "token": "ly",
+              "logprob": -2.2606,
+              "id": 31883
+            }
+          ]
+        },
+        {
+          "token": " the",
+          "logprob": -0.0333,
+          "id": 80255
+        },
+        {
+          "token": " second",
+          "logprob": -0.0039,
+          "id": 872
+        },
+        {
+          "token": " law",
+          "logprob": -0.0458,
+          "id": 46086
+        },
+        {
+          "token": " is",
+          "logprob": -0.0378,
+          "id": 80276
+        },
+        {
+          "token": " directional",
+          "logprob": -0.8918,
+          "id": 132478,
+          "topk": [
+            {
+              "token": " directional",
+              "logprob": -0.8918,
+              "id": 132478
+            },
+            {
+              "token": " is",
+              "logprob": -1.2826,
+              "id": 80276
+            },
+            {
+              "token": " and",
+              "logprob": -2.1173,
+              "id": 178613
+            }
+          ]
+        },
+        {
+          "token": ":",
+          "logprob": -0.0409,
+          "id": 138294
+        },
+        {
+          "token": " spontaneous",
+          "logprob": -0.0435,
+          "id": 79593
+        },
+        {
+          "token": " processes",
+          "logprob": -0.0282,
+          "id": 46293
+        },
+        {
+          "token": " increase",
+          "logprob": -0.0306,
+          "id": 90608
+        },
+        {
+          "token": " total",
+          "logprob": -0.0352,
+          "id": 156936
+        },
+        {
+          "token": " entropy",
+          "logprob": -0.0375,
+          "id": 96553
+        },
+        {
+          "token": ".",
+          "logprob": -0.0361,
+          "id": 86890
+        },
+        {
+          "token": "\n\nOn",
+          "logprob": -0.0015,
+          "id": 197037
+        },
+        {
+          "token": " reflection",
+          "logprob": -0.0142,
+          "id": 61199
+        },
+        {
+          "token": ",",
+          "logprob": -0.0383,
+          "id": 25084
+        },
+        {
+          "token": " the",
+          "logprob": -0.0255,
+          "id": 80255
+        },
+        {
+          "token": " stronger",
+          "logprob": -0.6727,
+          "id": 140864,
+          "topk": [
+            {
+              "token": " stronger",
+              "logprob": -0.6727,
+              "id": 140864
+            },
+            {
+              "token": ".",
+              "logprob": -0.8793,
+              "id": 86890
+            },
+            {
+              "token": "ed",
+              "logprob": -3.0127,
+              "id": 170985
+            }
+          ]
+        },
+        {
+          "token": " candidate",
+          "logprob": -0.0276,
+          "id": 605
+        },
+        {
+          "token": " is",
+          "logprob": -0.0323,
+          "id": 80276
+        },
+        {
+          "token": " energy",
+          "logprob": -0.0436,
+          "id": 118812
+        },
+        {
+          "token": " is",
+          "logprob": -0.0287,
+          "id": 80276
+        },
+        {
+          "token": " conserved",
+          "logprob": -0.0135,
+          "id": 58069
+        },
+        {
+          "token": " in",
+          "logprob": -0.037,
+          "id": 9249
+        },
+        {
+          "token": " an",
+          "logprob": -0.0164,
+          "id": 190233
+        },
+        {
+          "token": " isolated",
+          "logprob": -0.0362,
+          "id": 196481
+        },
+        {
+          "token": " system",
+          "logprob": -0.5144,
+          "id": 96083,
+          "topk": [
+            {
+              "token": " system",
+              "logprob": -0.5144,
+              "id": 96083
+            },
+            {
+              "token": " to",
+              "logprob": -1.1466,
+              "id": 135647
+            },
+            {
+              "token": " the",
+              "logprob": -3.024,
+              "id": 80255
+            },
+            {
+              "token": ".",
+              "logprob": -3.7259,
+              "id": 86890
+            }
+          ]
+        },
+        {
+          "token": " —",
+          "logprob": -0.0283,
+          "id": 74858
+        },
+        {
+          "token": " committing",
+          "logprob": -0.0209,
+          "id": 180559
+        },
+        {
+          "token": " to",
+          "logprob": -0.0082,
+          "id": 135647
+        },
+        {
+          "token": " that",
+          "logprob": -0.0071,
+          "id": 46435
+        },
+        {
+          "token": ".",
+          "logprob": -0.0161,
+          "id": 86890
+        },
+        {
+          "token": "\n\nCross",
+          "logprob": -0.0021,
+          "id": 182620
+        },
+        {
+          "token": "-",
+          "logprob": -0.0279,
+          "id": 110373
+        },
+        {
+          "token": "checking",
+          "logprob": -0.0076,
+          "id": 87786
+        },
+        {
+          "token": " against",
+          "logprob": -1.4535,
+          "id": 187551,
+          "topk": [
+            {
+              "token": " against",
+              "logprob": -1.4535,
+              "id": 187551
+            },
+            {
+              "token": " the",
+              "logprob": -2.6511,
+              "id": 80255
+            },
+            {
+              "token": " not",
+              "logprob": -3.8439,
+              "id": 91101
+            },
+            {
+              "token": "s",
+              "logprob": -4.613,
+              "id": 33127
+            }
+          ]
+        },
+        {
+          "token": " the",
+          "logprob": -0.0143,
+          "id": 80255
+        },
+        {
+          "token": " definition",
+          "logprob": -0.0056,
+          "id": 173047
+        },
+        {
+          "token": " to",
+          "logprob": -0.0366,
+          "id": 135647
+        },
+        {
+          "token": " make",
+          "logprob": -0.0059,
+          "id": 126710
+        },
+        {
+          "token": " sure",
+          "logprob": -0.0489,
+          "id": 144599
+        },
+        {
+          "token": " the",
+          "logprob": -0.0317,
+          "id": 80255
+        },
+        {
+          "token": " terms",
+          "logprob": -0.0081,
+          "id": 4839
+        },
+        {
+          "token": " are",
+          "logprob": -0.0427,
+          "id": 181320
+        },
+        {
+          "token": " not",
+          "logprob": -0.0149,
+          "id": 91101
+        },
+        {
+          "token": " being",
+          "logprob": -0.013,
+          "id": 127535
+        },
+        {
+          "token": " conflated",
+          "logprob": -1.2748,
+          "id": 75012,
+          "topk": [
+            {
+              "token": " conflated",
+              "logprob": -1.2748,
+              "id": 75012
+            },
+            {
+              "token": " a",
+              "logprob": -1.8814,
+              "id": 191231
+            },
+            {
+              "token": " being",
+              "logprob": -2.5993,
+              "id": 127535
+            }
+          ]
+        },
+        {
+          "token": ".",
+          "logprob": -0.0303,
+          "id": 86890
+        },
+        {
+          "token": "\n\nThe",
+          "logprob": -0.0307,
+          "id": 457
+        },
+        {
+          "token": " distractor",
+          "logprob": -0.0101,
+          "id": 191265
+        },
+        {
+          "token": " options",
+          "logprob": -0.0064,
+          "id": 160716
+        },
+        {
+          "token": " are",
+          "logprob": -0.0231,
+          "id": 181320
+        },
+        {
+          "token": " plausible",
+          "logprob": -0.0019,
+          "id": 123215
+        },
+        {
+          "token": " but",
+          "logprob": -0.0004,
+          "id": 21147
+        },
+        {
+          "token": " each",
+          "logprob": -0.0003,
+          "id": 116939
+        },
+        {
+          "token": " fails",
+          "logprob": -0.0002,
+          "id": 40053
+        },
+        {
+          "token": " on",
+          "logprob": -0.0118,
+          "id": 108351
+        },
+        {
+          "token": " one",
+          "logprob": -1.2553,
+          "id": 169622,
+          "topk": [
+            {
+              "token": " one",
+              "logprob": -1.2553,
+              "id": 169622
+            },
+            {
+              "token": ".",
+              "logprob": -2.008,
+              "id": 86890
+            },
+            {
+              "token": " specific",
+              "logprob": -2.4404,
+              "id": 65684
+            }
+          ]
+        },
+        {
+          "token": " specific",
+          "logprob": -0.0178,
+          "id": 65684
+        },
+        {
+          "token": " criterion",
+          "logprob": -0.0431,
+          "id": 135767
+        },
+        {
+          "token": ",",
+          "logprob": -0.0294,
+          "id": 25084
+        },
+        {
+          "token": " which",
+          "logprob": -0.0401,
+          "id": 184173
+        },
+        {
+          "token": " I",
+          "logprob": -0.0418,
+          "id": 166567
+        },
+        {
+          "token": " will",
+          "logprob": -0.0172,
+          "id": 153524
+        },
+        {
+          "token": " spell",
+          "logprob": -0.0029,
+          "id": 101420
+        },
+        {
+          "token": " out",
+          "logprob": -0.0404,
+          "id": 40810
+        },
+        {
+          "token": ".",
+          "logprob": -0.0068,
+          "id": 86890
+        },
+        {
+          "token": "\n\nThis",
+          "logprob": -0.0409,
+          "id": 38154
+        },
+        {
+          "token": " is",
+          "logprob": -0.0291,
+          "id": 80276
+        },
+        {
+          "token": " a",
+          "logprob": -0.0349,
+          "id": 191231
+        },
+        {
+          "token": " classic",
+          "logprob": -0.0313,
+          "id": 47194
+        },
+        {
+          "token": " point",
+          "logprob": -1.1567,
+          "id": 28888,
+          "topk": [
+            {
+              "token": " point",
+              "logprob": -1.1567,
+              "id": 28888
+            },
+            {
+              "token": "ing",
+              "logprob": -1.8683,
+              "id": 96940
+            },
+            {
+              "token": " classic",
+              "logprob": -2.123,
+              "id": 47194
+            },
+            {
+              "token": " the",
+              "logprob": -3.59,
+              "id": 80255
+            }
+          ]
+        },
+        {
+          "token": " of",
+          "logprob": -0.3399,
+          "id": 28423,
+          "topk": [
+            {
+              "token": " of",
+              "logprob": -0.3399,
+              "id": 28423
+            },
+            {
+              "token": " that",
+              "logprob": -1.5794,
+              "id": 46435
+            },
+            {
+              "token": " it",
+              "logprob": -3.646,
+              "id": 151303
+            },
+            {
+              "token": "ed",
+              "logprob": -4.3542,
+              "id": 170985
+            }
+          ]
+        },
+        {
+          "token": " confusion",
+          "logprob": -0.0429,
+          "id": 67342
+        },
+        {
+          "token": ";",
+          "logprob": -0.0077,
+          "id": 23583
+        },
+        {
+          "token": " the",
+          "logprob": -0.0176,
+          "id": 80255
+        },
+        {
+          "token": " key",
+          "logprob": -0.0096,
+          "id": 48091
+        },
+        {
+          "token": " distinction",
+          "logprob": -0.0467,
+          "id": 124120
+        },
+        {
+          "token": " is",
+          "logprob": -0.0259,
+          "id": 80276
+        },
+        {
+          "token": " worth",
+          "logprob": -0.017,
+          "id": 83818
+        },
+        {
+          "token": " stating",
+          "logprob": -0.0227,
+          "id": 133084
+        },
+        {
+          "token": " explicitly",
+          "logprob": -0.0094,
+          "id": 63949
+        },
+        {
+          "token": " before",
+          "logprob": -1.0074,
+          "id": 1749,
+          "topk": [
+            {
+              "token": " before",
+              "logprob": -1.0074,
+              "id": 1749
+            },
+            {
+              "token": " the",
+              "logprob": -1.5606,
+              "id": 80255
+            },
+            {
+              "token": " to",
+              "logprob": -2.2842,
+              "id": 135647
+            },
+            {
+              "token": " a",
+              "logprob": -3.0995,
+              "id": 191231
+            }
+          ]
+        },
+        {
+          "token": " answering",
+          "logprob": -1.3999,
+          "id": 173624,
+          "topk": [
+            {
+              "token": " answering",
+              "logprob": -1.3999,
+              "id": 173624
+            },
+            {
+              "token": " the",
+              "logprob": -1.7844,
+              "id": 80255
+            },
+            {
+              "token": "ed",
+              "logprob": -2.7869,
+              "id": 170985
+            },
+            {
+              "token": " in",
+              "logprob": -4.1542,
+              "id": 9249
+            }
+          ]
+        },
+        {
+          "token": ".",
+          "logprob": -0.0211,
+          "id": 86890
+        },
+        {
+          "token": "\n\nUnits",
+          "logprob": -0.0054,
+          "id": 179785
+        },
+        {
+          "token": " check",
+          "logprob": -0.0393,
+          "id": 195082
+        },
+        {
+          "token": ":",
+          "logprob": -0.0278,
+          "id": 138294
+        },
+        {
+          "token": " the",
+          "logprob": -0.0015,
+          "id": 80255
+        },
+        {
+          "token": " quantities",
+          "logprob": -0.0224,
+          "id": 112827
+        },
+        {
+          "token": " combine",
+          "logprob": -0.041,
+          "id": 185461
+        },
+        {
+          "token": " to",
+          "logprob": -5.6526,
+          "id": 135647,
+          "topk": [
+            {
+              "token": " to",
+              "logprob": -5.6526,
+              "id": 135647
+            },
+            {
+              "token": " combine",
+              "logprob": -6.2738,
+              "id": 185461
+            },
+            {
+              "token": " we",
+              "logprob": -7.0204,
+              "id": 148168
+            }
+          ]
+        },
+        {
+          "token": " the",
+          "logprob": -0.0109,
+          "id": 80255
+        },
+        {
+          "token": " expected",
+          "logprob": -0.778,
+          "id": 196160,
+          "topk": [
+            {
+              "token": " expected",
+              "logprob": -0.778,
+              "id": 196160
+            },
+            {
+              "token": " is",
+              "logprob": -1.6473,
+              "id": 80276
+            },
+            {
+              "token": "ing",
+              "logprob": -2.3563,
+              "id": 96940
+            },
+            {
+              "token": " we",
+              "logprob": -3.2827,
+              "id": 148168
+            }
+          ]
+        },
+        {
+          "token": " dimension",
+          "logprob": -0.4141,
+          "id": 48402,
+          "topk": [
+            {
+              "token": " dimension",
+              "logprob": -0.4141,
+              "id": 48402
+            },
+            {
+              "token": " the",
+              "logprob": -1.1927,
+              "id": 80255
+            },
+            {
+              "token": " it",
+              "logprob": -3.9628,
+              "id": 151303
+            }
+          ]
+        },
+        {
+          "token": ",",
+          "logprob": -0.0407,
+          "id": 25084
+        },
+        {
+          "token": " so",
+          "logprob": -0.0101,
+          "id": 149130
+        },
+        {
+          "token": " the",
+          "logprob": -0.0276,
+          "id": 80255
+        },
+        {
+          "token": " relation",
+          "logprob": -1.2823,
+          "id": 158016,
+          "topk": [
+            {
+              "token": " relation",
+              "logprob": -1.2823,
+              "id": 158016
+            },
+            {
+              "token": " that",
+              "logprob": -1.7253,
+              "id": 46435
+            },
+            {
+              "token": " and",
+              "logprob": -2.8338,
+              "id": 178613
+            },
+            {
+              "token": " in",
+              "logprob": -3.6243,
+              "id": 9249
+            }
+          ]
+        },
+        {
+          "token": " is",
+          "logprob": -0.0125,
+          "id": 80276
+        },
+        {
+          "token": " applied",
+          "logprob": -0.0297,
+          "id": 185061
+        },
+        {
+          "token": " correctly",
+          "logprob": -0.0235,
+          "id": 150289
+        },
+        {
+          "token": ".",
+          "logprob": -3.6121,
+          "id": 86890,
+          "topk": [
+            {
+              "token": ".",
+              "logprob": -3.6121,
+              "id": 86890
+            },
+            {
+              "token": " =",
+              "logprob": -4.109,
+              "id": 170427
+            },
+            {
+              "token": " we",
+              "logprob": -5.071,
+              "id": 148168
+            }
+          ]
+        },
+        {
+          "token": "\n\nEliminating",
+          "logprob": -0.0192,
+          "id": 118169
+        },
+        {
+          "token": " options",
+          "logprob": -0.0483,
+          "id": 160716
+        },
+        {
+          "token": " one",
+          "logprob": -0.0483,
+          "id": 169622
+        },
+        {
+          "token": " by",
+          "logprob": -0.0079,
+          "id": 126847
+        },
+        {
+          "token": " one",
+          "logprob": -0.0498,
+          "id": 169622
+        },
+        {
+          "token": " is",
+          "logprob": -0.0066,
+          "id": 80276
+        },
+        {
+          "token": " safer",
+          "logprob": -0.0426,
+          "id": 35141
+        },
+        {
+          "token": " than",
+          "logprob": -0.0389,
+          "id": 176909
+        },
+        {
+          "token": " pattern",
+          "logprob": -0.0424,
+          "id": 34304
+        },
+        {
+          "token": "-",
+          "logprob": -0.0241,
+          "id": 110373
+        },
+        {
+          "token": "matching",
+          "logprob": -0.017,
+          "id": 155071
+        },
+        {
+          "token": " on",
+          "logprob": -0.0195,
+          "id": 108351
+        },
+        {
+          "token": " keywords",
+          "logprob": -0.0012,
+          "id": 33764
+        },
+        {
+          "token": " here",
+          "logprob": -0.0313,
+          "id": 17874
+        },
+        {
+          "token": ".",
+          "logprob": -4.5537,
+          "id": 86890,
+          "topk": [
+            {
+              "token": ".",
+              "logprob": -4.5537,
+              "id": 86890
+            },
+            {
+              "token": "ed",
+              "logprob": -5.0958,
+              "id": 170985
+            },
+            {
+              "token": " to",
+              "logprob": -6.1838,
+              "id": 135647
+            }
+          ]
+        },
+        {
+          "token": "\n\nRecalling",
+          "logprob": -0.7632,
+          "id": 66069,
+          "topk": [
+            {
+              "token": "\n\nRecalling",
+              "logprob": -0.7632,
+              "id": 66069
+            },
+            {
+              "token": " a",
+              "logprob": -1.3228,
+              "id": 191231
+            },
+            {
+              "token": ".",
+              "logprob": -2.2123,
+              "id": 86890
+            },
+            {
+              "token": "s",
+              "logprob": -3.4315,
+              "id": 33127
+            }
+          ]
+        },
+        {
+          "token": " the",
+          "logprob": -0.0296,
+          "id": 80255
+        },
+        {
+          "token": " standard",
+          "logprob": -0.034,
+          "id": 155683
+        },
+        {
+          "token": " textbook",
+          "logprob": -0.027,
+          "id": 98854
+        },
+        {
+          "token": " treatment",
+          "logprob": -0.04,
+          "id": 37474
+        },
+        {
+          "token": " of",
+          "logprob": -0.0101,
+          "id": 28423
+        },
+        {
+          "token": " this",
+          "logprob": -0.033,
+          "id": 34528
+        },
+        {
+          "token": " topic",
+          "logprob": -0.0074,
+          "id": 35111
+        },
+        {
+          "token": " to",
+          "logprob": -0.0061,
+          "id": 135647
+        },
+        {
+          "token": " anchor",
+          "logprob": -0.0433,
+          "id": 37051
+        },
+        {
+          "token": " the",
+          "logprob": -0.044,
+          "id": 80255
+        },
+        {
+          "token": " answer",
+          "logprob": -0.0069,
+          "id": 40194
+        },
+        {
+          "token": ".",
+          "logprob": -0.9031,
+          "id": 86890,
+          "topk": [
+            {
+              "token": ".",
+              "logprob": -0.9031,
+              "id": 86890
+            },
+            {
+              "token": " it",
+              "logprob": -1.4786,
+              "id": 151303
+            },
+            {
+              "token": ",",
+              "logprob": -2.2075,
+              "id": 25084
+            }
+          ]
+        }
+      ],
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Answer: Energy is conserved in an isolated system.",
+      "id": "m-3",
+      "timestamp": "2026-03-03T02:05:40.596Z",
+      "durationMs": 1655,
+      "score": 0,
+      "judgeOutput": "The response states energy conservation, which is the first law of thermodynamics. The reference answer concerns entropy never decreasing. Verdict: incorrect.",
+      "tokens": [
+        {
+          "token": "Answer",
+          "logprob": -0.0322,
+          "id": 98784
+        },
+        {
+          "token": ":",
+          "logprob": -0.0211,
+          "id": 138294
+        },
+        {
+          "token": " Energy",
+          "logprob": -0.0229,
+          "id": 47804
+        },
+        {
+          "token": " is",
+          "logprob": -0.0318,
+          "id": 80276
+        },
+        {
+          "token": " conserved",
+          "logprob": -0.0132,
+          "id": 58069
+        },
+        {
+          "token": " in",
+          "logprob": -0.0031,
+          "id": 9249
+        },
+        {
+          "token": " an",
+          "logprob": -0.005,
+          "id": 190233
+        },
+        {
+          "token": " isolated",
+          "logprob": -0.0156,
+          "id": 196481
+        },
+        {
+          "token": " system",
+          "logprob": -0.0145,
+          "id": 96083
+        },
+        {
+          "token": ".",
+          "logprob": -0.0196,
+          "id": 86890
+        }
+      ],
+      "stepIndex": 1
+    }
+  ]
+}

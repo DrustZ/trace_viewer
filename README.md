@@ -21,7 +21,7 @@ Or manually:
 
 ```bash
 npm install
-npm run generate:all   # creates the example corpus (deterministic; ~1,340 traces / 4 runs)
+npm run generate:all   # creates the example corpus (deterministic; ~650 traces / 4 runs)
 npm run dev            # API on :8787 + web on :5173
 ```
 
@@ -41,13 +41,12 @@ npm run build && npm start   # serves the built SPA + API on :8787
    (checkbox multi-select filters), all trace filters, and drag-and-drop import. The main pane
    shows reward-by-checkpoint curves (click a point to filter that step), the per-component
    analytics table, and the trace table. Click any row → a resizable preview drawer slides in.
-2. **Read a failure** — try `termbench-i08-s255-r03`: the conversation shows a **malformed
+2. **Read a failure** — open `swebench-i06-s50-r01`: the conversation shows a **malformed
    tool-call JSON** in a loud red block, followed by the error result. The step-grouped cards
    keep reasoning collapsed inside each response; `Expand all / Collapse all` in the toolbar.
-3. **Profile a slow trace** — open any trace's **Timeline** tab: a nested span tree
-   (turns → model / sandbox / grader spans) with proportional bars, status dots, and a
-   span-detail panel (exceptions surface in red). The conversation view also has a vertical
-   **minimap** (toolbar → Timeline) for jump-navigation by turn duration.
+3. **Profile a slow trace** — toggle **Timeline** in the conversation toolbar: a two-pane
+   profiling view with the span tree (turns → model / sandbox / grader spans, proportional
+   duration bars, exceptions in red) on the left and the selected span's message on the right.
 4. **Ask why** — the home **AI analysis** panel runs an agent over the corpus
    ("why do swe traces time out?"), and every trace page has **Ask AI** chat plus a
    **Playground** tab that replays a prompt prefix against a stand-in model.
@@ -81,9 +80,9 @@ agentic session, heavy Markdown/LaTeX, and full Anthropic/OpenAI metadata) for e
 the **Import a trace** dialog.
 
 **Import is load-and-view**: paste text / upload a file / fetch a URL, and the imported
-trace opens directly as its own page. Imports are held in memory only (re-importing just
-refreshes) — for a persistent corpus, drop files into `data/runs/<run>/` and the server
-watches + rescans.
+trace opens in a side drawer (the home view stays put, so you can keep importing/loading).
+Imports are held in memory only (re-importing just refreshes) — for a persistent corpus, drop
+files into `data/runs/<run>/` and the server watches + rescans.
 
 Regenerate the corpus (byte-identical for a given seed):
 

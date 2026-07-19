@@ -1,0 +1,69 @@
+{
+  "id": "chatcmpl-b-browsecomp-i04-s150-r01",
+  "created": 1772864073,
+  "model": "harmony-32b",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You answer multi-hop factual questions by searching the web. Do not rely on memory alone: confirm names, dates, and figures in retrieved snippets before committing. Give one final answer covering every part of the question."
+    },
+    {
+      "role": "user",
+      "content": "Which is taller when measured from base to summit: Mauna Kea or Mount Everest, and by roughly how much, using commonly cited figures?"
+    },
+    {
+      "role": "assistant",
+      "reasoning_content": "Everest wins on elevation above sea level, but Mauna Kea measured from its underwater base is taller overall. Need both figures.",
+      "tool_calls": [
+        {
+          "id": "call-1",
+          "type": "function",
+          "function": {
+            "name": "search",
+            "arguments": "{\"query\":\"Mauna Kea height base to summit total\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call-1",
+      "content": "1. Mauna Kea — Wikipedia — https://en.wikipedia.org/wiki/Mauna_Kea\n   Measured from its base on the ocean floor, Mauna Kea is about 10,210 m (33,500 ft) tall — the tallest mountain on Earth — though only 4,207 m of it is above sea level.\n\n2. Is Mauna Kea taller than Everest? — USGS — https://www.usgs.gov/faqs/mauna-kea-taller-everest\n   Mauna Kea is the tallest mountain from base to peak; Mount Everest has the highest altitude."
+    },
+    {
+      "role": "assistant",
+      "reasoning_content": "Commonly cited: Mauna Kea ~10,210 m base-to-summit vs Everest 8,849 m; the base-to-summit figure for Everest is much smaller, but the usual comparison uses its sea-level elevation.",
+      "tool_calls": [
+        {
+          "id": "call-2",
+          "type": "function",
+          "function": {
+            "name": "search",
+            "arguments": "{\"query\":\"Mount Everest elevation 8849\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call-2",
+      "content": "1. Mount Everest — Wikipedia — https://en.wikipedia.org/wiki/Mount_Everest\n   Everest's elevation of 8,848.86 m (29,031.7 ft) was jointly announced by China and Nepal in 2020.\n\n2. How tall is Mount Everest, really? — https://www.nationalgeographic.com/everest-height\n   The 2020 survey settled on 8,848.86 metres above sea level."
+    }
+  ],
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Measured base-to-summit, Mauna Kea is taller: about 10,210 m from its ocean-floor base, versus Everest’s 8,849 m above sea level. Using those commonly cited figures, Mauna Kea is roughly 1,360 m \"taller\", even though Everest remains the highest point on Earth."
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 281,
+    "completion_tokens": 142,
+    "total_tokens": 423
+  }
+}

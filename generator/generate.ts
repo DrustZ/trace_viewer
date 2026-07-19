@@ -97,8 +97,10 @@ function buildPlans(seed: number, scale: number): TracePlan[] {
             success: drng.bernoulli(pSuccess),
             failure: drng.bernoulli(0.25) ? pickFailure(drng, comp.short) : null,
             executing: false,
-            // Every non-huge trace carries recorded tokens (huge stays excluded).
-            withLogprobs: true,
+            // A fraction of traces carry recorded token logprobs (like real
+            // inference logging) — enough to demo the token inspector without
+            // bloating the corpus; huge stays excluded.
+            withLogprobs: drng.bernoulli(0.35),
             huge: false,
             emit: 'native',
           })

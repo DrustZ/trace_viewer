@@ -2,7 +2,7 @@ import type { Message, TokenLogprob } from '../shared/schema/types'
 import { hashSeed, type Rng } from './rng'
 import type { FailureRegion } from './types'
 
-export const MAX_TOKENS_PER_MESSAGE = 600
+export const MAX_TOKENS_PER_MESSAGE = 400
 
 /** Synthetic vocabulary size for token ids. */
 export const TOKEN_ID_VOCAB = 200000

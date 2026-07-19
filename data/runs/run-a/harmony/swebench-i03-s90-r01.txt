@@ -1,0 +1,80 @@
+<|start|>system<|message|>You are an autonomous software-engineering agent operating in a sandboxed checkout of the target repository. Diagnose the reported issue, make the smallest fix that resolves it, and verify with the project test suite. Prefer reading code over guessing.<|end|>
+<|start|>developer<|message|>Tool inventory: bash for exploration and running tests; str_replace_editor for all file edits. Policy: work only inside /testbed, never push directly, and keep every patch to the minimal hunk that fixes the issue.<|end|>
+<|start|>user<|message|>[astropy/astropy] Card.value silently truncates long CONTINUE strings on rewrite
+
+Reading a header with a long string value and writing it back drops the
+tail of the string:
+
+>>> from astropy.io import fits
+>>> c = fits.Card('SVALUE', 'x' * 180)
+>>> fits.Card.fromstring(str(c)).value == 'x' * 180
+False
+
+Traceback in strict mode:
+  File "astropy/io/fits/card.py", line 167, in _format_value
+    value = value[:68]
+astropy.io.fits.verify.VerifyError: card value truncated to 68 characters
+
+The CONTINUE convention should preserve the full value.<|end|>
+<|start|>assistant<|channel|>analysis<|message|>The report says values over 68 chars get cut instead of being spread over CONTINUE cards. _format_value is in the traceback; checking how _use_continue is set.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"grep -rn 'CONTINUE' astropy/io/fits/card.py | head -6"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>astropy/io/fits/card.py:61:CONTINUE_CARD = 'CONTINUE'
+astropy/io/fits/card.py:158:        # long strings are split across CONTINUE cards
+astropy/io/fits/card.py:612:            if card.keyword == CONTINUE_CARD:
+astropy/io/fits/card.py:während:0<|end|>
+<|start|>assistant<|channel|>analysis<|message|>_use_continue is only set when parsing an existing CONTINUE card (line 433), never when formatting a fresh long value — so newly built cards truncate. The formatter should enable the convention itself.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"sed -n '155,175p' astropy/io/fits/card.py"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>    def _format_value(self, value):
+        # long strings are split across CONTINUE cards
+        if isinstance(value, str) and len(value) > 68:
+            if not self._use_continue:
+                value = value[:68]
+        return _format_str(value)<|end|>
+<|start|>assistant<|channel|>analysis<|message|>The diff should stay minimal: touch only the guard, keep formatting identical so the review surface is one hunk.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"grep -rn '_use_continue' astropy/io/fits/card.py | head -4"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>astropy/io/fits/card.py:104:        self._use_continue = False
+astropy/io/fits/card.py:158:        if not self._use_continue:
+astropy/io/fits/card.py:433:            self._use_continue = keyword == CONTINUE_CARD<|end|>
+<|start|>assistant<|channel|>analysis<|message|>The surrounding module has no test for this branch; the verified suite ships one, so running it first to see the red state.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"grep -rn 'CONTINUE' astropy/io/fits/card.py | head -6"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>astropy/io/fits/card.py:61:CONTINUE_CARD = 'CONTINUE'
+astropy/io/fits/card.py:158:        # long strings are split across CONTINUE cards
+astropy/io/fits/card.py:612:            if card.keyword == CONTINUE_CARD:
+astropy/io/fits/card.py:während:0<|end|>
+<|start|>assistant<|channel|>analysis<|message|>Reproducing the failure first so the fix can be verified against a red baseline.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"python -m pytest astropy/io/fits/tests/test_card.py -q -k continue"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>============================= test session starts ==============================
+platform linux -- Python 3.11.8, pytest-8.0.2, pluggy-1.4.0
+rootdir: /testbed
+collected 7 items
+
+astropy/io/fits/tests/test_card.py ......F              [100%]
+
+=================================== FAILURES ===================================
+_________________________ test_long_string_roundtrip _________________________
+
+    def test_long_string_roundtrip(self):
+        c = fits.Card('SVALUE', 'x' * 180)
+>       assert fits.Card.fromstring(str(c)).value == 'x' * 180
+E       AssertionError: assert 'xxxx...x' == 'xxxx...x'
+E         Right contains 112 more characters
+
+astropy/io/fits/tests/test_card.py:88: AssertionError
+
+=========================== short test summary info ============================
+FAILED astropy/io/fits/tests/test_card.py::test_long_string_roundtrip
+========================= 1 failed, 6 passed in 3.42s ==========================<|end|>
+<|start|>assistant<|channel|>analysis<|message|>The surrounding module has no test for this branch; the verified suite ships one, so running it first to see the red state.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.str_replace_editor<|message|>{"command":"str_replace","path":"astropy/io/fits/card.py","old_str":"        if isinstance(value, str) and len(value) > 68:\n            if not self._use_continue:\n                value = value[:68]","new_str":"        if isinstance(value, str) and len(value) > 68:\n            self._use_continue = True"}<|end|>
+<|start|>functions.str_replace_editor to=assistant<|channel|>commentary<|message|>The file astropy/io/fits/card.py has been edited successfully.<|end|>
+<|start|>assistant<|channel|>analysis<|message|>Running the target test suite to check the fix.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"python -m pytest astropy/io/fits/tests/test_card.py -q -k continue"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>============================= test session starts ==============================
+platform linux -- Python 3.11.8, pytest-8.0.2, pluggy-1.4.0
+rootdir: /testbed
+collected 7 items
+
+astropy/io/fits/tests/test_card.py .......              [100%]
+
+============================== 7 passed in 2.87s ===============================<|end|>
+<|start|>assistant<|channel|>final<|message|>Made _format_value enable the CONTINUE convention for any string longer than 68 characters instead of truncating. The roundtrip test passes and verification no longer raises.<|return|>

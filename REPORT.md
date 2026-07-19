@@ -12,7 +12,7 @@ rollout trace — load it (paste / file / URL, or a run folder), read the agent 
 inspect tokens / spans / reward, and diff two runs. It answers *"why did this rollout go
 wrong,"* not *"how is my app doing in production."*
 
-**Why local-first + in-memory, no database?** The corpus (~1.3k traces) loads into memory and
+**Why local-first + in-memory, no database?** The corpus (~650 traces) loads into memory and
 aggregates in milliseconds; disk JSON under `data/runs/<run>/` is the source of truth, so
 traces stay greppable and shareable as files. The store sits behind a narrow interface — at
 100k+ traces you swap it for SQLite/DuckDB without touching anything else. Trade-off: boot
@@ -110,7 +110,7 @@ loudly — for an RL debugger, a model emitting broken JSON is signal, not noise
 "turns" or "thinking tokens" mean the same thing regardless of source. Sources may override
 with exact values (e.g., real token counts) — overrides win, estimates fill gaps.
 
-**In-memory store + JSON files; no database.** ~1,340 traces aggregate in milliseconds in
+**In-memory store + JSON files; no database.** ~650 traces aggregate in milliseconds in
 memory; disk (plain JSON) is the source of truth, so traces are greppable and shareable as
 files. The store hides behind a narrow interface — at 100k+ traces you swap one file for
 SQLite/DuckDB. Progressive scanning (serve immediately, stream the corpus in batches) covers

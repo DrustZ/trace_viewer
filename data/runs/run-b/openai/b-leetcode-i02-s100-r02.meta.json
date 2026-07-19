@@ -1,0 +1,150 @@
+{
+  "meta": {
+    "traceId": "b-leetcode-i02-s100-r02",
+    "instanceId": "leetcode-i02",
+    "component": "code/leetcode",
+    "status": "completed",
+    "timestamp": "2026-03-05T04:21:21.742Z",
+    "checkpointStep": 100,
+    "split": "train",
+    "sourceFormat": "openai-chat",
+    "rewardDetails": {
+      "cases_passed": 4,
+      "cases_total": 8
+    },
+    "extra": {
+      "ground_truth": "Returns true iff every bracket closes the matching type in order, rejecting any close on an empty stack.",
+      "golden_response": "Reference approach (passes all 8 cases):\n\n```python\nclass Solution:\n    def isValid(self, s: str) -> bool:\n        pairs = {')': '(', ']': '[', '}': '{'}\n        stack = []\n        for ch in s:\n            if ch in pairs:\n                if not stack or stack.pop() != pairs[ch]:\n                    return False\n            else:\n                stack.append(ch)\n        return not stack\n```",
+      "run": "run-b",
+      "kl": 0.1676,
+      "trainer_batch": 4,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 0.5,
+        "length_penalty": -0.0002,
+        "final_reward": 0.4998
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-leetcode-i02-s100-r02",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 24674,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 99,
+          "durationMs": 7,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 161,
+          "durationMs": 18025,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 161,
+          "durationMs": 13216,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 38
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 13449,
+          "durationMs": 1790,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 121
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "execute_code.exec",
+          "kind": "sandbox",
+          "startMs": 15272,
+          "durationMs": 2914,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 18318,
+          "durationMs": 3342,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 18318,
+          "durationMs": 3342,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 45
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-1",
+          "name": "test_runner",
+          "kind": "grader",
+          "startMs": 21760,
+          "durationMs": 2914,
+          "status": "ok",
+          "detail": {
+            "cases_passed": 4,
+            "cases_total": 8
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0.5,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  }
+}

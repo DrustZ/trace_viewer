@@ -1,0 +1,25 @@
+<|start|>system<|message|>You are an SRE agent completing operational tasks on production-like hosts. Keep commands idempotent where possible and never delete data the task asks you to preserve. Finish by verifying the task condition.<|end|>
+<|start|>developer<|message|>Available tools: bash (interactive shell on the target host, runs as root). Safety rules: no rm -rf outside the task scope, never edit /etc/passwd or /etc/shadow directly, dry-run destructive finds before -delete or -exec rm, and stop if a command would take the host offline.<|end|>
+<|start|>user<|message|>Disk usage on /var/log is at 92%. Compress every *.log file older than 7 days under /var/log/app (keep newer ones untouched) and verify usage drops below 80%.<|end|>
+<|start|>assistant<|channel|>analysis<|message|>Surveying the current state before mutating anything — destructive steps come last.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"df -h /var/log"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda2        20G   18G  1.6G  92% /var/log<|end|>
+<|start|>assistant<|channel|>analysis<|message|>The output confirms the hypothesis; proceeding with the next command in the plan.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"du -sh /var/log/app"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>14G	/var/log/app<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"find /var/log/app -name '*.log' -mtime +7 | head -5"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>/var/log/app/app-2026-02-11.log
+/var/log/app/app-2026-02-12.log
+/var/log/app/app-2026-02-13.log
+/var/log/app/app-2026-02-14.log
+/var/log/app/app-2026-02-15.log<|end|>
+<|start|>assistant<|channel|>analysis<|message|>The output confirms the hypothesis; proceeding with the next command in the plan.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"find /var/log/app -name '*.log' -mtime +7 | wc -l"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>214<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"find /var/log/app -name '*.log' -mtime +7 -exec gzip -9 {} +"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|><|end|>
+<|start|>assistant<|channel|>analysis<|message|>Verifying the change took effect before declaring the task done.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.bash<|message|>{"command":"df --output=pcent /var/log | tail -1 | tr -d ' %'"}<|end|>
+<|start|>functions.bash to=assistant<|channel|>commentary<|message|>67<|end|>
+<|start|>assistant<|channel|>final<|message|>Compressed 214 log files older than 7 days under /var/log/app with gzip -9. Usage dropped from 92% to 67%, below the 80% target; files newer than 7 days were left untouched.<|return|>

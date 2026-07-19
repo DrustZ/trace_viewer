@@ -1,0 +1,193 @@
+{
+  "meta": {
+    "traceId": "b-browsecomp-i02-s80-r02",
+    "instanceId": "browsecomp-i02",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-04T08:13:27.075Z",
+    "checkpointStep": 80,
+    "split": "train",
+    "sourceFormat": "harmony",
+    "rewardDetails": {
+      "answer_match": 1
+    },
+    "extra": {
+      "ground_truth": "Helium was discovered first — identified spectroscopically in sunlight in 1868 by Janssen and Lockyer — while argon was isolated in 1894 by Rayleigh and Ramsay. That places the discoveries 26 years apart.",
+      "golden_response": "Helium was discovered first — identified spectroscopically in sunlight in 1868 by Janssen and Lockyer — while argon was isolated in 1894 by Rayleigh and Ramsay. That places the discoveries 26 years apart.\n\nSource hint: Helium — Wikipedia — https://en.wikipedia.org/wiki/Helium",
+      "run": "run-b",
+      "kl": 0.0968,
+      "trainer_batch": 3,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-browsecomp-i02-s80-r02",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 13220,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 6,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 240,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 434,
+          "durationMs": 5942,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 434,
+          "durationMs": 3166,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 30
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 3899,
+          "durationMs": 1333,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 5581,
+          "durationMs": 795,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 6444,
+          "durationMs": 4379,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 6444,
+          "durationMs": 1165,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 20
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-8",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 7948,
+          "durationMs": 1622,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-8",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 9927,
+          "durationMs": 896,
+          "status": "ok",
+          "messageId": "m-7"
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 11014,
+          "durationMs": 2092,
+          "status": "ok"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-12",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 11014,
+          "durationMs": 2092,
+          "status": "ok",
+          "messageId": "m-8",
+          "detail": {
+            "tokens_out": 51
+          }
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-1",
+          "name": "answer_match",
+          "kind": "grader",
+          "startMs": 13213,
+          "durationMs": 7,
+          "status": "ok",
+          "detail": {
+            "verdict": "correct"
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 1,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  }
+}

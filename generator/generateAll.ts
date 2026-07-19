@@ -19,8 +19,8 @@ interface RunSpec {
 }
 
 const RUNS: readonly RunSpec[] = [
-  { run: 'run-a', seed: 42, scale: 1.0 },
-  { run: 'run-b', seed: 43, scale: 0.5 },
+  { run: 'run-a', seed: 42, scale: 0.6 },
+  { run: 'run-b', seed: 43, scale: 0.4 },
   { run: 'run-c', seed: 44, scale: 0.3 },
   { run: 'run-d', seed: 45, scale: 0.2 },
 ]

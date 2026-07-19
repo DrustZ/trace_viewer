@@ -1,0 +1,310 @@
+{
+  "meta": {
+    "traceId": "b-browsecomp-i04-s125-r01",
+    "instanceId": "browsecomp-i04",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-06T05:00:06.205Z",
+    "checkpointStep": 125,
+    "split": "test",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 1
+    },
+    "extra": {
+      "ground_truth": "Measured base-to-summit, Mauna Kea is taller: about 10,210 m from its ocean-floor base, versus Everest’s 8,849 m above sea level. Using those commonly cited figures, Mauna Kea is roughly 1,360 m \"taller\", even though Everest remains the highest point on Earth.",
+      "golden_response": "Measured base-to-summit, Mauna Kea is taller: about 10,210 m from its ocean-floor base, versus Everest’s 8,849 m above sea level. Using those commonly cited figures, Mauna Kea is roughly 1,360 m \"taller\", even though Everest remains the highest point on Earth.\n\nSource hint: Mauna Kea — Wikipedia — https://en.wikipedia.org/wiki/Mauna_Kea",
+      "run": "run-b",
+      "kl": 0.0562,
+      "trainer_batch": 5,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-browsecomp-i04-s125-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 8740,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 50,
+          "durationMs": 9,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 254,
+          "durationMs": 2680,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 254,
+          "durationMs": 1249,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 32
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 1549,
+          "durationMs": 648,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 2259,
+          "durationMs": 675,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 2974,
+          "durationMs": 4581,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 2974,
+          "durationMs": 829,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 45
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-8",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 4088,
+          "durationMs": 1448,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 0
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-8",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 5901,
+          "durationMs": 1654,
+          "status": "ok",
+          "messageId": "m-7"
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 7948,
+          "durationMs": 738,
+          "status": "ok"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-12",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 7948,
+          "durationMs": 738,
+          "status": "ok",
+          "messageId": "m-8",
+          "detail": {
+            "tokens_out": 65
+          }
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-1",
+          "name": "answer_match",
+          "kind": "grader",
+          "startMs": 8736,
+          "durationMs": 4,
+          "status": "ok",
+          "detail": {
+            "verdict": "correct"
+          }
+        }
+      ]
+    }
+  },
+  "stats": {
+    "score": 1,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 270,
+    "outputTokens": 142,
+    "thinkingTokens": 77,
+    "totalTokens": 412,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.5422535211267606,
+    "durationMs": 8686,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a browsing assistant for hard research questions. Issue targeted queries, cross-check disagreeing sources, and answer only after each sub-fact is independently confirmed.",
+      "id": "m-0",
+      "timestamp": "2026-03-06T05:00:06.205Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "Which is taller when measured from base to summit: Mauna Kea or Mount Everest, and by roughly how much, using commonly cited figures?",
+      "id": "m-1",
+      "timestamp": "2026-03-06T05:00:06.255Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Everest wins on elevation above sea level, but Mauna Kea measured from its underwater base is taller overall. Need both figures.",
+      "id": "m-2",
+      "timestamp": "2026-03-06T05:00:06.459Z",
+      "durationMs": 1249,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"Mauna Kea height base to summit total\"}",
+          "parsedArguments": {
+            "query": "Mauna Kea height base to summit total"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-06T05:00:07.754Z",
+      "durationMs": 648,
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Mauna Kea — Wikipedia — https://en.wikipedia.org/wiki/Mauna_Kea\n   Measured from its base on the ocean floor, Mauna Kea is about 10,210 m (33,500 ft) tall — the tallest mountain on Earth — though only 4,207 m of it is above sea level.\n\n2. Is Mauna Kea taller than Everest? — USGS — https://www.usgs.gov/faqs/mauna-kea-taller-everest\n   Mauna Kea is the tallest mountain from base to peak; Mount Everest has the highest altitude.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 675
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-06T05:00:08.464Z",
+      "durationMs": 675,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Commonly cited: Mauna Kea ~10,210 m base-to-summit vs Everest 8,849 m; the base-to-summit figure for Everest is much smaller, but the usual comparison uses its sea-level elevation.",
+      "id": "m-5",
+      "timestamp": "2026-03-06T05:00:09.179Z",
+      "durationMs": 829,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"Mount Everest elevation 8849\"}",
+          "parsedArguments": {
+            "query": "Mount Everest elevation 8849"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-06T05:00:10.293Z",
+      "durationMs": 1448,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. Mount Everest — Wikipedia — https://en.wikipedia.org/wiki/Mount_Everest\n   Everest's elevation of 8,848.86 m (29,031.7 ft) was jointly announced by China and Nepal in 2020.\n\n2. How tall is Mount Everest, really? — https://www.nationalgeographic.com/everest-height\n   The 2020 survey settled on 8,848.86 metres above sea level.",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 1654
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-06T05:00:12.106Z",
+      "durationMs": 1654,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Measured base-to-summit, Mauna Kea is taller: about 10,210 m from its ocean-floor base, versus Everest’s 8,849 m above sea level. Using those commonly cited figures, Mauna Kea is roughly 1,360 m \"taller\", even though Everest remains the highest point on Earth.",
+      "id": "m-8",
+      "timestamp": "2026-03-06T05:00:14.153Z",
+      "durationMs": 738,
+      "stepIndex": 3
+    }
+  ]
+}

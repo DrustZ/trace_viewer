@@ -1,0 +1,116 @@
+{
+  "meta": {
+    "traceId": "b-deepscaler-i04-s25-r01",
+    "instanceId": "deepscaler-i04",
+    "component": "stem/deepscaler-math",
+    "status": "completed",
+    "timestamp": "2026-03-02T01:21:51.820Z",
+    "checkpointStep": 25,
+    "split": "test",
+    "sourceFormat": "openai-chat",
+    "rewardDetails": {
+      "math_verify": 0
+    },
+    "extra": {
+      "ground_truth": "49",
+      "golden_response": "Powers of 7 modulo 100 cycle with period 4: $7, 49, 43, 1, 7, \\dots$\n\nSince $2026 = 4 \\cdot 506 + 2$, we have $2026 \\equiv 2 \\pmod 4$, so $7^{2026} \\equiv 7^2 = 49 \\pmod{100}$.\n\nFinal answer: $\\boxed{49}$",
+      "run": "run-b",
+      "kl": 0.0469,
+      "trainer_batch": 1,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0003,
+        "final_reward": -0.0003
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "b-deepscaler-i04-s25-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 10159,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 198,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 341,
+          "durationMs": 9701,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 341,
+          "durationMs": 7166,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 313
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 7580,
+          "durationMs": 2462,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 24
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "math_verify",
+          "kind": "grader",
+          "startMs": 10151,
+          "durationMs": 8,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  }
+}
