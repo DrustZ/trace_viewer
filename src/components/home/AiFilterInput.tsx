@@ -47,11 +47,12 @@ export function AiFilterInput({
             if (e.key === 'Enter') submit()
           }}
           placeholder='Describe a filter, e.g. "failed swebench runs over 20 turns"'
+          data-testid="ai-filter"
           className="w-72 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
         />
         <button
           type="button"
-          data-testid="ai-filter"
+          data-testid="ai-filter-submit"
           onClick={submit}
           disabled={ai.isPending || query.trim() === ''}
           className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"

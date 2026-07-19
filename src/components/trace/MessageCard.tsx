@@ -172,7 +172,9 @@ function Body({
               </p>
               <TokenLogprobText
                 tokens={message.tokens}
-                text={message.content.length > 0 ? message.content : message.toolCalls?.[0]?.arguments}
+                text={
+                  message.content.length > 0 ? message.content : message.toolCalls?.[0]?.arguments
+                }
               />
             </div>
           )}
