@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { EmptyState } from '../components/common/EmptyState'
 import { AnalysisPanel } from '../components/home/AnalysisPanel'
 import { CollapsibleSection } from '../components/home/CollapsibleSection'
 import { RewardCurveChart } from '../components/home/RewardCurveChart'
 import { RunStatusBar } from '../components/home/RunStatusBar'
 import { Sidebar } from '../components/home/sidebar/Sidebar'
+import { TraceDrawer } from '../components/home/TraceDrawer'
 import { TraceTableArea } from '../components/home/TraceTableArea'
 import { hasActiveSelection, useListParams } from '../state/filterParams'
 
@@ -26,6 +28,23 @@ function readSidebarOpen(): boolean {
 export default function HomePage() {
   const { params, setParam, setParams, clearAll } = useListParams()
   const [sidebarOpen, setSidebarOpen] = useState(readSidebarOpen)
+
+  // The preview drawer is owned here (not inside the gated table area) so an
+  // imported trace or a shared ?peek= link opens even with no run selected.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  const peek = searchParams.get('peek')
+  const setPeek = useCallback(
+    (traceId: string | null) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        if (traceId) next.set('peek', traceId)
+        else next.delete('peek')
+        return next
+      })
+    },
+    [setSearchParams],
+  )
 
   const toggleSidebar = () =>
     setSidebarOpen((prev) => {
@@ -56,7 +75,12 @@ export default function HomePage() {
               <CollapsibleSection id="curves" title="Reward curves" defaultOpen>
                 <RewardCurveChart params={params} setParam={setParam} />
               </CollapsibleSection>
-              <TraceTableArea params={params} setParams={setParams} />
+              <TraceTableArea
+                params={params}
+                setParams={setParams}
+                selectedId={peek ?? undefined}
+                onSelect={setPeek}
+              />
             </>
           ) : (
             <EmptyState
@@ -66,6 +90,14 @@ export default function HomePage() {
           )}
         </main>
       </div>
+      {peek && (
+        <TraceDrawer
+          traceId={peek}
+          onClose={() => setPeek(null)}
+          onNavigate={setPeek}
+          listSearch={location.search}
+        />
+      )}
     </div>
   )
 }
