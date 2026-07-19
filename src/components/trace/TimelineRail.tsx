@@ -129,12 +129,12 @@ export function Minimap({
     return tops
   }, [segHeights])
 
-  // Dock-style focus: the unit at the viewport center, mapped through sampling.
-  const centerPx = scrollOffset - scrollMargin + viewportHeight / 2
-  const focusedUnit =
-    totalSize > 0 && units.length > 0
-      ? Math.min(Math.max(Math.floor((centerPx / totalSize) * units.length), 0), units.length - 1)
-      : 0
+  // Dock-style focus mapped over the REACHABLE scroll range (0 = top, 1 = end),
+  // so the last unit gets focus at the bottom — the viewport center alone never
+  // reaches the end of the content.
+  const maxScroll = Math.max(totalSize - viewportHeight, 1)
+  const progress = Math.min(Math.max((scrollOffset - scrollMargin) / maxScroll, 0), 1)
+  const focusedUnit = units.length > 0 ? Math.round(progress * (units.length - 1)) : 0
   const focusedIdx =
     n === units.length
       ? focusedUnit
