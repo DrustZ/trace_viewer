@@ -1,8 +1,15 @@
 import type { Message, ToolCall } from '@shared/schema/types'
+import { messageTokens } from '@shared/stats/computeStats'
 import { FoldSection } from '../common/CollapsibleText'
-import { formatDuration, formatTimestamp } from '../common/format'
-import { ScoreBadge } from '../common/ScoreBadge'
-import { FOLD_TONES, JudgeCallout, LongText, MessageMeta } from './MessageCard'
+import { formatDuration, formatNumber, formatScore, formatTimestamp } from '../common/format'
+import {
+  FOLD_TONES,
+  JudgeCallout,
+  type LogprobMode,
+  MessageMeta,
+  messageNumber,
+  RichTextBlock,
+} from './MessageCard'
 import { TokenLogprobText } from './TokenLogprobText'
 import { ToolCallBlock } from './ToolCallBlock'
 import { type StepUnit, stepScore, unitDurationMs } from './unitize'
@@ -18,20 +25,27 @@ function firstToolCall(unit: StepUnit): ToolCall | undefined {
 }
 
 /** One response piece: a commentary message's tool call(s) or the final text. */
-function ResponsePiece({ message, showLogprobs }: { message: Message; showLogprobs: boolean }) {
-  const hasTokens = showLogprobs && message.tokens !== undefined && message.tokens.length > 0
+function ResponsePiece({ message, logprobMode }: { message: Message; logprobMode: LogprobMode }) {
+  // Per the logprob contract: an active token view replaces rich/plain text rendering.
+  const tokenMode = logprobMode === 'off' ? undefined : logprobMode
+  const tokens = message.tokens !== undefined && message.tokens.length > 0 ? message.tokens : null
   const isToolCall = message.toolCalls !== undefined && message.toolCalls.length > 0
   return (
     <div data-testid="step-response" data-kind={isToolCall ? 'toolCall' : 'final'}>
       {isToolCall ? (
         <div className="space-y-2">
           {message.content && (
-            <LongText text={message.content} label="COMMENTARY" tone={FOLD_TONES.toolCall} />
+            <RichTextBlock
+              id={message.id}
+              text={message.content}
+              label="COMMENTARY"
+              tone={FOLD_TONES.toolCall}
+            />
           )}
           {message.toolCalls?.map((call) => (
             <ToolCallBlock key={call.id} call={call} />
           ))}
-          {hasTokens && message.tokens && (
+          {tokenMode && tokens && (
             <div
               className="rounded-md border border-indigo-200 bg-indigo-50/30 px-2 py-1.5"
               data-testid="arguments-logprobs"
@@ -39,26 +53,22 @@ function ResponsePiece({ message, showLogprobs }: { message: Message; showLogpro
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
                 Arguments logprobs
               </p>
-              <TokenLogprobText
-                tokens={message.tokens}
-                text={
-                  message.content.length > 0 ? message.content : message.toolCalls?.[0]?.arguments
-                }
-              />
+              <TokenLogprobText tokens={tokens} mode={tokenMode} />
             </div>
           )}
         </div>
-      ) : hasTokens && message.tokens ? (
-        <TokenLogprobText
-          tokens={message.tokens}
-          text={message.content}
-          className="px-1.5 py-0.5"
-        />
+      ) : tokenMode && tokens ? (
+        <TokenLogprobText tokens={tokens} mode={tokenMode} className="px-1.5 py-0.5" />
       ) : (
-        <LongText text={message.content} label="ASSISTANT RESPONSE" tone={FOLD_TONES.final} />
+        <RichTextBlock
+          id={message.id}
+          text={message.content}
+          label="ASSISTANT RESPONSE"
+          tone={FOLD_TONES.final}
+        />
       )}
       {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
-      <MessageMeta message={message} showLogprobs={showLogprobs} light />
+      <MessageMeta message={message} logprobMode={logprobMode} light />
     </div>
   )
 }
@@ -108,18 +118,21 @@ export function StepCard({
   onToggle,
   reasoningOpen,
   onToggleReasoning,
-  showLogprobs = false,
+  logprobMode = 'off',
 }: {
   unit: StepUnit
   expanded: boolean
   onToggle: () => void
   reasoningOpen: boolean
   onToggleReasoning: () => void
-  showLogprobs?: boolean
+  logprobMode?: LogprobMode
 }) {
   const first = unit.messages[0]
+  const number = first ? messageNumber(first.id) : undefined
   const durationMs = unitDurationMs(unit)
   const score = stepScore(unit)
+  // unit.messages holds exactly the step's assistant messages (see buildUnits).
+  const tokenCount = unit.messages.reduce((acc, m) => acc + messageTokens(m), 0)
   const reasoningText = unit.analysis.map((m) => m.content).join('\n\n')
   return (
     <div className="py-1.5" data-testid="step-card" data-step={unit.stepIndex}>
@@ -146,9 +159,27 @@ export function StepCard({
           <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
             Assistant
           </span>
+          {number !== undefined && (
+            <span className="font-mono text-[10px] text-slate-400" data-testid="message-number">
+              #{number}
+            </span>
+          )}
           <span className="ml-auto flex shrink-0 items-center gap-2 text-[11px] text-slate-400">
             {durationMs !== undefined && <span>{formatDuration(durationMs)}</span>}
-            {score !== undefined && <ScoreBadge score={score} />}
+            {score !== undefined && (
+              <span
+                className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[10px] text-emerald-700"
+                data-testid="step-reward-chip"
+              >
+                Reward: {formatScore(score)}
+              </span>
+            )}
+            <span
+              className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500"
+              data-testid="step-tokens-chip"
+            >
+              Tokens ({formatNumber(tokenCount)})
+            </span>
             <span>{formatTimestamp(first?.timestamp)}</span>
           </span>
         </button>
@@ -173,7 +204,7 @@ export function StepCard({
               (m) => m.judgeOutput && <JudgeCallout key={m.id} text={m.judgeOutput} />,
             )}
             {unit.responses.map((m) => (
-              <ResponsePiece key={m.id} message={m} showLogprobs={showLogprobs} />
+              <ResponsePiece key={m.id} message={m} logprobMode={logprobMode} />
             ))}
           </div>
         ) : (

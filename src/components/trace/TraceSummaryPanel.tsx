@@ -1,5 +1,11 @@
 import type { Trace } from '@shared/schema/types'
 import { useMemo, useState } from 'react'
+import {
+  MarkdownContent,
+  RichRawToggle,
+  useViewMode,
+  wrapBareLatex,
+} from '../common/MarkdownContent'
 import { ScoreBadge } from '../common/ScoreBadge'
 
 const JUDGE_CLAMP = 400
@@ -35,6 +41,43 @@ function Item({ label, children }: { label: string; children: React.ReactNode })
     <div>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
       <div className="mt-1">{children}</div>
+    </div>
+  )
+}
+
+/**
+ * One Reference value (ground truth or success criteria): markdown by default so math
+ * like \frac{...} renders (bare TeX gets $-wrapped), with the mono raw string behind
+ * the same Rich/Raw pill used on message cards.
+ */
+function ReferenceBlock({
+  id,
+  text,
+  sublabel,
+  testId,
+}: {
+  id: string
+  text: string
+  sublabel?: string
+  testId: string
+}) {
+  const [view, setView] = useViewMode(id)
+  return (
+    <div data-testid={testId} data-view={view}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] text-slate-400">{sublabel}</span>
+        <RichRawToggle mode={view} onChange={setView} />
+      </div>
+      {view === 'rich' ? (
+        <MarkdownContent
+          text={wrapBareLatex(text)}
+          className="mt-1 max-h-40 overflow-y-auto rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-700"
+        />
+      ) : (
+        <pre className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded border border-slate-200 bg-slate-50 px-2 py-1.5 font-mono text-xs text-slate-700">
+          {text}
+        </pre>
+      )}
     </div>
   )
 }
@@ -145,18 +188,26 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
                 </div>
               </Item>
             )}
-            {groundTruth !== undefined && (
-              <Item label="Ground truth">
-                <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded border border-slate-200 bg-slate-50 px-2 py-1.5 font-mono text-xs text-slate-700">
-                  {groundTruth}
-                </pre>
-              </Item>
-            )}
-            {successCriteria !== undefined && (
-              <Item label="Success criteria">
-                <p className="whitespace-pre-wrap break-words text-sm text-slate-700">
-                  {successCriteria}
-                </p>
+            {(groundTruth !== undefined || successCriteria !== undefined) && (
+              <Item label="Reference">
+                <div className="space-y-3">
+                  {groundTruth !== undefined && (
+                    <ReferenceBlock
+                      id={`${meta.traceId}:ground-truth`}
+                      text={groundTruth}
+                      sublabel={successCriteria !== undefined ? 'ground truth' : undefined}
+                      testId="reference-ground-truth"
+                    />
+                  )}
+                  {successCriteria !== undefined && (
+                    <ReferenceBlock
+                      id={`${meta.traceId}:success-criteria`}
+                      text={successCriteria}
+                      sublabel={groundTruth !== undefined ? 'success criteria' : undefined}
+                      testId="reference-success-criteria"
+                    />
+                  )}
+                </div>
               </Item>
             )}
             {judge !== undefined && (

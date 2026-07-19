@@ -47,6 +47,14 @@ export function TraceHeader({
   const navigate = useNavigate()
   const { meta, stats } = trace
 
+  // Cheap tab counts only: messages are already loaded; span count comes from
+  // meta.extra.spans when the source provided one (Evolution would need a fetch — omitted).
+  const extraSpans = meta.extra?.spans
+  const tabCounts: Partial<Record<TraceTab, number>> = {
+    conversation: trace.messages.length,
+    ...(Array.isArray(extraSpans) ? { timeline: extraSpans.length } : {}),
+  }
+
   const backSearch = useMemo(() => {
     const p = new URLSearchParams(listSearch)
     p.delete('tab')
@@ -163,6 +171,11 @@ export function TraceHeader({
               }`}
             >
               {TAB_LABELS[tab]}
+              {tabCounts[tab] !== undefined && (
+                <span className="ml-1 font-normal text-slate-400">
+                  ({formatNumber(tabCounts[tab])})
+                </span>
+              )}
             </button>
           ))}
         </nav>

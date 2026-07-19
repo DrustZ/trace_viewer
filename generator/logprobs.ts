@@ -1,10 +1,19 @@
 import type { Message, TokenLogprob } from '../shared/schema/types'
-import type { Rng } from './rng'
+import { hashSeed, type Rng } from './rng'
 import type { FailureRegion } from './types'
 
 export const MAX_TOKENS_PER_MESSAGE = 700
 
-const SPLIT_RE = /\s+|(?=[^\w\s])/
+/** Synthetic vocabulary size for token ids. */
+export const TOKEN_ID_VOCAB = 200000
+
+/** Stable vocabulary id: FNV-1a of the token string folded into [0, TOKEN_ID_VOCAB). */
+export function tokenId(token: string): number {
+  return hashSeed(token) % TOKEN_ID_VOCAB
+}
+
+/** A word or a single punctuation mark, carrying any whitespace that precedes it. */
+const TOKEN_RE = /\s*(?:\w+|[^\w\s])/g
 
 export interface TokenSpan {
   token: string
@@ -12,18 +21,23 @@ export interface TokenSpan {
 }
 
 /**
- * Naive whitespace/punctuation tokenizer. The UI zips tokens back onto the
- * same text with this exact split, so token count must match it.
+ * Naive BPE-style tokenizer: words and single punctuation marks, each carrying
+ * its leading whitespace, so the concatenated tokens reproduce the source text
+ * exactly (up to the token cap) and the UI can render gap-free token blocks.
  */
 export function tokenize(text: string): TokenSpan[] {
   const spans: TokenSpan[] = []
   let cursor = 0
-  for (const part of text.split(SPLIT_RE)) {
-    if (part.length === 0) continue
-    const start = text.indexOf(part, cursor)
-    spans.push({ token: part, start })
-    cursor = start + part.length
-    if (spans.length >= MAX_TOKENS_PER_MESSAGE) break
+  for (const m of text.matchAll(TOKEN_RE)) {
+    if (spans.length >= MAX_TOKENS_PER_MESSAGE) return spans
+    spans.push({ token: m[0], start: m.index })
+    cursor = m.index + m[0].length
+  }
+  if (cursor < text.length) {
+    // Whitespace-only tail (or wholly-whitespace text) still belongs to a token.
+    const last = spans[spans.length - 1]
+    if (last !== undefined) last.token += text.slice(cursor)
+    else if (text.length > 0) spans.push({ token: text, start: 0 })
   }
   return spans
 }
@@ -53,7 +67,7 @@ export function buildTokens(
 ): TokenLogprob[] {
   return tokenize(text).map(({ token, start }) => {
     const suspicious = region ? start < region.end && start + token.length > region.start : false
-    return { token, logprob: sampleLogprob(rng, suspicious) }
+    return { token, logprob: sampleLogprob(rng, suspicious), id: tokenId(token) }
   })
 }
 

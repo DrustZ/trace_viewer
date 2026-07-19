@@ -1,6 +1,7 @@
 import type { Message } from '@shared/schema/types'
 import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import { formatDuration } from '../common/format'
+import { RichRawToggle, useViewMode } from '../common/MarkdownContent'
 
 /** Output above this length is clamped behind the fold control. */
 const CLAMP = 2500
@@ -16,7 +17,22 @@ const RED: FoldTone = {
   hover: 'hover:bg-red-100/70',
 }
 
+/** 'Rich' view for terminal output: fenced-code styling, not markdown parsing. */
+function CodeBlock({ text }: { text: string }) {
+  return (
+    <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100">
+      {text}
+    </pre>
+  )
+}
+
+/**
+ * Tool output card. Terminal output is not markdown, so 'Raw' is the default view;
+ * the pill's 'Rich' renders fenced-code style instead. Choice is per message id,
+ * session-persistent (survives virtualization recycling).
+ */
 export function ToolResultBlock({ message }: { message: Message }) {
+  const [view, setView] = useViewMode(message.id, 'raw')
   const isError = message.toolResult?.isError ?? false
   const durationMs = message.toolResult?.durationMs
   const card = isError
@@ -33,17 +49,24 @@ export function ToolResultBlock({ message }: { message: Message }) {
             ERROR
           </span>
         )}
-        {durationMs !== undefined && (
-          <span className="ml-auto rounded bg-white/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
-            {formatDuration(durationMs)}
-          </span>
-        )}
+        <span className="ml-auto flex items-center gap-2">
+          <RichRawToggle mode={view} onChange={setView} />
+          {durationMs !== undefined && (
+            <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+              {formatDuration(durationMs)}
+            </span>
+          )}
+        </span>
       </div>
       <div className="px-2 pb-1.5">
         {message.content.length <= CLAMP ? (
-          <div className="whitespace-pre-wrap break-words px-1.5 font-mono text-xs">
-            {message.content}
-          </div>
+          view === 'rich' ? (
+            <CodeBlock text={message.content} />
+          ) : (
+            <div className="whitespace-pre-wrap break-words px-1.5 font-mono text-xs">
+              {message.content}
+            </div>
+          )
         ) : (
           <FoldSection
             label="OUTPUT"
@@ -52,6 +75,7 @@ export function ToolResultBlock({ message }: { message: Message }) {
             mono
             blockPreview
             previewChars={CLAMP}
+            renderText={view === 'rich' ? (t) => <CodeBlock text={t} /> : undefined}
           />
         )}
       </div>

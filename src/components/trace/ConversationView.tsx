@@ -1,7 +1,7 @@
 import type { Trace } from '@shared/schema/types'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ConversationToolbar } from './ConversationToolbar'
+import { ConversationToolbar, type LogprobMode } from './ConversationToolbar'
 import { MessageCard } from './MessageCard'
 import { StepCard } from './StepCard'
 import { TimelineRailCell, TimelineRailHeader } from './TimelineRail'
@@ -9,6 +9,7 @@ import { TraceSummaryPanel } from './TraceSummaryPanel'
 import { buildUnits, unitDurationMs } from './unitize'
 
 const TIMELINE_KEY = 'tv.timeline.open'
+const LOGPROB_KEY = 'tv.logprob.mode'
 const MATCH_CAP = 500
 const NO_MATCHES: number[] = []
 
@@ -17,6 +18,15 @@ function readTimelineOpen(): boolean {
     return localStorage.getItem(TIMELINE_KEY) === '1'
   } catch {
     return false
+  }
+}
+
+function readLogprobMode(): LogprobMode {
+  try {
+    const v = localStorage.getItem(LOGPROB_KEY)
+    return v === 'tokens' || v === 'probs' ? v : 'off'
+  } catch {
+    return 'off'
   }
 }
 
@@ -40,7 +50,7 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const [listOffset, setListOffset] = useState(0)
   const [query, setQuery] = useState('')
   const [matchPos, setMatchPos] = useState(0)
-  const [showLogprobs, setShowLogprobs] = useState(false)
+  const [logprobMode, setLogprobModeState] = useState<LogprobMode>(readLogprobMode)
   const [timelineOpen, setTimelineOpen] = useState(readTimelineOpen)
   const messages = trace.messages
 
@@ -137,6 +147,15 @@ export function ConversationView({ trace }: { trace: Trace }) {
     setReasoningOpen(new Map())
   }, [])
 
+  const setLogprobMode = useCallback((mode: LogprobMode) => {
+    setLogprobModeState(mode)
+    try {
+      localStorage.setItem(LOGPROB_KEY, mode)
+    } catch {
+      // private mode etc. — state still works for this session
+    }
+  }, [])
+
   const toggleTimeline = useCallback(() => {
     setTimelineOpen((v) => {
       const next = !v
@@ -227,8 +246,8 @@ export function ConversationView({ trace }: { trace: Trace }) {
         onNextMatch={nextMatch}
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
-        showLogprobs={showLogprobs}
-        onToggleLogprobs={() => setShowLogprobs((v) => !v)}
+        logprobMode={logprobMode}
+        onLogprobModeChange={setLogprobMode}
         timelineOpen={timelineOpen}
         onToggleTimeline={toggleTimeline}
       />
@@ -280,14 +299,14 @@ export function ConversationView({ trace }: { trace: Trace }) {
                         onToggle={() => toggleStep(unit.id)}
                         reasoningOpen={reasoningOpen.get(unit.id) ?? false}
                         onToggleReasoning={() => toggleReasoning(unit.id)}
-                        showLogprobs={showLogprobs}
+                        logprobMode={logprobMode}
                       />
                     ) : (
                       <MessageCard
                         message={unit.message}
                         bodyExpanded={foldOpen.get(unit.id) ?? false}
                         onToggleBody={() => toggleFold(unit.id)}
-                        showLogprobs={showLogprobs}
+                        logprobMode={logprobMode}
                       />
                     )}
                   </div>

@@ -26,3 +26,15 @@ export const BUCKET_LABELS: readonly string[] = [
   'p ≥ 15%',
   'p < 15%',
 ]
+
+/**
+ * Soft pastel backgrounds cycled by token index in the 'tokens' view, so
+ * adjacent token blocks stay visually distinct without encoding confidence.
+ */
+export const TOKEN_CYCLE_CLASSES: readonly string[] = [
+  'bg-rose-100',
+  'bg-sky-100',
+  'bg-emerald-100',
+  'bg-amber-100',
+  'bg-violet-100',
+]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BUCKET_CLASSES, BUCKET_LABELS, logprobToBucket } from './logprobColor'
+import { BUCKET_CLASSES, BUCKET_LABELS, logprobToBucket, TOKEN_CYCLE_CLASSES } from './logprobColor'
 
 describe('logprobToBucket', () => {
   it('maps logprob 0 (p = 1) to bucket 0', () => {
@@ -39,5 +39,19 @@ describe('bucket constants', () => {
     expect(BUCKET_CLASSES).toHaveLength(5)
     expect(BUCKET_LABELS).toHaveLength(5)
     expect(BUCKET_CLASSES[0]).toBe('')
+  })
+})
+
+describe('TOKEN_CYCLE_CLASSES', () => {
+  it('provides five distinct pastel classes in a stable order', () => {
+    expect(TOKEN_CYCLE_CLASSES).toHaveLength(5)
+    expect(new Set(TOKEN_CYCLE_CLASSES).size).toBe(5)
+    expect(TOKEN_CYCLE_CLASSES).toEqual([
+      'bg-rose-100',
+      'bg-sky-100',
+      'bg-emerald-100',
+      'bg-amber-100',
+      'bg-violet-100',
+    ])
   })
 })

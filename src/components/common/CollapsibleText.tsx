@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 /** Expanded views above this size are cut off — full text belongs in the Raw tab. */
 const HARD_CAP = 200_000
@@ -26,6 +26,7 @@ export function FoldSection({
   previewChars = 120,
   blockPreview = false,
   testId = 'fold-toggle',
+  renderText,
 }: {
   label: string
   text: string
@@ -37,6 +38,8 @@ export function FoldSection({
   previewChars?: number
   blockPreview?: boolean
   testId?: string
+  /** Custom renderer for the expanded content (e.g. markdown); previews stay plain text. */
+  renderText?: (text: string) => ReactNode
 }) {
   const [localOpen, setLocalOpen] = useState(defaultExpanded)
   const open = expanded ?? localOpen
@@ -68,7 +71,11 @@ export function FoldSection({
       </button>
       {open ? (
         <div className="px-1.5 pb-1">
-          <div className={contentCls}>{chars > HARD_CAP ? text.slice(0, HARD_CAP) : text}</div>
+          {renderText ? (
+            renderText(chars > HARD_CAP ? text.slice(0, HARD_CAP) : text)
+          ) : (
+            <div className={contentCls}>{chars > HARD_CAP ? text.slice(0, HARD_CAP) : text}</div>
+          )}
           {chars > HARD_CAP && (
             <p className="mt-1 text-xs text-slate-400 italic">
               (truncated view — use Raw tab for full text)

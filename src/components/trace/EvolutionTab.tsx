@@ -2,12 +2,14 @@ import type { Trace, TraceSummary } from '@shared/schema/types'
 import { type ReactNode, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
   ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
+  Scatter,
   Tooltip,
   type TooltipContentProps,
   XAxis,
@@ -15,7 +17,7 @@ import {
 } from 'recharts'
 import { useEvolution, useSiblings } from '../../api/hooks'
 import { EmptyState, ErrorState, LoadingState } from '../common/EmptyState'
-import { formatDuration, formatNumber, formatScore } from '../common/format'
+import { formatDuration, formatNumber, formatPercent, formatScore } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { StatusPill } from '../common/StatusPill'
 
@@ -23,12 +25,41 @@ import { StatusPill } from '../common/StatusPill'
 // RewardCurveChart. The current-trace reference dot uses a darker step of the same ramp.
 const SERIES_COLOR = '#2a78d6'
 const CURRENT_COLOR = '#1c5cab'
+// slate-400: individual rollout dots sit visually behind the avg line.
+const DOT_COLOR = '#94a3b8'
 
 interface ChartRow {
   step: number
   /** undefined ⇒ no rollout at this step is scored; the line skips the point. */
   avgScore?: number
+  min?: number
+  max?: number
+  /** [min, max] band for the range Area; undefined ⇒ gap. */
+  range?: [number, number]
   count: number
+}
+
+interface ScatterDatum {
+  /**
+   * Exact checkpoint step. Keeping data x on-step keeps the axis tooltip ticks clean;
+   * the anti-overplot jitter is applied in pixel space by the custom dot shape instead.
+   */
+  step: number
+  score: number
+  /** Deterministic per-rollout horizontal offset in px, applied by the dot shape. */
+  jitterPx: number
+  /** Owning chart row — lets the shared tooltip resolve scatter hovers to step stats. */
+  row: ChartRow
+}
+
+/** The tooltip payload may lead with a jittered scatter point; follow it back to its row. */
+function resolveRow(payload: TooltipContentProps['payload']): ChartRow | undefined {
+  for (const entry of payload) {
+    const p = entry.payload as ChartRow | ScatterDatum | undefined
+    if (!p) continue
+    return 'row' in p ? p.row : p
+  }
+  return undefined
 }
 
 /** 'leetcode-i09-s25-r01' → 'r01'; falls back to the full id for foreign formats. */
@@ -75,13 +106,13 @@ function TraceLink({
   )
 }
 
-function EvolutionTooltip({ active, payload, label }: TooltipContentProps) {
+function EvolutionTooltip({ active, payload }: TooltipContentProps) {
   if (!active || payload.length === 0) return null
-  const row = payload[0]?.payload as ChartRow | undefined
+  const row = resolveRow(payload)
   if (!row) return null
   return (
     <div className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-sm">
-      <div className="font-medium text-slate-700">step {label}</div>
+      <div className="font-medium text-slate-700">step {row.step}</div>
       <div className="mt-0.5 flex items-center gap-1.5">
         <span
           className="inline-block h-0.5 w-3 rounded-full"
@@ -92,6 +123,11 @@ function EvolutionTooltip({ active, payload, label }: TooltipContentProps) {
         </span>
         <span className="text-slate-400">avg · n={row.count}</span>
       </div>
+      {row.min !== undefined && row.max !== undefined && (
+        <div className="mt-0.5 tabular-nums text-slate-400">
+          min {formatScore(row.min)} · max {formatScore(row.max)}
+        </div>
+      )}
     </div>
   )
 }
@@ -180,14 +216,66 @@ export function EvolutionTab({
 
   const rows = useMemo<ChartRow[]>(
     () =>
-      (evolution.data?.points ?? []).map((p) => ({
-        step: p.step,
-        avgScore: p.avgScore ?? undefined,
-        count: p.rollouts.length,
-      })),
+      (evolution.data?.points ?? []).map((p) => {
+        const scores = p.rollouts.map((r) => r.stats.score).filter((s): s is number => s !== null)
+        const min = scores.length > 0 ? Math.min(...scores) : undefined
+        const max = scores.length > 0 ? Math.max(...scores) : undefined
+        return {
+          step: p.step,
+          avgScore: p.avgScore ?? undefined,
+          min,
+          max,
+          range:
+            min !== undefined && max !== undefined ? ([min, max] as [number, number]) : undefined,
+          count: p.rollouts.length,
+        }
+      }),
     [evolution.data],
   )
-  const totalRollouts = rows.reduce((n, r) => n + r.count, 0)
+
+  // One dot per scored rollout, fanned out around its step by a deterministic
+  // per-index offset scaled to the smallest step gap (avoids overplotting).
+  const scatterPoints = useMemo<ScatterDatum[]>(() => {
+    const points = evolution.data?.points ?? []
+    const rowByStep = new Map(rows.map((r) => [r.step, r]))
+    const steps = points.map((p) => p.step).sort((a, b) => a - b)
+    let gap = Number.POSITIVE_INFINITY
+    for (let i = 1; i < steps.length; i++) gap = Math.min(gap, steps[i] - steps[i - 1])
+    const spread = Number.isFinite(gap) ? gap * 0.15 : 0.5
+    const out: ScatterDatum[] = []
+    for (const p of points) {
+      const row = rowByStep.get(p.step)
+      if (!row) continue
+      const n = p.rollouts.length
+      p.rollouts.forEach((rollout, i) => {
+        const score = rollout.stats.score
+        if (score === null) return
+        const jitter = n > 1 ? (i / (n - 1) - 0.5) * spread : 0
+        out.push({ step: p.step + jitter, score, row })
+      })
+    }
+    return out
+  }, [evolution.data, rows])
+
+  // Instance-level summary over every rollout in the series (all checkpoints).
+  const summary = useMemo(() => {
+    const all = (evolution.data?.points ?? []).flatMap((p) => p.rollouts)
+    const scores = all.map((r) => r.stats.score).filter((s): s is number => s !== null)
+    const durations = all
+      .map((r) => r.stats.durationMs)
+      .filter((d): d is number => typeof d === 'number')
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+    return {
+      count: all.length,
+      avg: scores.length > 0 ? mean(scores) : null,
+      min: scores.length > 0 ? Math.min(...scores) : null,
+      max: scores.length > 0 ? Math.max(...scores) : null,
+      successRate: scores.length > 0 ? scores.filter((s) => s > 0).length / scores.length : null,
+      avgDurationMs: durations.length > 0 ? mean(durations) : null,
+    }
+  }, [evolution.data])
+
+  const totalRollouts = summary.count
   const selectedPoint = evolution.data?.points.find((p) => p.step === selectedStep)
 
   if (evolution.isLoading) {
@@ -217,9 +305,63 @@ export function EvolutionTab({
         </span>
       </div>
 
+      <div
+        data-testid="evolution-summary"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5"
+      >
+        {[
+          { label: 'Avg reward', value: formatScore(summary.avg) },
+          {
+            label: 'Min – Max',
+            value:
+              summary.min !== null && summary.max !== null
+                ? `${formatScore(summary.min)} – ${formatScore(summary.max)}`
+                : '—',
+          },
+          { label: 'Success rate', value: formatPercent(summary.successRate) },
+          { label: 'Rollouts', value: formatNumber(summary.count) },
+          { label: 'Avg duration', value: formatDuration(summary.avgDurationMs) },
+        ].map((tile) => (
+          <div
+            key={tile.label}
+            className="rounded-lg border border-emerald-200/70 bg-emerald-50/60 px-3 py-2"
+          >
+            <div className="text-[11px] font-medium text-emerald-700">{tile.label}</div>
+            <div className="mt-0.5 text-lg font-semibold tabular-nums text-emerald-950">
+              {tile.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-medium text-slate-700">Avg score by checkpoint</h2>
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <h2 className="text-sm font-medium text-slate-700">Avg score by checkpoint</h2>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0.5 w-3 rounded-full"
+                  style={{ backgroundColor: SERIES_COLOR }}
+                />
+                Avg reward
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-2 w-3 rounded-[2px]"
+                  style={{ backgroundColor: SERIES_COLOR, opacity: 0.2 }}
+                />
+                Min/max range
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: DOT_COLOR, opacity: 0.55 }}
+                />
+                Individual rollouts
+              </span>
+            </div>
+          </div>
           <span className="text-xs text-slate-400">click a point to inspect its rollouts</span>
         </div>
         {rows.length === 0 ? (
@@ -232,13 +374,22 @@ export function EvolutionTab({
             className={`h-[220px] ${evolution.isFetching ? 'opacity-60' : ''}`}
           >
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart
+              <ComposedChart
                 data={rows}
                 margin={{ top: 18, right: 16, bottom: 0, left: 0 }}
                 style={{ cursor: 'pointer' }}
                 onClick={(state) => {
-                  const step = Number(state?.activeLabel)
-                  if (Number.isFinite(step)) setSelection({ traceId, step })
+                  const x = Number(state?.activeLabel)
+                  if (!Number.isFinite(x)) return
+                  // Scatter jitter can make the active label sit between checkpoints —
+                  // snap the selection to the nearest real step.
+                  let step: number | undefined
+                  for (const r of rows) {
+                    if (step === undefined || Math.abs(r.step - x) < Math.abs(step - x)) {
+                      step = r.step
+                    }
+                  }
+                  if (step !== undefined) setSelection({ traceId, step })
                 }}
               >
                 <CartesianGrid stroke="#e2e8f0" vertical={false} />
@@ -264,10 +415,31 @@ export function EvolutionTab({
                   cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }}
                 />
                 <ReferenceLine x={selectedStep} stroke="#cbd5e1" />
+                <Area
+                  type="monotone"
+                  dataKey="range"
+                  name="Min/max range"
+                  stroke="none"
+                  fill={SERIES_COLOR}
+                  fillOpacity={0.15}
+                  activeDot={false}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+                <Scatter
+                  data={scatterPoints}
+                  dataKey="score"
+                  name="Individual rollouts"
+                  tooltipType="none"
+                  isAnimationActive={false}
+                  shape={(props: { cx?: number; cy?: number }) => (
+                    <circle cx={props.cx} cy={props.cy} r={3} fill={DOT_COLOR} fillOpacity={0.55} />
+                  )}
+                />
                 <Line
                   type="monotone"
                   dataKey="avgScore"
-                  name="Instance avg"
+                  name="Avg reward"
                   stroke={SERIES_COLOR}
                   strokeWidth={2}
                   dot={{ r: 4, fill: SERIES_COLOR, stroke: '#ffffff', strokeWidth: 2 }}
@@ -286,7 +458,7 @@ export function EvolutionTab({
                     label={{ value: 'this trace', position: 'top', fontSize: 10, fill: '#64748b' }}
                   />
                 )}
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}

@@ -1,11 +1,23 @@
 import type { Message } from '@shared/schema/types'
 import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import { formatDuration, formatTimestamp } from '../common/format'
+import { MarkdownContent, RichRawToggle, useViewMode } from '../common/MarkdownContent'
 import { ScoreBadge } from '../common/ScoreBadge'
+import { TokenLogprobText } from './TokenLogprobText'
 import { ToolResultBlock } from './ToolResultBlock'
 
 /** Content above this length is clamped behind the fold control. */
 const CLAMP = 2500
+
+/** Tri-state logprob view owned by ConversationView; 'off' renders normal rich/raw text. */
+export type LogprobMode = 'off' | 'tokens' | 'probs'
+
+/** Message id 'm-<idx>' (assigned by finalizeTrace) → 1-based '#<n>'; unknown ids omit it. */
+export function messageNumber(id: string): number | undefined {
+  const match = /^m-(\d+)$/.exec(id)
+  if (!match) return undefined
+  return Number(match[1]) + 1
+}
 
 /**
  * Standalone (non-step) card kinds. Assistant messages render inside StepCard;
@@ -78,6 +90,47 @@ export function LongText({ text, label, tone }: { text: string; label: string; t
   return <FoldSection label={label} text={text} tone={tone} blockPreview previewChars={CLAMP} />
 }
 
+/**
+ * A plain-text content block with the per-message Rich/Raw pill: markdown by default,
+ * the original whitespace-pre-wrap text on 'Raw'. The choice is keyed by message id in
+ * a session-level store so it survives virtualization recycling. Long rich content keeps
+ * the fold control; the collapsed preview stays plain text.
+ */
+export function RichTextBlock({
+  id,
+  text,
+  label,
+  tone,
+}: {
+  id: string
+  text: string
+  label: string
+  tone: FoldTone
+}) {
+  const [view, setView] = useViewMode(id)
+  return (
+    <div data-testid="rich-text-block" data-view={view}>
+      <div className="-mb-1 flex justify-end px-1.5 pt-0.5">
+        <RichRawToggle mode={view} onChange={setView} />
+      </div>
+      {view === 'raw' ? (
+        <LongText text={text} label={label} tone={tone} />
+      ) : text.length <= CLAMP ? (
+        <MarkdownContent text={text} className="px-1.5 py-0.5" />
+      ) : (
+        <FoldSection
+          label={label}
+          text={text}
+          tone={tone}
+          blockPreview
+          previewChars={CLAMP}
+          renderText={(t) => <MarkdownContent text={t} />}
+        />
+      )}
+    </div>
+  )
+}
+
 /** Amber LLM-as-judge explanation attached to a message. */
 export function JudgeCallout({ text }: { text: string }) {
   return (
@@ -91,11 +144,11 @@ export function JudgeCallout({ text }: { text: string }) {
 /** Per-message meta row: logprobs hint, timestamp, duration, score. */
 export function MessageMeta({
   message,
-  showLogprobs,
+  logprobMode,
   light = false,
 }: {
   message: Message
-  showLogprobs: boolean
+  logprobMode: LogprobMode
   /** Smaller type for rows nested inside a StepCard. */
   light?: boolean
 }) {
@@ -106,7 +159,7 @@ export function MessageMeta({
         light ? 'text-[10px]' : 'text-xs'
       }`}
     >
-      {hasTokens && !showLogprobs && (
+      {hasTokens && logprobMode === 'off' && (
         <span
           className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
           title="Per-token logprobs available — enable the logprobs toggle to view"
@@ -127,18 +180,39 @@ function Body({
   kind,
   expanded,
   onToggle,
+  logprobMode,
 }: {
   message: Message
   kind: Kind
   expanded: boolean
   onToggle: () => void
+  logprobMode: LogprobMode
 }) {
+  const [view, setView] = useViewMode(message.id)
   const card = `rounded-lg border border-l-4 px-2 py-1.5 ${CARD[kind]}`
+  if (kind === 'toolResult' || kind === 'toolError') return <ToolResultBlock message={message} />
+
+  // Per the logprob contract: an active token view replaces rich/plain text rendering.
+  const tokenMode = logprobMode === 'off' ? undefined : logprobMode
+  const tokens = message.tokens !== undefined && message.tokens.length > 0 ? message.tokens : null
+  if (tokenMode && tokens) {
+    return (
+      <div className={card}>
+        <TokenLogprobText tokens={tokens} mode={tokenMode} className="px-1.5 py-0.5" />
+      </div>
+    )
+  }
+
   switch (kind) {
     case 'system':
     case 'developer':
       return (
         <div className={card}>
+          {expanded && (
+            <div className="-mb-1 flex justify-end px-1.5 pt-0.5">
+              <RichRawToggle mode={view} onChange={setView} />
+            </div>
+          )}
           <FoldSection
             label={kind === 'system' ? 'SYSTEM PROMPT' : 'DEVELOPER'}
             text={message.content}
@@ -146,23 +220,32 @@ function Body({
             mono
             expanded={expanded}
             onToggle={onToggle}
+            renderText={view === 'rich' ? (t) => <MarkdownContent text={t} /> : undefined}
           />
         </div>
       )
     case 'user':
       return (
         <div className={card}>
-          <LongText text={message.content} label="USER MESSAGE" tone={FOLD_TONES.user} />
-        </div>
-      )
-    case 'final':
-      return (
-        <div className={card}>
-          <LongText text={message.content} label="ASSISTANT RESPONSE" tone={FOLD_TONES.final} />
+          <RichTextBlock
+            id={message.id}
+            text={message.content}
+            label="USER MESSAGE"
+            tone={FOLD_TONES.user}
+          />
         </div>
       )
     default:
-      return <ToolResultBlock message={message} />
+      return (
+        <div className={card}>
+          <RichTextBlock
+            id={message.id}
+            text={message.content}
+            label="ASSISTANT RESPONSE"
+            tone={FOLD_TONES.final}
+          />
+        </div>
+      )
   }
 }
 
@@ -171,15 +254,16 @@ export function MessageCard({
   message,
   bodyExpanded,
   onToggleBody,
-  showLogprobs = false,
+  logprobMode = 'off',
 }: {
   message: Message
   bodyExpanded: boolean
   onToggleBody: () => void
-  showLogprobs?: boolean
+  logprobMode?: LogprobMode
 }) {
   const kind = kindOf(message)
   const chip = CHIP[kind]
+  const number = messageNumber(message.id)
   return (
     <div className="flex gap-3 py-1.5" data-testid="message-card" data-kind={kind}>
       <div className="flex w-24 shrink-0 flex-col items-end gap-1 pt-1.5">
@@ -188,11 +272,22 @@ export function MessageCard({
         >
           {chip.label}
         </span>
+        {number !== undefined && (
+          <span className="font-mono text-[10px] text-slate-400" data-testid="message-number">
+            #{number}
+          </span>
+        )}
       </div>
       <div className="min-w-0 flex-1">
-        <Body message={message} kind={kind} expanded={bodyExpanded} onToggle={onToggleBody} />
+        <Body
+          message={message}
+          kind={kind}
+          expanded={bodyExpanded}
+          onToggle={onToggleBody}
+          logprobMode={logprobMode}
+        />
         {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
-        <MessageMeta message={message} showLogprobs={showLogprobs} />
+        <MessageMeta message={message} logprobMode={logprobMode} />
       </div>
     </div>
   )
