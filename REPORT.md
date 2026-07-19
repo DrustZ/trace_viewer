@@ -141,10 +141,28 @@ log-scaled duration bars so 30s timeouts don't flatten 200ms tool calls.
 
 ## 6. Known gaps & if I had more time
 
-Two navigation affordances were consciously deferred at the deadline (both small,
-both noted from self-review): click-through from a tool call to its result card and back,
-and a "go to message" jump from a Timeline span into the conversation view (the span detail
-panel shows the message id today).
+A structured self-review against an earlier prototype of mine surfaced a prioritized adoption
+list; what fit before the deadline landed (honest partial-comparison semantics on /compare —
+totals vs loaded, '≈' aggregates, B−A delta labeling, matched/one-side-only rows; atomic
+all-or-nothing imports with duplicate/conflict detection). The rest is deliberately deferred
+and documented here as the next hardening pass:
+
+- **First-class run identity** — runId currently lives in `meta.extra` with query-level
+  scoping (evolution/siblings/panels are run-aware); the full version threads
+  `(runId, traceId)` through types, URL, API, cache keys and the store.
+- **Evaluation-evidence panel** — split reward / score / passed with a versioned pass
+  policy, evaluator revision, and the judge's full prompt/rubric alongside its reasoning
+  (we show reasoning + verdict + golden today; `score > 0` as "success" is a stand-in).
+- **Raw provenance** — Normalized vs Original toggle, parser version/warnings, source
+  locator and content hash on the Raw tab.
+- **Verifiable AI citations** — chat/analysis cite `#N` and trace ids as free text today;
+  the hardened version validates citations against real ids, rejects fabricated ones, and
+  makes each citation a click-to-evidence jump.
+- **Acceptance matrix** — adversarial E2E fixtures (500+ instances, 200+ rollouts on one
+  instance, mixed-run collisions, hostile Markdown, duplicate-id import batches).
+
+Two small navigation affordances also deferred: tool-call ↔ result click-through, and
+"go to message" from a Timeline span (the span detail shows the message id).
 
 Also: streaming responses for chat/analysis; a Python-sandbox tool for the analysis agent;
 an OTel GenAI / Langfuse export connector (the registry makes this one file); SQLite index
