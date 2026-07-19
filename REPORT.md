@@ -14,6 +14,12 @@ answers *"why did this rollout go wrong,"* not *"how is my app doing in producti
 opens in a **side drawer, not a new page**, because when you're debugging you want to flip
 between rollouts fast without losing the list.
 
+*Background:* I build and maintain **Reflection AI's internal trace viewer and RL-run trace
+debugger**, so the workflows here — read a rollout, profile it, compare runs, watch an instance
+evolve across checkpoints — are the ones I reach for daily. This is a clean-room, self-contained
+take on them (no internal code or data), which is why the feature choices below are opinionated
+rather than exhaustive.
+
 ## Features, and why each exists
 
 Each feature earns its place against one job: **read a rollout deeply, or find which rollout to
