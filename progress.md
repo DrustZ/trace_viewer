@@ -110,3 +110,37 @@ User tested v0.3 in the browser; this round is their feedback verbatim → produ
   (ERR_ABORTED on recharts.js) — retry with a longer --wait.
 - generate.test.ts asserts executing traces sit at the max checkpoint step (1-2 allowed at
   small --scale).
+
+## 2026-07-19 — v0.5 → v0.6 (commits 8cc37a9, 672771c, 3b13529, 2329cf0)
+
+- v0.5: timeline rail + in-trace search, Evolution tab, logprob shading, AI filter
+  (sonnet-5 + rules fallback), condition builder, global search, import dialog
+- v0.5.1: step-grouped conversation (StepCards, nested collapsed REASONING,
+  expand/collapse-all), from user feedback
+- v0.5.2: span-level profiling — generator ProfSpans (model/sandbox/grader + exceptions),
+  Langfuse-style Timeline tab with span detail panel, derived fallback for imports
+- v0.6: markdown/KaTeX rich rendering + Rich/Raw pills + numbering + reward/token chips,
+  tri-state logprob views, evolution range band + scatter + tiles (sisyphus references)
+
+## 2026-07-19 — Waves 1–2 + fix packs (commits bbc863c, 4369b4f, b744ba7, …)
+
+Compressed delivery mode (user: everything within 3 hours; per-wave minimal gates, one full
+verify at the end):
+- Wave 1: vertical sidebar layout (selection stats, category tree multi-select, sidebar
+  filters, import dropzone, run status bar), token-prob chips + inference top-k, judge
+  reasoning + golden response + reward breakdown (+kl/trainer_batch), trace AI chat,
+  progressive scan
+- Wave 2: AI analysis agent (tool-use loop over the store), power filter keys + presets +
+  gpt-tokenizer BPE fallback, cross-run comparison (run-b corpus + /compare), playground/replay
+- Fix pack (user testing feedback): chat-style left/right alignment, vertical minimap
+  timeline slider replacing the per-row rail, expand/collapse-all covering system/developer
+  folds, score/evolution fallback states for unscored traces
+- FIX-C: per-message Rendered|Raw|Tokens tabs with inline token inspector (confidence chips,
+  #idx / prob% / ↵ toggles, selected-token panel with top-k alternatives)
+
+**Notes to remember**
+- Corpus is now TWO runs: data/traces (run-a, seed 42, 961) + data/traces_runb (run-b,
+  seed 43, scale 0.5, 241; traceIds prefixed 'b-', instanceIds shared for /compare joins).
+- The 'run' filter key defaults absent extra.run to 'run-a'.
+- Waves used minimal inline gates (tsc+vitest+regen) instead of per-wave verify agents —
+  final full verify happens in M6.
