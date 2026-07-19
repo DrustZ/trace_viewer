@@ -120,11 +120,19 @@ export function RunColumn({
   }, [selectedStep])
 
   const [tab, setTab] = useState<TraceTab>('conversation')
-  const [showRollouts, setShowRollouts] = useState(true)
+  const [showRollouts, setShowRollouts] = useState(!selectedTraceId)
+  // Once a trace is picked, collapse the rollout list so the trace view fills
+  // the column (reopen via the run header to switch rollouts).
+  useEffect(() => {
+    if (selectedTraceId) setShowRollouts(false)
+  }, [selectedTraceId])
   const trace = useTrace(selectedTraceId || undefined)
 
   return (
-    <section className="flex h-full min-w-0 flex-col gap-2" data-testid={`run-column-${run}`}>
+    <section
+      className="flex h-full min-w-0 flex-1 basis-0 flex-col gap-2"
+      data-testid={`run-column-${run}`}
+    >
       <button
         type="button"
         onClick={() => setShowRollouts((v) => !v)}
