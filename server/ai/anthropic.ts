@@ -24,6 +24,8 @@ export interface NlFilterResult {
   filter: FilterSet
   source: 'llm' | 'rules'
   explanation: string
+  /** True when the query asks for group/instance-average semantics the per-trace DSL cannot express. */
+  groupByInstance?: boolean
 }
 
 /** Minimal client surface used here — a seam so tests can inject a fake. */
@@ -53,6 +55,7 @@ const emitFilterSchema = z.object({
     }),
   ),
   explanation: z.string(),
+  groupByInstance: z.boolean().optional(),
 })
 
 const EMIT_FILTER_INPUT_SCHEMA = {
@@ -78,6 +81,11 @@ const EMIT_FILTER_INPUT_SCHEMA = {
       },
     },
     explanation: { type: 'string' },
+    groupByInstance: {
+      type: 'boolean',
+      description:
+        'Set true when the query asks about group/instance averages so the UI groups traces by instance',
+    },
   },
   required: ['conditions', 'explanation'],
 }
@@ -88,7 +96,9 @@ Query: "failed swebench runs with more than 20 turns"
 Query: "truncated traces over 100k tokens"
 -> {"conditions":[{"key":"truncated","op":"eq","value":true},{"key":"totalTokens","op":"gt","value":100000}],"explanation":"Truncated traces with more than 100,000 total tokens"}
 Query: "zero-score test rollouts at step 800"
--> {"conditions":[{"key":"score","op":"eq","value":0},{"key":"split","op":"eq","value":"test"},{"key":"step","op":"eq","value":800}],"explanation":"Test-split traces that scored 0 at checkpoint step 800"}`
+-> {"conditions":[{"key":"score","op":"eq","value":0},{"key":"split","op":"eq","value":"test"},{"key":"step","op":"eq","value":800}],"explanation":"Test-split traces that scored 0 at checkpoint step 800"}
+Query: "groups at step 125 with avg rollout reward < 0.5"
+-> {"conditions":[{"key":"step","op":"eq","value":125}],"groupByInstance":true,"explanation":"Step-125 traces grouped by instance — average reward is shown on each group row; the per-trace filter cannot threshold group averages, so use the group averages shown (exact thresholding is available via the analysis panel)"}`
 
 function buildSystemPrompt(ctx: NlFilterContext): string {
   const keyLines = FILTER_KEYS.map((k) => `- ${k.id} (${k.type}): ${k.description}`).join('\n')
@@ -107,7 +117,9 @@ Available checkpoint steps: ${steps}
 
 ${FEW_SHOT_EXAMPLES}
 
-Rules: use only the listed key ids and ops valid for that key's type. Emit numbers as JSON numbers and booleans as JSON booleans. Component values should match the available components (use 'contains' for partial matches). Conditions are ANDed together; use 'in' with an array for OR within one key. If nothing in the query maps to a filter, emit an empty conditions array.`
+Rules: use only the listed key ids and ops valid for that key's type. Emit numbers as JSON numbers and booleans as JSON booleans. Component values should match the available components (use 'contains' for partial matches). Conditions are ANDed together; use 'in' with an array for OR within one key. If nothing in the query maps to a filter, emit an empty conditions array.
+
+IMPORTANT — the filter DSL is strictly per-trace. A per-trace 'score.lt.X' condition matches individual rollouts whose own score is below X; it is NOT a group/instance average (on 0/1-scored data it returns only zero-score rollouts). When the query asks about groups/instances by AVERAGE score/reward: set groupByInstance to true, emit only conditions that are truly per-trace (e.g. step, component — do NOT emit a score condition to approximate the average), and say in the explanation that group averages appear on the group rows and that exact avg thresholding is available via the analysis panel.`
 }
 
 let singleton: EmitFilterClient | null = null
@@ -175,14 +187,26 @@ export async function nlToFilter(
 
     const parsed = emitFilterSchema.safeParse(findToolInput(response.content))
     if (!parsed.success) return fallback()
-    if (parsed.data.conditions.length === 0 && query.trim() !== '') return fallback()
+    // An empty conditions array is still meaningful when the model asked to group by instance.
+    if (
+      parsed.data.conditions.length === 0 &&
+      !parsed.data.groupByInstance &&
+      query.trim() !== ''
+    ) {
+      return fallback()
+    }
 
     const conditions: FilterCondition[] = parsed.data.conditions.map((c) => ({
       key: c.key,
       op: c.op,
       value: coerceValue(c.key, c.value),
     }))
-    return { filter: { conditions }, source: 'llm', explanation: parsed.data.explanation }
+    return {
+      filter: { conditions },
+      source: 'llm',
+      explanation: parsed.data.explanation,
+      ...(parsed.data.groupByInstance ? { groupByInstance: true } : {}),
+    }
   } catch {
     return fallback()
   }

@@ -46,6 +46,44 @@ describe('nlToFilter', () => {
     ])
   })
 
+  it('accepts groupByInstance for group-average queries and advertises it in the tool schema', async () => {
+    const create: CreateMock = vi.fn().mockResolvedValue(
+      toolUseResponse({
+        conditions: [{ key: 'step', op: 'eq', value: 125 }],
+        groupByInstance: true,
+        explanation: 'Step-125 traces grouped by instance; averages appear on the group rows',
+      }),
+    )
+    const result = await nlToFilter(
+      'at step 125, the groups with avg rollout reward < 0.5',
+      CTX,
+      fakeClient(create),
+    )
+
+    expect(result.source).toBe('llm')
+    expect(result.groupByInstance).toBe(true)
+    // Only the truly per-trace condition — no per-trace score.lt masquerading as an average.
+    expect(result.filter.conditions).toEqual([{ key: 'step', op: 'eq', value: 125 }])
+
+    const [params] = create.mock.calls[0]
+    const tool = params.tools?.[0] as { input_schema: { properties: Record<string, unknown> } }
+    expect(tool.input_schema.properties).toHaveProperty('groupByInstance')
+    expect(String(params.system)).toContain('groupByInstance')
+  })
+
+  it('omits groupByInstance when the model does not set it', async () => {
+    const create: CreateMock = vi.fn().mockResolvedValue(
+      toolUseResponse({
+        conditions: [{ key: 'score', op: 'gt', value: 0.5 }],
+        explanation: 'per-trace',
+      }),
+    )
+    const result = await nlToFilter('score above 0.5', CTX, fakeClient(create))
+    expect(result.source).toBe('llm')
+    expect(result.groupByInstance).toBeUndefined()
+    expect('groupByInstance' in result).toBe(false)
+  })
+
   it('falls back to rules when the tool_use input has an unknown key', async () => {
     const create: CreateMock = vi.fn().mockResolvedValue(
       toolUseResponse({

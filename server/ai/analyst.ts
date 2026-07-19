@@ -6,6 +6,7 @@ import type {
 import { z } from 'zod'
 import { FILTER_KEYS } from '../../shared/filter/keys'
 import type { Trace, TraceSummary } from '../../shared/schema/types'
+import { runOf } from '../../shared/stats/evolution'
 import { firstParam, type RouteCtx } from '../routes/context'
 import { appliedSummaries } from '../routes/listParams'
 
@@ -126,6 +127,22 @@ const TOOLS: MessageCreateParamsNonStreaming['tools'] = [
     },
   },
   {
+    name: 'aggregate_instances',
+    description:
+      'Group rollouts by instance (task) and compute per-group score stats. THE tool for group/instance-level average-reward questions — the per-trace filter DSL cannot express group averages.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        step: { type: 'number', description: 'Restrict to one checkpoint step' },
+        component: { type: 'string', description: 'Exact component name' },
+        run: { type: 'string', description: 'Restrict to one run id' },
+        avgBelow: { type: 'number', description: 'Keep groups with avgScore < this' },
+        avgAtLeast: { type: 'number', description: 'Keep groups with avgScore >= this' },
+        limit: { type: 'number', description: `Max ${LIST_MAX_LIMIT}, default ${LIST_MAX_LIMIT}` },
+      },
+    },
+  },
+  {
     name: 'get_trace',
     description: 'Fetch one trace in full: meta + stats + numbered messages (content clamped).',
     input_schema: {
@@ -186,7 +203,9 @@ function buildSystemPrompt(): string {
   const keyLines = FILTER_KEYS.map((k) => `- ${k.id} (${k.type}): ${k.description}`).join('\n')
   return `You are an AI analysis agent embedded in an RL training trace viewer. The store holds rollout traces, each with meta (traceId, component, dataset split, checkpoint step, status) and stats (score, turns, toolUses, tokens, truncated, hasError).
 
-Tools: list_traces (filtered summaries), aggregate (grouped stats), get_trace (one trace with messages), search_traces (full-text), and emit_report (your final answer — always call it exactly once at the end).
+Tools: list_traces (filtered summaries), aggregate (grouped stats), aggregate_instances (per-instance group score averages), get_trace (one trace with messages), search_traces (full-text), and emit_report (your final answer — always call it exactly once at the end).
+
+The filter DSL is strictly per-trace: 'score.lt.0.5' matches individual rollouts, NOT groups by average — on 0/1-scored data it returns only zero-score rollouts. For questions about instances/groups by average reward, use aggregate_instances. Example: 'groups at step 125 with avg reward < 0.5' -> aggregate_instances {"step":125,"avgBelow":0.5}.
 
 Filter DSL (for list_traces filters and suggestedFilter): 'key.op.value' segments joined by ';'. Ops: eq, neq, lt, lte, gt, gte, contains, in ('in' values joined by '|'). Keys:
 ${keyLines}
@@ -269,6 +288,58 @@ function aggregate(ctx: RouteCtx, input: Record<string, unknown>): unknown {
   return { rows }
 }
 
+/**
+ * Per-instance group aggregation with optional avgScore bounds — group-average
+ * semantics the per-trace filter DSL cannot express. Groups with a null
+ * avgScore are excluded by either bound.
+ */
+function aggregateInstances(ctx: RouteCtx, input: Record<string, unknown>): unknown {
+  let items = ctx.store.list()
+  const step =
+    typeof input.step === 'number' ? input.step : Number(firstParam(input.step) ?? Number.NaN)
+  if (Number.isFinite(step)) items = items.filter((s) => s.meta.checkpointStep === step)
+  const component = firstParam(input.component)
+  if (component) items = items.filter((s) => s.meta.component === component)
+  const run = firstParam(input.run)
+  if (run) items = items.filter((s) => runOf(s) === run)
+
+  const groups = new Map<string, TraceSummary[]>()
+  for (const s of items) {
+    const at = groups.get(s.meta.instanceId)
+    if (at) at.push(s)
+    else groups.set(s.meta.instanceId, [s])
+  }
+  let rows = [...groups.entries()].map(([instanceId, group]) => {
+    const scores = group.map((s) => s.stats.score).filter((v): v is number => v !== null)
+    return {
+      instanceId,
+      component: group[0].meta.component,
+      steps: [...new Set(group.map((s) => s.meta.checkpointStep))].sort((a, b) => a - b),
+      rollouts: group.length,
+      avgScore: scores.length > 0 ? scores.reduce((acc, v) => acc + v, 0) / scores.length : null,
+      minScore: scores.length > 0 ? Math.min(...scores) : null,
+      maxScore: scores.length > 0 ? Math.max(...scores) : null,
+    }
+  })
+  const avgBelow = typeof input.avgBelow === 'number' ? input.avgBelow : undefined
+  if (avgBelow !== undefined)
+    rows = rows.filter((r) => r.avgScore !== null && r.avgScore < avgBelow)
+  const avgAtLeast = typeof input.avgAtLeast === 'number' ? input.avgAtLeast : undefined
+  if (avgAtLeast !== undefined) {
+    rows = rows.filter((r) => r.avgScore !== null && r.avgScore >= avgAtLeast)
+  }
+  rows.sort((a, b) => {
+    if (a.avgScore !== b.avgScore) {
+      if (a.avgScore === null) return 1
+      if (b.avgScore === null) return -1
+      return a.avgScore - b.avgScore
+    }
+    return a.instanceId < b.instanceId ? -1 : a.instanceId > b.instanceId ? 1 : 0
+  })
+  const limit = toNumber(input.limit, LIST_MAX_LIMIT, LIST_MAX_LIMIT)
+  return { total: rows.length, rows: rows.slice(0, limit) }
+}
+
 /** Meta + stats + numbered messages, clamped to a total character budget. */
 export function condenseTrace(trace: Trace, maxChars: number): unknown {
   const messages: string[] = []
@@ -328,6 +399,8 @@ export function executeTool(ctx: RouteCtx, name: string, rawInput: unknown): unk
         return listTraces(ctx, input)
       case 'aggregate':
         return aggregate(ctx, input)
+      case 'aggregate_instances':
+        return aggregateInstances(ctx, input)
       case 'get_trace':
         return getTrace(ctx, input)
       case 'search_traces':

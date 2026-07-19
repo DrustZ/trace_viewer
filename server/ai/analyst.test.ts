@@ -13,6 +13,7 @@ function fakeClient(create: CreateMock): AnalystClient {
 
 function parsedTrace(opts: {
   traceId: string
+  instanceId?: string
   status?: 'completed' | 'failed'
   step?: number
   score?: number
@@ -22,7 +23,7 @@ function parsedTrace(opts: {
   return {
     meta: {
       traceId: opts.traceId,
-      instanceId: `inst-${opts.traceId}`,
+      instanceId: opts.instanceId ?? `inst-${opts.traceId}`,
       component: 'code/leetcode',
       status: opts.status ?? 'completed',
       timestamp: '2026-03-01T00:00:00.000Z',
@@ -109,6 +110,36 @@ describe('executeTool', () => {
       count: 1,
       avgScore: 0.9,
     })
+  })
+
+  it('aggregate_instances computes group averages with avgBelow/avgAtLeast bounds', () => {
+    // Mixed 0/1 rewards: 'g-third' averages 1/3 although no single trace scores fractionally.
+    const ctx = makeCtx([
+      parsedTrace({ traceId: 'a1', instanceId: 'g-third', step: 125, score: 1 }),
+      parsedTrace({ traceId: 'a2', instanceId: 'g-third', step: 125, score: 0 }),
+      parsedTrace({ traceId: 'a3', instanceId: 'g-third', step: 125, score: 0 }),
+      parsedTrace({ traceId: 'b1', instanceId: 'g-high', step: 125, score: 1 }),
+      parsedTrace({ traceId: 'c1', instanceId: 'g-other-step', step: 200, score: 0 }),
+    ])
+    const out = executeTool(ctx, 'aggregate_instances', { step: 125, avgBelow: 0.5 }) as {
+      total: number
+      rows: Array<Record<string, unknown>>
+    }
+    expect(out.total).toBe(1)
+    expect(out.rows[0]).toMatchObject({
+      instanceId: 'g-third',
+      component: 'code/leetcode',
+      steps: [125],
+      rollouts: 3,
+      minScore: 0,
+      maxScore: 1,
+    })
+    expect(out.rows[0].avgScore).toBeCloseTo(1 / 3, 5)
+
+    const atLeast = executeTool(ctx, 'aggregate_instances', { avgAtLeast: 0.5 }) as {
+      rows: Array<{ instanceId: string }>
+    }
+    expect(atLeast.rows.map((r) => r.instanceId)).toEqual(['g-high'])
   })
 
   it('aggregate rejects an unknown groupBy', () => {
@@ -204,6 +235,34 @@ describe('runAnalysis', () => {
     expect(params.model).toBe('claude-sonnet-5')
     expect(String(params.system)).toContain('emit_report')
     expect(String(params.system)).toContain('score (number)')
+  })
+
+  it('dispatches aggregate_instances through the loop and documents it in the system prompt', async () => {
+    const ctx = makeCtx([
+      parsedTrace({ traceId: 'a1', instanceId: 'g-third', step: 125, score: 1 }),
+      parsedTrace({ traceId: 'a2', instanceId: 'g-third', step: 125, score: 0 }),
+      parsedTrace({ traceId: 'a3', instanceId: 'g-third', step: 125, score: 0 }),
+      parsedTrace({ traceId: 'b1', instanceId: 'g-high', step: 125, score: 1 }),
+    ])
+    const create: CreateMock = vi
+      .fn()
+      .mockResolvedValueOnce(toolUseResponse('aggregate_instances', { step: 125, avgBelow: 0.5 }))
+      .mockResolvedValueOnce(toolUseResponse('emit_report', { summary: 'done', findings: [] }))
+    const result = await runAnalysis(
+      ctx,
+      'at step 125, the groups with avg rollout reward < 0.5',
+      fakeClient(create),
+    )
+    expect(result.steps.map((s) => s.tool)).toEqual(['aggregate_instances', 'emit_report'])
+
+    const [params] = create.mock.calls[1]
+    expect(String(params.system)).toContain('aggregate_instances')
+    const blocks = params.messages[2].content as Array<{ content: string }>
+    const payload = JSON.parse(blocks[0].content) as {
+      rows: Array<{ instanceId: string; avgScore: number }>
+    }
+    expect(payload.rows.map((r) => r.instanceId)).toEqual(['g-third'])
+    expect(payload.rows[0].avgScore).toBeCloseTo(1 / 3, 5)
   })
 
   it('stops at the 8-turn cap and wraps the last text as the summary', async () => {

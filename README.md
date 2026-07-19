@@ -34,7 +34,7 @@ npm run build && npm start   # serves the built SPA + API on :8787
    (checkbox multi-select filters), all trace filters, and drag-and-drop import. The main pane
    shows reward-by-checkpoint curves (click a point to filter that step), the per-component
    analytics table, and the trace table. Click any row → a resizable preview drawer slides in.
-2. **Read a failure** — try `termbench-i09-s200-r02`: the conversation shows a **malformed
+2. **Read a failure** — try `termbench-i08-s255-r03`: the conversation shows a **malformed
    tool-call JSON** in a loud red block, followed by the error result. The step-grouped cards
    keep reasoning collapsed inside each response; `Expand all / Collapse all` in the toolbar.
 3. **Profile a slow trace** — open any trace's **Timeline** tab: a nested span tree

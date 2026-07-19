@@ -195,7 +195,7 @@ export function SidebarFilters({
           className={INPUT_CLASS}
         />
       </Field>
-      <AiFilterInput setParam={setParam} />
+      <AiFilterInput />
       <Field label="Presets">
         <select
           className={SELECT_CLASS}

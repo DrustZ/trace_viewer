@@ -46,6 +46,35 @@ function groupByInstance(items: TraceSummary[]): InstanceGroup[] {
   })
 }
 
+/** Group-average bound params: applied AFTER grouping, on each group's avgScore. */
+const GROUP_AVG_BOUNDS = [
+  ['groupAvgLt', (avg: number, bound: number) => avg < bound],
+  ['groupAvgLte', (avg: number, bound: number) => avg <= bound],
+  ['groupAvgGt', (avg: number, bound: number) => avg > bound],
+  ['groupAvgGte', (avg: number, bound: number) => avg >= bound],
+] as const
+
+/**
+ * Filters instance groups by avgScore bounds (groupAvgLt/Lte/Gt/Gte). The
+ * per-trace filter DSL cannot express group averages (e.g. "groups with avg
+ * reward < 0.5" over 0/1 scores); these bounds act on the grouped rows.
+ * Groups with a null avgScore are excluded by any bound.
+ */
+function applyGroupAvgBounds(
+  groups: InstanceGroup[],
+  query: Record<string, unknown>,
+): InstanceGroup[] {
+  let out = groups
+  for (const [param, passes] of GROUP_AVG_BOUNDS) {
+    const raw = firstParam(query[param])
+    if (raw === undefined || raw === '') continue
+    const bound = Number(raw)
+    if (!Number.isFinite(bound)) continue
+    out = out.filter((g) => g.avgScore !== null && passes(g.avgScore, bound))
+  }
+  return out
+}
+
 export function tracesRoutes(ctx: RouteCtx): Router {
   const router = Router()
 
@@ -59,7 +88,8 @@ export function tracesRoutes(ctx: RouteCtx): Router {
     const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0
     const page = items.slice(offset, offset + limit)
     if (firstParam(req.query.groupBy) === 'instance') {
-      res.json({ total, groups: groupByInstance(page) } satisfies GroupedTracesResponse)
+      const groups = applyGroupAvgBounds(groupByInstance(page), req.query)
+      res.json({ total, groups } satisfies GroupedTracesResponse)
       return
     }
     res.json({ total, items: page } satisfies TracesListResponse)

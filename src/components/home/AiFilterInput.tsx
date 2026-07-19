@@ -1,7 +1,16 @@
 import { encodeFilterSet } from '@shared/filter/parse'
+import type { AiFilterResponse } from '@shared/schema/api'
 import { useState } from 'react'
 import { useAiFilter } from '../../api/hooks'
-import type { ListParamKey } from '../../state/filterParams'
+import { type ListParamPatch, useListParams } from '../../state/filterParams'
+
+/**
+ * The server passes groupByInstance as an additive field on the ai-filter
+ * response (group-average requests are inexpressible in the per-trace DSL and
+ * surface as instance grouping instead). Typed locally to keep the shared
+ * contract untouched.
+ */
+type AiFilterResult = AiFilterResponse & { groupByInstance?: boolean }
 
 function Spinner() {
   return (
@@ -19,20 +28,25 @@ function Spinner() {
   )
 }
 
-export function AiFilterInput({
-  setParam,
-}: {
-  setParam: (key: ListParamKey, value: string | undefined) => void
-}) {
+export function AiFilterInput() {
   const [query, setQuery] = useState('')
   const ai = useAiFilter()
+  // Batch setter: filters + group must land in one URL update (sequential
+  // setParam calls in the same tick see stale search params).
+  const { setParams } = useListParams()
 
   const submit = () => {
     const q = query.trim()
     if (q === '' || ai.isPending) return
     ai.mutate(q, {
       // Replace (not merge) the filters param: predictable, matches the explanation shown.
-      onSuccess: (result) => setParam('filters', encodeFilterSet(result.filter) || undefined),
+      onSuccess: (result) => {
+        const patch: ListParamPatch = { filters: encodeFilterSet(result.filter) || undefined }
+        // Group-average requests are per-trace-inexpressible; the server asks
+        // us to group by instance so avg scores appear on the group rows.
+        if ((result as AiFilterResult).groupByInstance) patch.group = 'instance'
+        setParams(patch)
+      },
     })
   }
 

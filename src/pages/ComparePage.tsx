@@ -435,7 +435,8 @@ export default function ComparePage() {
           </datalist>
           <span className="font-normal normal-case tracking-normal text-slate-500">
             {instanceOptions.length} instances discovered (first {INSTANCE_SCAN_LIMIT} scanned) ·
-            best rollout = highest score at the latest matched step
+            compares the two runs' policy checkpoints step by step · best rollout = highest score at
+            the latest matched step
           </span>
         </label>
 

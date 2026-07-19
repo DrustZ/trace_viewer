@@ -164,18 +164,20 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
     return undefined
   }, [trace.messages])
 
-  // Why there is no score — shown under the badge so a bare "—" never stands alone.
+  // Why the score is missing (or zero) — shown under the badge so a bare "—"
+  // or an unexplained 0 never stands alone. Budget-exhausted rollouts are
+  // graded 0, so that note must not hide behind the null-score branch.
   let scoreNote: { text: string; cls: string } | undefined
-  if (stats.score === null) {
+  if (endReason === 'budget_exceeded' && (stats.score === null || stats.score === 0)) {
+    scoreNote = {
+      text: 'score 0 — budget exhausted before a final answer',
+      cls: 'text-amber-700',
+    }
+  } else if (stats.score === null) {
     if (meta.status === 'executing') {
       scoreNote = { text: 'ungraded — rollout still executing', cls: 'text-blue-600' }
     } else if (meta.status === 'failed' && lastToolError?.includes('Cancelled')) {
       scoreNote = { text: 'ungraded — run cancelled before grading', cls: 'text-slate-500' }
-    } else if (endReason === 'budget_exceeded') {
-      scoreNote = {
-        text: 'score 0 — budget exhausted before a final answer',
-        cls: 'text-amber-700',
-      }
     } else {
       scoreNote = { text: 'ungraded', cls: 'text-slate-500' }
     }

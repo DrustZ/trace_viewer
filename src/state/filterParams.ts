@@ -15,6 +15,8 @@ const LIST_PARAM_KEYS = [
   'sort',
   'order',
   'group',
+  'groupAvgLt',
+  'groupAvgGte',
   'limit',
 ] as const
 
@@ -36,6 +38,8 @@ export function searchToListParams(search: URLSearchParams): ListParams {
     sort: get('sort'),
     order: get('order'),
     groupBy: search.get('group') === 'instance' ? 'instance' : undefined,
+    groupAvgLt: get('groupAvgLt'),
+    groupAvgGte: get('groupAvgGte'),
     limit: Number.isNaN(limit) ? undefined : limit,
   }
 }

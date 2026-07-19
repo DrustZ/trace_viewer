@@ -1,11 +1,12 @@
 import 'dotenv/config'
+import pkg from '../package.json'
 import { createApp } from './app'
 import { scanAll, watch } from './store/scan'
 import { TraceStore } from './store/traceStore'
 
 const port = Number(process.env.PORT ?? 8787)
 const store = new TraceStore()
-const app = createApp({ store })
+const app = createApp({ store, version: pkg.version })
 
 // Progressive boot: listen immediately; the corpus streams in behind /api/meta progress.
 scanAll(store)

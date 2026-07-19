@@ -111,15 +111,25 @@ export function computeStats(
     turns,
     toolUses,
     sandboxExecutions,
-    thinkingPortion: outputTokens > 0 ? thinkingTokens / outputTokens : 0,
+    thinkingPortion: thinkingPortionOf(thinkingTokens, outputTokens),
     durationMs,
     ...overrides,
   }
   // thinkingPortion follows token overrides unless explicitly overridden itself.
   if (overrides && !('thinkingPortion' in overrides)) {
-    stats.thinkingPortion = stats.outputTokens > 0 ? stats.thinkingTokens / stats.outputTokens : 0
+    stats.thinkingPortion = thinkingPortionOf(stats.thinkingTokens, stats.outputTokens)
   }
   return stats
+}
+
+/**
+ * Share of output tokens spent thinking, clamped to [0, 1] — estimated
+ * thinking tokens (chars/4) can exceed an exact outputTokens override from a
+ * source's usage block, and a portion above 100% is never meaningful.
+ */
+function thinkingPortionOf(thinkingTokens: number, outputTokens: number): number {
+  if (outputTokens <= 0) return 0
+  return Math.min(1, thinkingTokens / outputTokens)
 }
 
 function computeDuration(messages: Message[]): number | undefined {

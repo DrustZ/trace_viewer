@@ -106,7 +106,7 @@ for orders of magnitude more:
 
 - **Already built for scale**: progressive boot scan (serve in <1s, stream the corpus in
   batches with visible progress); every list/filter/sort/aggregate runs on summaries only —
-  message bodies travel only on single-trace fetch; search index caps text per trace;
+  message bodies travel only on single-trace fetch; search index caps text per message;
   aggregates memoize per store version; the huge-trace path (virtualization, clamps, capped
   span/token rendering) is stress-tested with a 3.5 MB / 400-turn rollout.
 - **At ~100k traces**: keep the architecture, swap residency — summaries stay in memory,
@@ -175,7 +175,7 @@ Playwright E2E suite.
 | Brief item | Where it lives |
 |---|---|
 | Load by paste / upload / URL | Import dialog (3 tabs), sidebar drag-and-drop, watched `data/` dir; SSRF-guarded server fetch |
-| Conversation clearly by message type | Role/channel color coding, step-grouped responses, input-left / response-right alignment |
+| Conversation clearly by message type | Role/channel color coding, step-grouped responses, uniform full-width cards (left/right chat alignment was tried and reverted — see §2) |
 | Very long traces | Virtualized everything; 3.5 MB / 400-turn stress trace ships in-corpus; minimap navigation; content clamps; lazy raw |
 | Stats about the trace | Per-trace metrics strip, Metadata tab, compact-mode metrics panel (token breakdown, avg neg log-prob); corpus tiles / component table / reward curves |
 | More than one trace format | native + harmony + openai-chat connectors behind an auto-detecting registry |

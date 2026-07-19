@@ -190,6 +190,67 @@ describe('api', () => {
     expect(first.items).toHaveLength(3)
   })
 
+  it('GET /api/traces?groupBy=instance applies groupAvg bounds on the group averages', async () => {
+    // Mixed 0/1 rewards: instance 'g-third' averages 1/3 even though no single
+    // trace has a fractional score — per-trace score.lt.0.5 cannot find it honestly.
+    const entry = (traceId: string, instanceId: string, score?: number) => ({
+      meta: {
+        traceId,
+        instanceId,
+        component: 'code/leetcode',
+        status: 'completed',
+        timestamp: '2026-03-01T00:00:00.000Z',
+        checkpointStep: 125,
+        split: 'train',
+        sourceFormat: 'native',
+      },
+      messages: [{ id: '', role: 'user', content: 'task' }],
+      ...(score !== undefined ? { stats: { score } } : {}),
+    })
+    const fixture = JSON.stringify([
+      entry('g-third-r1', 'g-third', 1),
+      entry('g-third-r2', 'g-third', 0),
+      entry('g-third-r3', 'g-third', 0),
+      entry('g-high-r1', 'g-high', 1),
+      entry('g-high-r2', 'g-high', 1),
+      entry('g-null-r1', 'g-null'),
+    ])
+    const store = new TraceStore()
+    for (const parsed of parseAny(fixture, { fallbackTimestamp: SEED_FALLBACK_TS }).traces) {
+      store.upsert(parsed)
+    }
+    const groupApp = createApp({ store, importDir, dataRoots: [scanRoot] })
+
+    const below = await request(groupApp).get(
+      '/api/traces?groupBy=instance&step=125&groupAvgLt=0.5',
+    )
+    expect(below.status).toBe(200)
+    const belowGroups = below.body.groups as Array<{
+      instanceId: string
+      count: number
+      avgScore: number | null
+    }>
+    // 0.33-avg group included; perfect group and null-avg group excluded by the bound.
+    expect(belowGroups.map((g) => g.instanceId)).toEqual(['g-third'])
+    expect(belowGroups[0].count).toBe(3)
+    expect(belowGroups[0].avgScore).toBeCloseTo(1 / 3, 5)
+
+    // The per-trace DSL alone distorts the group: score.lt.0.5 drops the
+    // score-1 rollout, so the group appears with count 2 and avgScore 0.
+    const perTrace = await request(groupApp).get(
+      '/api/traces?groupBy=instance&step=125&filters=score.lt.0.5',
+    )
+    const distorted = perTrace.body.groups.find(
+      (g: { instanceId: string }) => g.instanceId === 'g-third',
+    )
+    expect(distorted).toMatchObject({ count: 2, avgScore: 0 })
+
+    const atLeast = await request(groupApp).get('/api/traces?groupBy=instance&groupAvgGte=0.5')
+    expect((atLeast.body.groups as Array<{ instanceId: string }>).map((g) => g.instanceId)).toEqual(
+      ['g-high'],
+    )
+  })
+
   it('GET /api/traces?q= unions substring and search-index matches', async () => {
     const bySubstring = await request(app).get('/api/traces?q=leetcode')
     expect(bySubstring.body.total).toBe(3)

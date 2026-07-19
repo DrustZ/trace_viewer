@@ -32,6 +32,10 @@ export interface ListParams {
   sort?: string
   order?: string
   groupBy?: string
+  /** With groupBy=instance: keep only groups whose avgScore < this bound. */
+  groupAvgLt?: string
+  /** With groupBy=instance: keep only groups whose avgScore >= this bound. */
+  groupAvgGte?: string
   limit?: number
   offset?: number
 }
@@ -93,11 +97,11 @@ export function useNeighbors(traceId: string | undefined, params: ListParams) {
   })
 }
 
-// FIXME(encode): traceId is interpolated unencoded below — wrap with encodeURIComponent (hook owned by another track).
 export function useSiblings(traceId: string | undefined) {
   return useQuery({
     queryKey: ['siblings', traceId],
-    queryFn: () => apiGet<TraceSummary[]>(`/api/traces/${traceId}/siblings`),
+    queryFn: () =>
+      apiGet<TraceSummary[]>(`/api/traces/${encodeURIComponent(traceId ?? '')}/siblings`),
     enabled: !!traceId,
   })
 }
