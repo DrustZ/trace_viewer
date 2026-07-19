@@ -1,0 +1,23 @@
+import { chromium } from 'playwright'
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const errs = []
+page.on('pageerror', e => errs.push(e.message))
+await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' })
+const rowsBefore = await page.locator('[data-testid="trace-row"]').count()
+const input = page.locator('[data-testid="ai-filter"]')
+await input.fill('failed swebench traces with score below 0.2')
+await input.press('Enter')
+// LLM call — wait for source badge
+await page.waitForSelector('[data-testid="ai-filter-source"]', { timeout: 30000 })
+await page.waitForTimeout(1200)
+const badge = await page.locator('[data-testid="ai-filter-source"]').textContent()
+const chips = await page.locator('[data-testid="filter-chip"]').allTextContents()
+const rowsAfter = await page.locator('[data-testid="trace-row"]').count()
+console.log('source badge:', JSON.stringify(badge))
+console.log('chips:', JSON.stringify(chips))
+console.log('rows before:', rowsBefore, 'after:', rowsAfter)
+console.log('url:', page.url())
+await page.screenshot({ path: '/tmp/v05_aifilter.png' })
+if (errs.length) console.log('PAGEERRORS:', errs.join('; '))
+await browser.close()

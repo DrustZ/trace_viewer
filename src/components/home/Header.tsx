@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { useMeta, useRefresh } from '../../api/hooks'
 import { formatNumber } from '../common/format'
+import { GlobalSearchBox } from './GlobalSearchBox'
+import { ImportDialog } from './ImportDialog'
 
 function ReloadIcon({ spinning }: { spinning: boolean }) {
   return (
@@ -22,6 +25,7 @@ function ReloadIcon({ spinning }: { spinning: boolean }) {
 export function Header() {
   const meta = useMeta()
   const refresh = useRefresh()
+  const [importOpen, setImportOpen] = useState(false)
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
@@ -34,16 +38,28 @@ export function Header() {
               : 'Loading…'}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => refresh.mutate()}
-          disabled={refresh.isPending}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          <ReloadIcon spinning={refresh.isPending} />
-          Reload
-        </button>
+        <div className="flex items-center gap-2">
+          <GlobalSearchBox />
+          <button
+            type="button"
+            data-testid="import-open"
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Import
+          </button>
+          <button
+            type="button"
+            onClick={() => refresh.mutate()}
+            disabled={refresh.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <ReloadIcon spinning={refresh.isPending} />
+            Reload
+          </button>
+        </div>
       </div>
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </header>
   )
 }

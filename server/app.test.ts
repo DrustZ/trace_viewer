@@ -2,7 +2,7 @@ import { promises as fs, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import request from 'supertest'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseAny } from '../shared/connectors/registry'
 import { createApp } from './app'
 import { TraceStore } from './store/traceStore'
@@ -297,6 +297,8 @@ describe('api', () => {
   })
 
   it('POST /api/ai-filter answers with rules-based filters', async () => {
+    // Force the rules path even when the shell exports a real ANTHROPIC_API_KEY.
+    vi.stubEnv('ANTHROPIC_API_KEY', '')
     const res = await request(app)
       .post('/api/ai-filter')
       .send({ query: 'failed traces with score under 0.5' })
@@ -306,6 +308,7 @@ describe('api', () => {
     expect(res.body.filter.conditions).toContainEqual({ key: 'status', op: 'eq', value: 'failed' })
     const missing = await request(app).post('/api/ai-filter').send({})
     expect(missing.status).toBe(400)
+    vi.unstubAllEnvs()
   })
 
   it('responds 400 to malformed JSON bodies', async () => {

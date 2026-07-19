@@ -84,3 +84,29 @@ E2E verify agent: 17 endpoint checks PASS, 6 Playwright screenshots judged, huge
   defaults; revisit only if it confuses the demo story.
 - `data/imported/` is runtime state — clean test artifacts before packaging.
 - Verify agents leave the dev server running at :5173 (pid in /tmp/tv_dev.pid, log /tmp/tv_dev.log).
+
+## 2026-07-19 — v0.4: user-feedback rework (done, commit 99c65ac)
+
+User tested v0.3 in the browser; this round is their feedback verbatim → product:
+- Fixed top region (tiles / reward curves / hierarchical component table, each a collapsible
+  section persisted to localStorage) with only the trace table scrolling
+- Reward curves: dense checkpoint grid (every 5 steps → 61 train points, 12 test evals) so the
+  chart reads as real training progress; click a point filters that step
+- Component table: category ▸ dataset hierarchy, count-weighted rollups, split control,
+  sparklines, row click filters
+- Trace preview drawer: right slide-over (?peek= in URL), drag-resizable, Expand → full page;
+  group-by-instance header rows show per-column averages aligned under the table columns
+- Conversation: TRACE SUMMARY panel (score chips / ground truth / judge output / status badges),
+  system+developer messages now exist in data AND render (collapsed with explicit affordance),
+  distinct per-type colors (system slate / user blue / reasoning violet / tool-call indigo /
+  tool-result cyan / final emerald)
+- Data semantics: `executing` only at the training frontier (max checkpoint step) — a finished
+  experiment contains only completed/failed
+
+**Notes to remember**
+- Verify-agent false alarm: "all swebench traces hasError" was wrong (19/159 measured); failing
+  pytest first-runs are correctly isError=false — only tool malfunctions set isError.
+- ui-debug.ts first hit after HMR of a new dep can race vite's deps prebundle
+  (ERR_ABORTED on recharts.js) — retry with a longer --wait.
+- generate.test.ts asserts executing traces sit at the max checkpoint step (1-2 allowed at
+  small --scale).

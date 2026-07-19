@@ -1,7 +1,8 @@
-import { decodeFilterSet } from '@shared/filter/parse'
 import type { ListParams } from '../../api/hooks'
 import { useMeta } from '../../api/hooks'
 import type { ListParamKey } from '../../state/filterParams'
+import { AiFilterInput } from './AiFilterInput'
+import { FilterConditionBuilder } from './FilterConditionBuilder'
 
 const SORT_OPTIONS: Array<{ id: string; label: string }> = [
   { id: 'time', label: 'Time' },
@@ -45,14 +46,7 @@ function LabeledSelect({
   )
 }
 
-function describeFilters(encoded: string): string {
-  const { conditions } = decodeFilterSet(encoded)
-  if (conditions.length === 0) return encoded
-  return conditions
-    .map((c) => `${c.key} ${c.op} ${Array.isArray(c.value) ? c.value.join('|') : c.value}`)
-    .join(' & ')
-}
-
+// The 'filters' param is rendered as editable chips by FilterConditionBuilder, not here.
 function activeChips(params: ListParams): Array<{ key: ListParamKey; label: string }> {
   const chips: Array<{ key: ListParamKey; label: string }> = []
   const push = (key: ListParamKey, value: string | undefined, label?: string) => {
@@ -62,7 +56,6 @@ function activeChips(params: ListParams): Array<{ key: ListParamKey; label: stri
   push('step', params.step)
   push('component', params.component)
   push('status', params.status)
-  push('filters', params.filters, params.filters ? describeFilters(params.filters) : undefined)
   push('q', params.q)
   push('sort', params.sort)
   push('order', params.order)
@@ -141,6 +134,10 @@ export function FilterBar({ params, setParam, clearAll }: FilterBarProps) {
           />
           Group by instance
         </label>
+      </div>
+      <div className="mt-2 flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-slate-100 pt-2">
+        <AiFilterInput setParam={setParam} />
+        <FilterConditionBuilder params={params} setParam={setParam} />
       </div>
       {chips.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">

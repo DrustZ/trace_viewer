@@ -2,6 +2,7 @@ import type { Message } from '@shared/schema/types'
 import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import { formatDuration, formatTimestamp } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
+import { TokenLogprobText } from './TokenLogprobText'
 import { ToolCallBlock } from './ToolCallBlock'
 import { ToolResultBlock } from './ToolResultBlock'
 
@@ -95,13 +96,16 @@ function Body({
   kind,
   expanded,
   onToggle,
+  showLogprobs,
 }: {
   message: Message
   kind: Kind
   expanded: boolean
   onToggle: () => void
+  showLogprobs: boolean
 }) {
   const card = `rounded-lg border border-l-4 px-2 py-1.5 ${CARD[kind]}`
+  const hasTokens = showLogprobs && message.tokens !== undefined && message.tokens.length > 0
   switch (kind) {
     case 'system':
     case 'developer':
@@ -138,7 +142,15 @@ function Body({
     case 'final':
       return (
         <div className={card}>
-          <LongText text={message.content} label="ASSISTANT RESPONSE" tone={FOLD_TONES.final} />
+          {hasTokens && message.tokens ? (
+            <TokenLogprobText
+              tokens={message.tokens}
+              text={message.content}
+              className="px-1.5 py-0.5"
+            />
+          ) : (
+            <LongText text={message.content} label="ASSISTANT RESPONSE" tone={FOLD_TONES.final} />
+          )}
         </div>
       )
     case 'toolCall':
@@ -150,6 +162,20 @@ function Body({
           {message.toolCalls?.map((call) => (
             <ToolCallBlock key={call.id} call={call} />
           ))}
+          {hasTokens && message.tokens && (
+            <div
+              className="rounded-md border border-indigo-200 bg-indigo-50/30 px-2 py-1.5"
+              data-testid="arguments-logprobs"
+            >
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
+                Arguments logprobs
+              </p>
+              <TokenLogprobText
+                tokens={message.tokens}
+                text={message.content.length > 0 ? message.content : message.toolCalls?.[0]?.arguments}
+              />
+            </div>
+          )}
         </div>
       )
     default:
@@ -162,14 +188,17 @@ export function MessageCard({
   isFirstOfStep,
   bodyExpanded,
   onToggleBody,
+  showLogprobs = false,
 }: {
   message: Message
   isFirstOfStep: boolean
   bodyExpanded: boolean
   onToggleBody: () => void
+  showLogprobs?: boolean
 }) {
   const kind = kindOf(message)
   const chip = CHIP[kind]
+  const hasTokens = message.tokens !== undefined && message.tokens.length > 0
   return (
     <div className="flex gap-3 py-1.5" data-testid="message-card" data-kind={kind}>
       <div className="flex w-24 shrink-0 flex-col items-end gap-1 pt-1.5">
@@ -185,7 +214,13 @@ export function MessageCard({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <Body message={message} kind={kind} expanded={bodyExpanded} onToggle={onToggleBody} />
+        <Body
+          message={message}
+          kind={kind}
+          expanded={bodyExpanded}
+          onToggle={onToggleBody}
+          showLogprobs={showLogprobs}
+        />
         {message.judgeOutput && (
           <div className="mt-2 rounded-lg border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 px-3 py-2">
             <p className="text-[10px] font-semibold tracking-wide text-amber-700">JUDGE</p>
@@ -195,6 +230,15 @@ export function MessageCard({
           </div>
         )}
         <div className="mt-1 flex items-center justify-end gap-2 text-xs text-slate-400">
+          {hasTokens && !showLogprobs && (
+            <span
+              className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+              title="Per-token logprobs available — enable the logprobs toggle to view"
+              data-testid="logprobs-available"
+            >
+              logprobs
+            </span>
+          )}
           <span>{formatTimestamp(message.timestamp)}</span>
           {message.durationMs !== undefined && <span>· {formatDuration(message.durationMs)}</span>}
           {message.score !== undefined && <ScoreBadge score={message.score} />}
