@@ -3,9 +3,9 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CompactMode } from './CompactMode'
 import { ConversationToolbar } from './ConversationToolbar'
-import { MessageCard } from './MessageCard'
+import { buildCallNameMap, MessageCard } from './MessageCard'
 import { StepCard } from './StepCard'
-import { Minimap } from './TimelineRail'
+import { TimelineMode } from './TimelineMode'
 import { TraceSummaryPanel } from './TraceSummaryPanel'
 import { buildUnits } from './unitize'
 
@@ -42,6 +42,10 @@ export function ConversationView({ trace }: { trace: Trace }) {
   // - reasoningOpen: nested reasoning widgets (default collapsed, always)
   const [foldOpen, setFoldOpen] = useState<Map<string, boolean>>(new Map())
   const [foldDefault, setFoldDefault] = useState(false)
+  // Standalone tool-result body folds. Separate default from system/developer: tool
+  // results read open by default, but Collapse all clamps them like everything else.
+  const [toolOpen, setToolOpen] = useState<Map<string, boolean>>(new Map())
+  const [toolDefault, setToolDefault] = useState(true)
   const [stepOverrides, setStepOverrides] = useState<Map<string, boolean>>(new Map())
   const [stepDefault, setStepDefault] = useState(true)
   const [reasoningOpen, setReasoningOpen] = useState<Map<string, boolean>>(new Map())
@@ -55,6 +59,10 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const messages = trace.messages
 
   const units = useMemo(() => buildUnits(messages), [messages])
+
+  // callId → tool name, so a standalone tool result can label its chip and pick the
+  // highlight language (python/bash/…) for its Rich view.
+  const callNames = useMemo(() => buildCallNameMap(messages), [messages])
 
   // messages[i] belongs to units[unitOfMessage[i]] — units partition messages in order.
   const unitOfMessage = useMemo(() => {
@@ -93,19 +101,6 @@ export function ConversationView({ trace }: { trace: Trace }) {
     return found
   }, [messages, query])
 
-  const totalDurationMs = useMemo(() => {
-    if (trace.stats.durationMs !== undefined) return trace.stats.durationMs
-    let sum = 0
-    let seen = false
-    for (const m of messages) {
-      if (m.durationMs !== undefined) {
-        sum += m.durationMs
-        seen = true
-      }
-    }
-    return seen ? sum : undefined
-  }, [trace.stats.durationMs, messages])
-
   const toggleFold = useCallback(
     (id: string) => {
       setFoldOpen((prev) => {
@@ -115,6 +110,17 @@ export function ConversationView({ trace }: { trace: Trace }) {
       })
     },
     [foldDefault],
+  )
+
+  const toggleTool = useCallback(
+    (id: string) => {
+      setToolOpen((prev) => {
+        const next = new Map(prev)
+        next.set(id, !(prev.get(id) ?? toolDefault))
+        return next
+      })
+    },
+    [toolDefault],
   )
 
   const toggleStep = useCallback(
@@ -144,6 +150,8 @@ export function ConversationView({ trace }: { trace: Trace }) {
     setStepOverrides(new Map())
     setFoldDefault(true)
     setFoldOpen(new Map())
+    setToolDefault(true)
+    setToolOpen(new Map())
   }, [])
 
   // Collapse all: every step card and system/developer fold closed AND every
@@ -153,6 +161,8 @@ export function ConversationView({ trace }: { trace: Trace }) {
     setStepOverrides(new Map())
     setFoldDefault(false)
     setFoldOpen(new Map())
+    setToolDefault(false)
+    setToolOpen(new Map())
     setReasoningOpen(new Map())
   }, [])
 
@@ -263,10 +273,11 @@ export function ConversationView({ trace }: { trace: Trace }) {
         compact={compact}
         onToggleCompact={toggleCompact}
       />
-      {/* outer wrapper anchors the non-scrolling minimap overlay */}
       <div className="relative min-h-0 flex-1">
         {compact ? (
           <CompactMode trace={trace} />
+        ) : timelineOpen ? (
+          <TimelineMode trace={trace} />
         ) : (
           <>
             {/* relative so listRef.offsetTop measures against the scroll container */}
@@ -308,6 +319,13 @@ export function ConversationView({ trace }: { trace: Trace }) {
                               reasoningOpen={reasoningOpen.get(unit.id) ?? false}
                               onToggleReasoning={() => toggleReasoning(unit.id)}
                             />
+                          ) : unit.message.role === 'tool' ? (
+                            <MessageCard
+                              message={unit.message}
+                              bodyExpanded={toolOpen.get(unit.id) ?? toolDefault}
+                              onToggleBody={() => toggleTool(unit.id)}
+                              toolName={callNames.get(unit.message.toolResult?.toolCallId ?? '')}
+                            />
                           ) : (
                             <MessageCard
                               message={unit.message}
@@ -322,26 +340,6 @@ export function ConversationView({ trace }: { trace: Trace }) {
                 </div>
               </div>
             </div>
-            {timelineOpen && (
-              <Minimap
-                units={units}
-                totalDurationMs={totalDurationMs}
-                scrollOffset={virtualizer.scrollOffset ?? 0}
-                viewportHeight={parentRef.current?.clientHeight ?? 0}
-                totalSize={virtualizer.getTotalSize()}
-                scrollMargin={virtualizer.options.scrollMargin}
-                onJump={(index) => {
-                  // Dynamic row heights: the first jump lands on estimates; re-align
-                  // once the target row has been measured.
-                  virtualizer.scrollToIndex(index, { align: 'start' })
-                  requestAnimationFrame(() =>
-                    requestAnimationFrame(() =>
-                      virtualizer.scrollToIndex(index, { align: 'start' }),
-                    ),
-                  )
-                }}
-              />
-            )}
           </>
         )}
       </div>

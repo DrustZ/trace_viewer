@@ -4,7 +4,6 @@ import { EvolutionTab } from './EvolutionTab'
 import { MetadataTab } from './MetadataTab'
 import { PlaygroundTab } from './PlaygroundTab'
 import { RawTab } from './RawTab'
-import { TimelineTab } from './TimelineTab'
 import { TraceChat } from './TraceChat'
 import { TraceHeader, type TraceTab } from './TraceHeader'
 
@@ -39,11 +38,6 @@ export function TraceView({
       />
       <div className="min-h-0 flex-1">
         {tab === 'conversation' && <ConversationView trace={trace} />}
-        {tab === 'timeline' && (
-          <div className="h-full overflow-y-auto">
-            <TimelineTab trace={trace} />
-          </div>
-        )}
         {tab === 'metadata' && (
           <div className="h-full overflow-y-auto">
             <MetadataTab trace={trace} />

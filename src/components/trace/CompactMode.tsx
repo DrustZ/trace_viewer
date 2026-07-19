@@ -1,6 +1,7 @@
 import type { Trace } from '@shared/schema/types'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../common/EmptyState'
+import { useResizableWidth } from '../common/useResizableWidth'
 import { MessageCard } from './MessageCard'
 import { StepCard } from './StepCard'
 import { TraceMetricsPanel } from './TraceMetricsPanel'
@@ -20,6 +21,11 @@ function toggleIn(prev: Map<string, boolean>, id: string, fallback: boolean): Ma
  */
 export function CompactMode({ trace }: { trace: Trace }) {
   const centerRef = useRef<HTMLDivElement>(null)
+  const { width, startResize, reset } = useResizableWidth('compact-rail', {
+    default: 240,
+    min: 160,
+    max: 480,
+  })
   const units = useMemo(() => buildUnits(trace.messages), [trace.messages])
   const flags = useMemo(() => units.map((unit) => unitFlags(unit, trace)), [units, trace])
   const [selected, setSelected] = useState(0)
@@ -69,7 +75,20 @@ export function CompactMode({ trace }: { trace: Trace }) {
     // biome-ignore lint/a11y/noNoninteractiveTabindex: focus target for ←/→ unit navigation
     // biome-ignore lint/a11y/noStaticElementInteractions: keyboard nav wrapper; rail cells/buttons are the accessible path
     <div data-testid="compact-mode" className="flex h-full" onKeyDown={onKeyDown} tabIndex={0}>
-      <TurnRail units={units} flags={flags} selected={index} onSelect={goto} />
+      <div
+        style={{ width }}
+        className="relative flex shrink-0 [&>[data-testid=turn-rail]]:!h-full [&>[data-testid=turn-rail]]:!w-full"
+      >
+        <TurnRail units={units} flags={flags} selected={index} onSelect={goto} />
+        <div
+          data-testid="pane-resize-compact"
+          aria-hidden="true"
+          title="Drag to resize · double-click to reset"
+          onPointerDown={startResize}
+          onDoubleClick={reset}
+          className="absolute top-0 right-0 z-10 h-full w-1.5 translate-x-1/2 cursor-col-resize touch-none hover:bg-blue-300"
+        />
+      </div>
       <div ref={centerRef} className="min-w-0 flex-1 overflow-y-auto px-4">
         <div className="flex items-center gap-2 py-2">
           <button

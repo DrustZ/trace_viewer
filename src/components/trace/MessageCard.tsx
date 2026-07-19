@@ -230,7 +230,12 @@ function Body({
             className="rounded-lg border border-slate-200 bg-white px-2 py-1.5"
           />
         ) : (
-          <ToolResultBlock message={message} toolName={toolName} />
+          <ToolResultBlock
+            message={message}
+            toolName={toolName}
+            expanded={expanded}
+            onToggle={onToggle}
+          />
         )}
       </div>
     )

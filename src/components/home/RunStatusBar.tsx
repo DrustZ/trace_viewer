@@ -25,15 +25,7 @@ function Spinner() {
 }
 
 /** Slim, non-scrolling status strip at the top of the main column. */
-export function RunStatusBar({
-  params,
-  sidebarOpen,
-  onToggleSidebar,
-}: {
-  params: ListParams
-  sidebarOpen: boolean
-  onToggleSidebar: () => void
-}) {
+export function RunStatusBar({ params }: { params: ListParams }) {
   const queryClient = useQueryClient()
   // Progressive scan: poll meta while the backend reports scanning, stop when done.
   const meta = useMeta({
@@ -70,17 +62,6 @@ export function RunStatusBar({
       data-testid="run-status-bar"
       className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-5 py-2"
     >
-      {!sidebarOpen && (
-        <button
-          type="button"
-          data-testid="statusbar-sidebar-toggle"
-          aria-label="Open sidebar"
-          onClick={onToggleSidebar}
-          className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
-        >
-          ☰
-        </button>
-      )}
       <span className="text-sm font-semibold text-slate-900">RL trace run · seed-42 corpus</span>
       {executing.data &&
         (runInProgress ? (

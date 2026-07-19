@@ -3,8 +3,12 @@
 // renamed ~21 layout classes (.stretchy → .katex-stretchy, …) — importing the root 0.18
 // stylesheet against 0.16 markup collapses \boxed{} borders, accents and struts.
 import '../../../node_modules/rehype-katex/node_modules/katex/dist/katex.min.css'
+// highlight.js token colours for fenced code blocks (github light — dark tokens on a
+// light surface, matching the app's slate theme; pre backgrounds are set below).
+import 'highlight.js/styles/github.css'
 import { Component, type ReactNode, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -93,7 +97,7 @@ const MD_STYLE = [
   'text-sm break-words',
   '[&_p]:my-1.5',
   '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
-  '[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-slate-900 [&_pre]:p-3 [&_pre]:text-xs [&_pre]:text-slate-100',
+  '[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-slate-200 [&_pre]:bg-slate-50 [&_pre]:p-3 [&_pre]:text-xs [&_pre]:text-slate-800',
   '[&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]',
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-inherit',
   '[&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5',
@@ -163,7 +167,10 @@ export function MarkdownContent({ text, className }: { text: string; className?:
   return (
     <div className={`${MD_STYLE} ${className ?? ''}`} data-testid="markdown-content">
       <MarkdownBoundary text={text}>
-        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeKatex, [rehypeHighlight, { ignoreMissing: true, detect: false }]]}
+        >
           {text}
         </ReactMarkdown>
       </MarkdownBoundary>

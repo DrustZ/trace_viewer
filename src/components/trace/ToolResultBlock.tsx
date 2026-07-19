@@ -1,10 +1,10 @@
 import type { Message } from '@shared/schema/types'
 import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import { formatDuration } from '../common/format'
-import { RichRawToggle, useViewMode } from '../common/MarkdownContent'
+import { MarkdownContent, RichRawToggle, useViewMode } from '../common/MarkdownContent'
 
-/** Output above this length is clamped behind the fold control. */
-const CLAMP = 2500
+/** Collapsed preview length — the one-line-ish clamp shown behind the fold. */
+const PREVIEW = 200
 
 const CYAN: FoldTone = {
   label: 'text-cyan-700',
@@ -17,29 +17,66 @@ const RED: FoldTone = {
   hover: 'hover:bg-red-100/70',
 }
 
-/** 'Rich' view for terminal output: fenced-code styling, not markdown parsing. */
-function CodeBlock({ text }: { text: string }) {
+/**
+ * Tool name → highlight.js language for code-producing tools. Their output is source
+ * or code-shaped, so it's wrapped in a fenced block of this language and highlighted.
+ */
+const TOOL_LANG: Record<string, string> = {
+  python: 'python',
+  run_tests: 'python',
+  run_test: 'python',
+  execute_code: 'python',
+  pytest: 'python',
+  bash: 'bash',
+  shell: 'bash',
+  sh: 'bash',
+}
+
+/** Language for fenced highlighting, or undefined when the output is plain terminal text. */
+function resolveLang(toolName: string | undefined, content: string): string | undefined {
+  if (/^diff --git /m.test(content) || /^@@ .* @@/m.test(content)) return 'diff'
+  if (toolName === undefined) return undefined
+  return TOOL_LANG[toolName.toLowerCase()]
+}
+
+/**
+ * 'Rich' rendering of tool output. Content that already carries fenced code, or comes
+ * from a code tool (python/run_tests/…), goes through MarkdownContent so rehype-highlight
+ * colours it by language; everything else stays as plain monospaced terminal text.
+ */
+function RichToolBody({ text, toolName }: { text: string; toolName?: string }) {
+  if (text.includes('```')) return <MarkdownContent text={text} />
+  const lang = resolveLang(toolName, text)
+  if (lang !== undefined) return <MarkdownContent text={`\`\`\`${lang}\n${text}\n\`\`\``} />
   return (
-    <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-slate-900 p-3 font-mono text-xs text-slate-100">
+    <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-800">
       {text}
     </pre>
   )
 }
 
 /**
- * Tool output card. Terminal output is not markdown, so 'Raw' is the default view;
- * the pill's 'Rich' renders fenced-code style instead. Choice is per message id,
+ * Tool output card. Defaults to the 'Rich' view: code-tool output is highlighted by
+ * language (fenced through MarkdownContent), plain terminal output stays monospaced.
+ * The 'Raw' pill drops back to unstyled text; the choice is per message id and
  * session-persistent (survives virtualization recycling).
+ *
+ * The body fold (expanded/onToggle) is lifted to ConversationView so Collapse/Expand all
+ * can clamp/open tool results alongside system/developer folds.
  */
 export function ToolResultBlock({
   message,
   /** Resolved by the parent from the trace's callId→name map; omitted ⇒ id-only chip. */
   toolName,
+  expanded,
+  onToggle,
 }: {
   message: Message
   toolName?: string
+  expanded: boolean
+  onToggle: () => void
 }) {
-  const [view, setView] = useViewMode(message.id, 'raw')
+  const [view, setView] = useViewMode(message.id, 'rich')
   const isError = message.toolResult?.isError ?? false
   const durationMs = message.toolResult?.durationMs
   const callId = message.toolResult?.toolCallId
@@ -79,25 +116,19 @@ export function ToolResultBlock({
         </span>
       </div>
       <div className="px-2 pb-1.5">
-        {message.content.length <= CLAMP ? (
-          view === 'rich' ? (
-            <CodeBlock text={message.content} />
-          ) : (
-            <div className="whitespace-pre-wrap break-words px-1.5 font-mono text-xs">
-              {message.content}
-            </div>
-          )
-        ) : (
-          <FoldSection
-            label="OUTPUT"
-            text={message.content}
-            tone={isError ? RED : CYAN}
-            mono
-            blockPreview
-            previewChars={CLAMP}
-            renderText={view === 'rich' ? (t) => <CodeBlock text={t} /> : undefined}
-          />
-        )}
+        <FoldSection
+          label="OUTPUT"
+          text={message.content}
+          tone={isError ? RED : CYAN}
+          mono
+          blockPreview
+          previewChars={PREVIEW}
+          expanded={expanded}
+          onToggle={onToggle}
+          renderText={
+            view === 'rich' ? (t) => <RichToolBody text={t} toolName={toolName} /> : undefined
+          }
+        />
       </div>
     </div>
   )

@@ -98,6 +98,10 @@ export function ConversationToolbar({
   const navCls =
     'h-7 w-7 rounded border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-40'
 
+  // Both focus modes replace the searchable virtualized list, so search + expand
+  // controls are inert there.
+  const busy = compact || timelineOpen
+
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-1.5">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -112,11 +116,11 @@ export function ConversationToolbar({
           }}
           placeholder="Search in trace…"
           data-testid="trace-search"
-          disabled={compact}
-          title={compact ? 'Search is unavailable in compact mode' : undefined}
+          disabled={busy}
+          title={busy ? 'Search is unavailable in this view' : undefined}
           className="h-7 w-64 max-w-full rounded border border-slate-200 px-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:opacity-50"
         />
-        {value !== '' && !compact && (
+        {value !== '' && !busy && (
           <>
             <span
               data-testid="search-count"
@@ -148,10 +152,10 @@ export function ConversationToolbar({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <ActionButton onClick={onExpandAll} testId="expand-all" disabled={compact}>
+        <ActionButton onClick={onExpandAll} testId="expand-all" disabled={busy}>
           Expand all
         </ActionButton>
-        <ActionButton onClick={onCollapseAll} testId="collapse-all" disabled={compact}>
+        <ActionButton onClick={onCollapseAll} testId="collapse-all" disabled={busy}>
           Collapse all
         </ActionButton>
         <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
@@ -163,7 +167,12 @@ export function ConversationToolbar({
         >
           Timeline
         </ToggleButton>
-        <ToggleButton pressed={compact} onClick={onToggleCompact} testId="toggle-compact">
+        <ToggleButton
+          pressed={compact}
+          onClick={onToggleCompact}
+          testId="toggle-compact"
+          disabled={timelineOpen}
+        >
           Compact
         </ToggleButton>
       </div>

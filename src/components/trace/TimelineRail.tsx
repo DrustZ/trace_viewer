@@ -2,10 +2,10 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { formatDuration } from '../common/format'
 import { type RenderUnit, stepHasToolCalls, unitDurationMs } from './unitize'
 
-type BarKind = 'user' | 'neutral' | 'toolCall' | 'toolResult' | 'toolError' | 'final'
+export type BarKind = 'user' | 'neutral' | 'toolCall' | 'toolResult' | 'toolError' | 'final'
 
 // Mirrors the card colors for continuity.
-function barKind(unit: RenderUnit): BarKind {
+export function barKind(unit: RenderUnit): BarKind {
   if (unit.kind === 'step') return stepHasToolCalls(unit) ? 'toolCall' : 'final'
   const m = unit.message
   if (m.role === 'tool') return m.toolResult?.isError ? 'toolError' : 'toolResult'
@@ -14,7 +14,7 @@ function barKind(unit: RenderUnit): BarKind {
 }
 
 // Base (unfocused) and focused fills per kind.
-const BAR: Record<BarKind, string> = {
+export const BAR: Record<BarKind, string> = {
   user: 'bg-blue-400',
   neutral: 'bg-slate-300',
   toolCall: 'bg-indigo-400',
@@ -22,7 +22,7 @@ const BAR: Record<BarKind, string> = {
   toolError: 'bg-red-400',
   final: 'bg-emerald-400',
 }
-const BAR_FOCUS: Record<BarKind, string> = {
+export const BAR_FOCUS: Record<BarKind, string> = {
   user: 'bg-blue-600',
   neutral: 'bg-slate-500',
   toolCall: 'bg-indigo-600',
@@ -31,23 +31,23 @@ const BAR_FOCUS: Record<BarKind, string> = {
   final: 'bg-emerald-600',
 }
 
-function kindLabel(unit: RenderUnit): string {
+export function kindLabel(unit: RenderUnit): string {
   if (unit.kind === 'step') return stepHasToolCalls(unit) ? 'step (tools)' : 'step (final)'
   return unit.message.role
 }
 
-const SAMPLE_CAP = 400
+export const SAMPLE_CAP = 400
 const GAP = 1
 const MIN_ROW = 4
 const MAX_ROW = 14
 
-function sampleIndices(count: number, cap: number): number[] {
+export function sampleIndices(count: number, cap: number): number[] {
   if (count <= cap) return Array.from({ length: count }, (_, i) => i)
   return Array.from({ length: cap }, (_, i) => Math.floor((i * count) / cap))
 }
 
 // Log-scaled so sub-second steps stay visible next to minute-long tool runs.
-function widthPct(durationMs: number | undefined, maxMs: number): number {
+export function widthPct(durationMs: number | undefined, maxMs: number): number {
   if (durationMs === undefined || durationMs <= 0 || maxMs <= 0) return 22
   return 22 + 78 * (Math.log10(durationMs + 1) / Math.log10(maxMs + 1))
 }

@@ -6,19 +6,11 @@ import { formatDuration, formatNumber, formatPercent } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { StatusPill } from '../common/StatusPill'
 
-export const TRACE_TABS = [
-  'conversation',
-  'timeline',
-  'metadata',
-  'evolution',
-  'playground',
-  'raw',
-] as const
+export const TRACE_TABS = ['conversation', 'metadata', 'evolution', 'playground', 'raw'] as const
 export type TraceTab = (typeof TRACE_TABS)[number]
 
 const TAB_LABELS: Record<TraceTab, string> = {
   conversation: 'Conversation',
-  timeline: 'Timeline',
   metadata: 'Metadata',
   evolution: 'Evolution',
   playground: 'Playground',
@@ -55,12 +47,10 @@ export function TraceHeader({
   const navigate = useNavigate()
   const { meta, stats } = trace
 
-  // Cheap tab counts only: messages are already loaded; span count comes from
-  // meta.extra.spans when the source provided one (Evolution would need a fetch — omitted).
-  const extraSpans = meta.extra?.spans
+  // Cheap tab counts only: messages are already loaded. (Profiling spans now live
+  // inside the Conversation view's Timeline sub-mode, not a standalone tab.)
   const tabCounts: Partial<Record<TraceTab, number>> = {
     conversation: trace.messages.length,
-    ...(Array.isArray(extraSpans) ? { timeline: extraSpans.length } : {}),
   }
 
   const backSearch = useMemo(() => {
