@@ -4,8 +4,10 @@ import { finalizeTrace } from '../../shared/stats/computeStats'
 
 export interface StoredTrace {
   trace: Trace
-  /** File the trace was loaded from; absent for traces seeded directly (tests, pasted imports pre-persist). */
+  /** File the trace was loaded from; absent for in-memory traces (tests, ephemeral imports). */
   sourcePath?: string
+  /** Original source text, kept in memory for ephemeral imports so the Raw view works without a file. */
+  rawText?: string
 }
 
 /** In-memory trace collection — the single source of truth behind every route. */
@@ -24,7 +26,7 @@ export class TraceStore {
   }
 
   /** Normalization happens here: every trace enters through finalizeTrace. */
-  upsert(parsed: ParsedTrace, sourcePath?: string): Trace {
+  upsert(parsed: ParsedTrace, sourcePath?: string, rawText?: string): Trace {
     const trace = finalizeTrace(
       parsed.meta,
       parsed.messages,
@@ -34,6 +36,7 @@ export class TraceStore {
     this.byId.set(trace.meta.traceId, {
       trace,
       ...(sourcePath !== undefined ? { sourcePath } : {}),
+      ...(rawText !== undefined ? { rawText } : {}),
     })
     this.version += 1
     return trace

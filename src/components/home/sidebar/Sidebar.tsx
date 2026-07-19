@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { type ListParams, useImportTrace, useMeta, useRefresh } from '../../../api/hooks'
+import { type ListParams, useImportTrace, useMeta } from '../../../api/hooks'
 import {
   hasActiveSelection,
   type ListParamKey,
@@ -41,24 +41,6 @@ function Chevron({ left }: { left: boolean }) {
   )
 }
 
-function ReloadIcon({ spinning }: { spinning: boolean }) {
-  return (
-    <svg
-      className={`h-3 w-3 ${spinning ? 'animate-spin' : ''}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-      <path d="M21 3v6h-6" />
-    </svg>
-  )
-}
-
 const BTN =
   'inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50'
 
@@ -78,7 +60,6 @@ export function Sidebar({
   clearAll: () => void
 }) {
   const meta = useMeta()
-  const refresh = useRefresh()
   const importTrace = useImportTrace()
   const [importOpen, setImportOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -171,16 +152,6 @@ export function Sidebar({
             className={BTN}
           >
             Import a trace
-          </button>
-          <button
-            type="button"
-            data-testid="reload"
-            onClick={() => refresh.mutate()}
-            disabled={refresh.isPending}
-            className={BTN}
-          >
-            <ReloadIcon spinning={refresh.isPending} />
-            Reload
           </button>
           <Link to="/compare" data-testid="compare-link" className={BTN}>
             Compare runs

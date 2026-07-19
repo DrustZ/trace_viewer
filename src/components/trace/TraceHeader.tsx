@@ -47,6 +47,15 @@ export function TraceHeader({
   const navigate = useNavigate()
   const { meta, stats } = trace
 
+  // Evolution tracks one instance across checkpoints — meaningless for a one-off
+  // imported trace, so drop that tab for imports.
+  const isImported = meta.extra?.run === 'imported'
+  const visibleTabs = isImported ? TRACE_TABS.filter((t) => t !== 'evolution') : TRACE_TABS
+  // Chat/message imports have no RL run/checkpoint/split — drop the synthetic
+  // default badges (step 0, train) so they don't read as real metadata.
+  const showStep = !(isImported && meta.checkpointStep === 0)
+  const showSplit = !(isImported && meta.sourceFormat !== 'native')
+
   // Cheap tab counts only: messages are already loaded. (Profiling spans now live
   // inside the Conversation view's Timeline sub-mode, not a standalone tab.)
   const tabCounts: Partial<Record<TraceTab, number>> = {
@@ -124,8 +133,8 @@ export function TraceHeader({
             <StatusPill status={meta.status} />
             <ScoreBadge score={stats.score} />
             <Badge>{meta.component}</Badge>
-            <Badge>step {meta.checkpointStep}</Badge>
-            <Badge>{meta.split}</Badge>
+            {showStep && <Badge>step {meta.checkpointStep}</Badge>}
+            {showSplit && <Badge>{meta.split}</Badge>}
             <Badge>{meta.sourceFormat}</Badge>
           </div>
           <div className="flex items-center gap-2">
@@ -158,7 +167,7 @@ export function TraceHeader({
           {formatPercent(stats.thinkingPortion)}
         </div>
         <nav className="mt-3 flex gap-5">
-          {TRACE_TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab}
               type="button"

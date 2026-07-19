@@ -109,6 +109,11 @@ export function tracesRoutes(ctx: RouteCtx): Router {
     asyncHandler(async (req, res) => {
       // asyncHandler erases the route-literal param inference; :id is always a string.
       const stored = ctx.store.get(String(req.params.id))
+      // Ephemeral imports keep their source text in memory (no file on disk).
+      if (stored?.rawText !== undefined) {
+        res.type('text/plain').send(stored.rawText)
+        return
+      }
       if (!stored?.sourcePath) {
         res.status(404).json({ error: 'raw source not available' })
         return

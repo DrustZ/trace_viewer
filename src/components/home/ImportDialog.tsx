@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useImportTrace } from '../../api/hooks'
 
@@ -55,7 +55,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [fileText, setFileText] = useState('')
   const [url, setUrl] = useState('')
   const importTrace = useImportTrace()
-  const navigate = useNavigate()
+  const [, setSearchParams] = useSearchParams()
   // Guards the auto-open effect so it fires once per successful import.
   const openedRef = useRef(false)
 
@@ -67,15 +67,24 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // On success, open the imported trace as its own full page — the home sidebar
-  // (runs / components / filters) doesn't apply to a one-off import.
+  // On success, open the imported trace in the right-hand drawer and close the
+  // dialog — the home view stays on the left so you can keep importing / loading
+  // runs. (The drawer's Expand button goes to the full trace page.)
   useEffect(() => {
     if (!importTrace.isSuccess || openedRef.current) return
     const first = importTrace.data.traceIds[0]
     if (!first) return
     openedRef.current = true
-    navigate(`/trace/${encodeURIComponent(first)}`)
-  }, [importTrace.isSuccess, importTrace.data, navigate])
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('peek', first)
+        return next
+      },
+      { replace: true },
+    )
+    onClose()
+  }, [importTrace.isSuccess, importTrace.data, onClose, setSearchParams])
 
   const submit = () => {
     if (importTrace.isPending) return
@@ -148,13 +157,10 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  const first = importTrace.data.traceIds[0]
-                  if (first) navigate(`/trace/${encodeURIComponent(first)}`)
-                }}
+                onClick={onClose}
                 className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               >
-                View first trace
+                View trace
               </button>
               <button
                 type="button"

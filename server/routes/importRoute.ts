@@ -166,9 +166,11 @@ export function importRoutes(ctx: RouteCtx): Router {
       // it always "imports and shows" instead of erroring on a duplicate.
       const first = result.traces[0]
       const sourceFormat = first.meta.sourceFormat
+      const rawLabel = source === 'pasted' ? 'imported (pasted)' : source
       for (const parsed of result.traces) {
         parsed.meta.extra = { ...(parsed.meta.extra ?? {}), run: 'imported' }
-        ctx.store.upsert(parsed, source === 'pasted' ? 'imported (pasted)' : source)
+        // Keep the original text in memory so the Raw view works (no file on disk).
+        ctx.store.upsert(parsed, rawLabel, text)
       }
 
       res.json({

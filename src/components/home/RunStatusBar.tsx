@@ -80,7 +80,7 @@ export function RunStatusBar({ params }: { params: ListParams }) {
             Run complete
           </span>
         ))}
-      <span className="min-w-0 flex-1 truncate text-center text-xs text-slate-500">
+      <span className="min-w-0 flex-1 truncate text-right text-xs text-slate-500">
         {active
           ? tiles.data && meta.data
             ? `Showing ${formatNumber(tiles.data.total)} of ${formatNumber(meta.data.traceCount)} traces · ${meta.data.components.length} components`
