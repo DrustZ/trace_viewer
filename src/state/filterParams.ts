@@ -98,6 +98,42 @@ export function hasActiveSelection(p: ListParams): boolean {
   return !!(p.filters || p.q || p.component || p.status || p.split || p.step)
 }
 
+/** Current numeric [min,max] bound for a key in the filters DSL, if any. */
+export function activeRange(params: ListParams, key: string): { min?: number; max?: number } {
+  const out: { min?: number; max?: number } = {}
+  for (const c of decodeFilterSet(params.filters).conditions) {
+    // The DSL round-trips values as strings; coerce numeric bounds back.
+    if (c.key !== key || (typeof c.value !== 'number' && typeof c.value !== 'string')) continue
+    const n = Number(c.value)
+    if (Number.isNaN(n)) continue
+    if (c.op === 'gte' || c.op === 'gt') out.min = n
+    else if (c.op === 'lte' || c.op === 'lt') out.max = n
+  }
+  return out
+}
+
+/**
+ * Patch that sets a [min,max] range on a numeric key: drops that key's existing
+ * range bounds, then adds gte/lte only for bounds tighter than the domain (so a
+ * full-range selection clears the filter). Every other condition is preserved.
+ */
+export function rangePatch(
+  params: ListParams,
+  key: string,
+  min: number,
+  max: number,
+  domainMin: number,
+  domainMax: number,
+): ListParamPatch {
+  const kept = decodeFilterSet(params.filters).conditions.filter(
+    (c) => !(c.key === key && (c.op === 'gte' || c.op === 'lte' || c.op === 'gt' || c.op === 'lt')),
+  )
+  const conditions: FilterCondition[] = [...kept]
+  if (min > domainMin) conditions.push({ key, op: 'gte', value: min })
+  if (max < domainMax) conditions.push({ key, op: 'lte', value: max })
+  return { filters: encodeFilterSet({ conditions }) || undefined }
+}
+
 export function useListParams() {
   const [search, setSearch] = useSearchParams()
   const params = useMemo(() => searchToListParams(search), [search])

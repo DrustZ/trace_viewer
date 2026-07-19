@@ -1,12 +1,13 @@
 import type { GroupedTracesResponse, InstanceGroup, TracesListResponse } from '@shared/schema/api'
 import type { TraceSummary } from '@shared/schema/types'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { type ListParams, useTraces } from '../../api/hooks'
-import type { ListParamPatch } from '../../state/filterParams'
+import { activeRange, type ListParamPatch, rangePatch } from '../../state/filterParams'
 import { EmptyState, ErrorState, LoadingState } from '../common/EmptyState'
 import { formatDuration, formatNumber, formatTimestamp } from '../common/format'
+import { RangeFilter } from '../common/RangeFilter'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { StatusPill } from '../common/StatusPill'
 import { useColumnWidths } from '../common/useColumnWidths'
@@ -56,6 +57,23 @@ const COLUMNS: Column[] = [
   { id: 'duration', label: 'Duration', sortKey: 'durationMs', align: 'right' },
   { id: 'time', label: 'Time', sortKey: 'time' },
 ]
+
+/** Numeric columns that support a header range-filter, mapped to their filter-DSL key. */
+interface RangeCol {
+  key: string
+  accessor: (t: TraceSummary) => number | null | undefined
+  step: number
+  fixedDomain?: [number, number]
+}
+const RANGE_COLS: Record<string, RangeCol> = {
+  score: { key: 'score', accessor: (t) => t.stats.score, step: 0.05, fixedDomain: [0, 1] },
+  step: { key: 'step', accessor: (t) => t.meta.checkpointStep, step: 1 },
+  turns: { key: 'turns', accessor: (t) => t.stats.turns, step: 1 },
+  tools: { key: 'toolUses', accessor: (t) => t.stats.toolUses, step: 1 },
+  outTok: { key: 'outputTokens', accessor: (t) => t.stats.outputTokens, step: 10 },
+  thinkTok: { key: 'thinkingTokens', accessor: (t) => t.stats.thinkingTokens, step: 10 },
+  duration: { key: 'durationMs', accessor: (t) => t.stats.durationMs, step: 100 },
+}
 
 type Row =
   | { kind: 'trace'; trace: TraceSummary; indent: boolean }
@@ -285,9 +303,27 @@ export function TraceTable({
 }) {
   const query = useTraces({ ...params, limit: params.limit ?? 2000 })
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [rangeCol, setRangeCol] = useState<string | null>(null)
   const location = useLocation()
   const parentRef = useRef<HTMLDivElement>(null)
   const { widths, startResize, resetCol } = useColumnWidths('traces', DEFAULT_WIDTHS)
+
+  // Close the open range-filter popover on Escape.
+  useEffect(() => {
+    if (!rangeCol) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setRangeCol(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [rangeCol])
+
+  const columnHasRange = (colId: string) => {
+    const cfg = RANGE_COLS[colId]
+    if (!cfg) return false
+    const r = activeRange(params, cfg.key)
+    return r.min !== undefined || r.max !== undefined
+  }
 
   const sort = params.sort ?? 'time'
   const order = params.order ?? 'desc'
@@ -324,6 +360,19 @@ export function TraceTable({
   if (query.isLoading || !query.data) return <LoadingState label="Loading traces…" />
 
   const data = query.data
+  // Range-slider domains come from the loaded rows (score is a fixed [0,1]).
+  const allTraces: TraceSummary[] = isGrouped(data)
+    ? data.groups.flatMap((g) => g.items)
+    : data.items
+  const domainFor = (colId: string): [number, number] => {
+    const cfg = RANGE_COLS[colId]
+    if (cfg.fixedDomain) return cfg.fixedDomain
+    const vals = allTraces.map(cfg.accessor).filter((v): v is number => v != null)
+    if (vals.length === 0) return [0, cfg.step]
+    const lo = Math.floor(Math.min(...vals))
+    const hi = Math.ceil(Math.max(...vals))
+    return lo === hi ? [lo, lo + cfg.step] : [lo, hi]
+  }
   const shown = isGrouped(data)
     ? data.groups.reduce((n, g) => n + g.items.length, 0)
     : data.items.length
@@ -346,6 +395,15 @@ export function TraceTable({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-1.5">
+      {/* Backdrop that dismisses an open range popover on outside click. */}
+      {rangeCol && (
+        <button
+          type="button"
+          aria-label="Close range filter"
+          className="fixed inset-0 z-20 cursor-default"
+          onClick={() => setRangeCol(null)}
+        />
+      )}
       <p className="shrink-0 text-xs text-slate-500">{countLine}</p>
       {rows.length === 0 ? (
         <EmptyState
@@ -397,6 +455,57 @@ export function TraceTable({
                       ) : (
                         <span className={base}>{label}</span>
                       )}
+                      {RANGE_COLS[col.id] && (
+                        <button
+                          type="button"
+                          data-testid={`range-toggle-${col.id}`}
+                          aria-label={`Filter ${col.label} by range`}
+                          title={`Filter ${col.label} by range`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setRangeCol(rangeCol === col.id ? null : col.id)
+                          }}
+                          className={`ml-0.5 shrink-0 ${
+                            columnHasRange(col.id)
+                              ? 'text-blue-600'
+                              : 'text-slate-300 hover:text-slate-600'
+                          }`}
+                        >
+                          <svg
+                            viewBox="0 0 16 16"
+                            aria-hidden="true"
+                            className="h-2.5 w-2.5"
+                            fill="currentColor"
+                          >
+                            <path d="M1.5 3h13l-5 6v4.5l-3 1.2V9l-5-6z" />
+                          </svg>
+                        </button>
+                      )}
+                      {rangeCol === col.id &&
+                        RANGE_COLS[col.id] &&
+                        (() => {
+                          const [dMin, dMax] = domainFor(col.id)
+                          const cfg = RANGE_COLS[col.id]
+                          return (
+                            <div className="absolute top-full right-0 z-30 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg">
+                              <RangeFilter
+                                label={col.label}
+                                domainMin={dMin}
+                                domainMax={dMax}
+                                step={cfg.step}
+                                value={activeRange(params, cfg.key)}
+                                onApply={(mn, mx) => {
+                                  setParams(rangePatch(params, cfg.key, mn, mx, dMin, dMax))
+                                  setRangeCol(null)
+                                }}
+                                onClear={() => {
+                                  setParams(rangePatch(params, cfg.key, dMin, dMax, dMin, dMax))
+                                  setRangeCol(null)
+                                }}
+                              />
+                            </div>
+                          )
+                        })()}
                       <div
                         data-testid={`col-resize-${col.id}`}
                         aria-hidden="true"
