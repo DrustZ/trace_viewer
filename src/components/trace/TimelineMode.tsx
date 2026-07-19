@@ -28,10 +28,12 @@ function toggleIn(prev: Map<string, boolean>, id: string, fallback: boolean): Ma
 export function TimelineMode({ trace }: { trace: Trace }) {
   const centerRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const { width, startResize, reset } = useResizableWidth('timeline', {
-    default: 400,
-    min: 260,
-    max: 720,
+  // Wide by default: the gantt bars are the point, so give them room (the name
+  // column is compact). Key bumped to reset any stale narrow persisted width.
+  const { width, startResize, reset } = useResizableWidth('timeline-v2', {
+    default: 620,
+    min: 340,
+    max: 1000,
   })
 
   const { spans, derived } = useMemo(() => buildSpanTree(trace), [trace])

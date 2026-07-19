@@ -69,8 +69,12 @@ export function SpanBar({
           selected ? 'bg-blue-50' : 'hover:bg-slate-50'
         }`}
       >
-        <div className="w-52 min-w-0 shrink-0" style={{ paddingLeft: depth * INDENT + 16 }}>
-          <div className="truncate text-xs font-medium text-slate-800">{span.name}</div>
+        {/* Compact name column so the gantt bar (the point of this view) dominates.
+            kind is a small inline prefix rather than a second line. */}
+        <div className="w-36 min-w-0 shrink-0" style={{ paddingLeft: depth * INDENT + 16 }}>
+          <div className="truncate text-xs font-medium text-slate-800" title={span.name}>
+            {span.name}
+          </div>
           <div className={`text-[9px] uppercase tracking-wide ${KIND_TEXT[span.kind]}`}>
             {span.kind}
           </div>
@@ -78,7 +82,7 @@ export function SpanBar({
         <div className="relative h-7 min-w-0 flex-1">
           <AxisGrid />
           <div
-            className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-sm ${
+            className={`absolute top-1/2 h-2.5 -translate-y-1/2 rounded-sm ${
               isRoot ? 'bg-blue-500' : KIND_BAR[span.kind]
             }`}
             style={{ left: `${left}%`, width: `max(2px, ${width}%)` }}
