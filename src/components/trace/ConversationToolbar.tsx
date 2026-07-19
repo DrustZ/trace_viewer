@@ -30,6 +30,27 @@ function ToggleButton({
   )
 }
 
+function ActionButton({
+  onClick,
+  testId,
+  children,
+}: {
+  onClick: () => void
+  testId: string
+  children: string
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      onClick={onClick}
+      className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
+    >
+      {children}
+    </button>
+  )
+}
+
 /** Slim non-scrolling bar above the message list: in-trace search + view toggles. */
 export function ConversationToolbar({
   onQueryChange,
@@ -37,6 +58,8 @@ export function ConversationToolbar({
   matchPos,
   onPrevMatch,
   onNextMatch,
+  onExpandAll,
+  onCollapseAll,
   showLogprobs,
   onToggleLogprobs,
   timelineOpen,
@@ -49,6 +72,10 @@ export function ConversationToolbar({
   matchPos: number
   onPrevMatch: () => void
   onNextMatch: () => void
+  /** Expands every step card; leaves reasoning widgets as they are. */
+  onExpandAll: () => void
+  /** Collapses every step card and closes all reasoning widgets. */
+  onCollapseAll: () => void
   showLogprobs: boolean
   onToggleLogprobs: () => void
   timelineOpen: boolean
@@ -112,6 +139,13 @@ export function ConversationToolbar({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
+        <ActionButton onClick={onExpandAll} testId="expand-all">
+          Expand all
+        </ActionButton>
+        <ActionButton onClick={onCollapseAll} testId="collapse-all">
+          Collapse all
+        </ActionButton>
+        <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
         <ToggleButton pressed={showLogprobs} onClick={onToggleLogprobs} testId="toggle-logprobs">
           Logprobs
         </ToggleButton>

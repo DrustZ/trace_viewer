@@ -1,29 +1,21 @@
-import type { Message } from '@shared/schema/types'
 import { useMemo } from 'react'
 import { formatDuration } from '../common/format'
+import { type RenderUnit, stepHasToolCalls, unitDurationMs } from './unitize'
 
-type RailKind = 'neutral' | 'reasoning' | 'toolCall' | 'toolResult' | 'toolError' | 'final'
+type RailKind = 'neutral' | 'toolCall' | 'toolResult' | 'toolError' | 'final'
 
-// Mirrors MessageCard's kind buckets for color continuity (T1 must not edit that file).
-function railKind(message: Message): RailKind {
-  switch (message.role) {
-    case 'user':
-    case 'system':
-    case 'developer':
-      return 'neutral'
-    case 'tool':
-      return message.toolResult?.isError ? 'toolError' : 'toolResult'
-    default: {
-      if ((message.channel ?? 'final') === 'analysis') return 'reasoning'
-      if (message.toolCalls?.length) return 'toolCall'
-      return 'final'
-    }
-  }
+// Mirrors the card colors for continuity: a step's bar takes the color of its
+// response (indigo when it calls tools, emerald for a final answer) — the
+// reasoning portion is not drawn separately.
+function railKind(unit: RenderUnit): RailKind {
+  if (unit.kind === 'step') return stepHasToolCalls(unit) ? 'toolCall' : 'final'
+  const m = unit.message
+  if (m.role === 'tool') return m.toolResult?.isError ? 'toolError' : 'toolResult'
+  return 'neutral' // user/system/developer
 }
 
 const BAR: Record<RailKind, string> = {
   neutral: 'bg-slate-300',
-  reasoning: 'bg-violet-300',
   toolCall: 'bg-indigo-300',
   toolResult: 'bg-cyan-400',
   toolError: 'bg-red-400',
@@ -36,22 +28,22 @@ function widthPct(durationMs: number, maxDurationMs: number): number {
   return (Math.log10(durationMs + 1) / Math.log10(maxDurationMs + 1)) * 100
 }
 
-/** Per-row rail cell: duration bar + label, physically aligned with its message card. */
+/** Per-row rail cell: duration bar + label, physically aligned with its render unit. */
 export function TimelineRailCell({
-  message,
+  unit,
   maxDurationMs,
 }: {
-  message: Message
+  unit: RenderUnit
   maxDurationMs: number
 }) {
-  const d = message.durationMs
+  const d = unitDurationMs(unit)
   return (
     <div className="w-[200px] pt-4 pr-1 pl-3">
       <div className="flex items-center gap-1.5">
         <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-sm bg-slate-100">
           {d !== undefined && (
             <div
-              className={`h-full rounded-sm ${BAR[railKind(message)]}`}
+              className={`h-full rounded-sm ${BAR[railKind(unit)]}`}
               style={{ width: `${widthPct(d, maxDurationMs)}%`, minWidth: 2 }}
             />
           )}
@@ -71,19 +63,19 @@ function sampleIndices(count: number, cap: number): number[] {
   return Array.from({ length: cap }, (_, i) => Math.floor((i * count) / cap))
 }
 
-/** Rail top: total duration + clickable per-message minimap. Sticky in the scroll container. */
+/** Rail top: total duration + clickable per-unit minimap. Sticky in the scroll container. */
 export function TimelineRailHeader({
-  messages,
+  units,
   maxDurationMs,
   totalDurationMs,
   onJump,
 }: {
-  messages: Message[]
+  units: RenderUnit[]
   maxDurationMs: number
   totalDurationMs: number | undefined
   onJump: (index: number) => void
 }) {
-  const sampled = useMemo(() => sampleIndices(messages.length, MINIMAP_CAP), [messages.length])
+  const sampled = useMemo(() => sampleIndices(units.length, MINIMAP_CAP), [units.length])
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
       <div className="flex items-baseline justify-between">
@@ -96,19 +88,20 @@ export function TimelineRailHeader({
       </div>
       <div data-testid="timeline-minimap" className="mt-1.5 max-h-60 overflow-y-auto">
         {sampled.map((index) => {
-          const m = messages[index]
+          const unit = units[index]
+          const d = unitDurationMs(unit)
           return (
             <button
-              key={m.id}
+              key={unit.id}
               type="button"
               onClick={() => onJump(index)}
-              title={`#${index + 1} · ${formatDuration(m.durationMs)}`}
-              aria-label={`Jump to message ${index + 1}`}
+              title={`#${index + 1} · ${formatDuration(d)}`}
+              aria-label={`Jump to unit ${index + 1}`}
               className="block h-[3px] w-full hover:bg-slate-100"
             >
               <span
-                className={`block h-full ${BAR[railKind(m)]}`}
-                style={{ width: `${widthPct(m.durationMs ?? 0, maxDurationMs)}%`, minWidth: 2 }}
+                className={`block h-full ${BAR[railKind(unit)]}`}
+                style={{ width: `${widthPct(d ?? 0, maxDurationMs)}%`, minWidth: 2 }}
               />
             </button>
           )

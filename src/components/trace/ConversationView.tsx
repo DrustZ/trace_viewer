@@ -3,8 +3,10 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ConversationToolbar } from './ConversationToolbar'
 import { MessageCard } from './MessageCard'
+import { StepCard } from './StepCard'
 import { TimelineRailCell, TimelineRailHeader } from './TimelineRail'
 import { TraceSummaryPanel } from './TraceSummaryPanel'
+import { buildUnits, unitDurationMs } from './unitize'
 
 const TIMELINE_KEY = 'tv.timeline.open'
 const MATCH_CAP = 500
@@ -23,9 +25,16 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const headRef = useRef<HTMLDivElement>(null)
   const railHeadRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  // Body fold state (system/developer/reasoning) lives here, keyed by message id —
-  // never inside recycled rows. Default is collapsed for those kinds.
-  const [expanded, setExpanded] = useState<Map<string, boolean>>(new Map())
+  // All expand state lives here, keyed by unit id (= first message id) — never
+  // inside recycled rows.
+  // - foldOpen: system/developer body folds on standalone cards (default collapsed)
+  // - step cards: `stepOverrides.get(id) ?? stepDefault` — Expand/Collapse all
+  //   just resets the overrides and flips the default
+  // - reasoningOpen: nested reasoning widgets (default collapsed, always)
+  const [foldOpen, setFoldOpen] = useState<Map<string, boolean>>(new Map())
+  const [stepOverrides, setStepOverrides] = useState<Map<string, boolean>>(new Map())
+  const [stepDefault, setStepDefault] = useState(true)
+  const [reasoningOpen, setReasoningOpen] = useState<Map<string, boolean>>(new Map())
   // Offset of the virtualized list inside the scroll container (summary panel height).
   // Fed to the virtualizer as scrollMargin, else visible ranges drift by that height.
   const [listOffset, setListOffset] = useState(0)
@@ -35,17 +44,18 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const [timelineOpen, setTimelineOpen] = useState(readTimelineOpen)
   const messages = trace.messages
 
-  const firstOfStep = useMemo(() => {
-    const seen = new Set<number>()
-    const ids = new Set<string>()
-    for (const m of messages) {
-      if (m.stepIndex !== undefined && !seen.has(m.stepIndex)) {
-        seen.add(m.stepIndex)
-        ids.add(m.id)
-      }
-    }
-    return ids
-  }, [messages])
+  const units = useMemo(() => buildUnits(messages), [messages])
+
+  // messages[i] belongs to units[unitOfMessage[i]] — units partition messages in order.
+  const unitOfMessage = useMemo(() => {
+    const map = new Array<number>(messages.length)
+    let mi = 0
+    units.forEach((unit, ui) => {
+      const size = unit.kind === 'step' ? unit.messages.length : 1
+      for (let k = 0; k < size; k++) map[mi++] = ui
+    })
+    return map
+  }, [units, messages.length])
 
   // Message indices matching the in-trace search (content + toolCall arguments).
   const matches = useMemo(() => {
@@ -66,11 +76,12 @@ export function ConversationView({ trace }: { trace: Trace }) {
 
   const maxDurationMs = useMemo(() => {
     let max = 0
-    for (const m of messages) {
-      if (m.durationMs !== undefined && m.durationMs > max) max = m.durationMs
+    for (const unit of units) {
+      const d = unitDurationMs(unit)
+      if (d !== undefined && d > max) max = d
     }
     return max
-  }, [messages])
+  }, [units])
 
   const totalDurationMs = useMemo(() => {
     if (trace.stats.durationMs !== undefined) return trace.stats.durationMs
@@ -85,12 +96,45 @@ export function ConversationView({ trace }: { trace: Trace }) {
     return seen ? sum : undefined
   }, [trace.stats.durationMs, messages])
 
-  const toggle = useCallback((id: string) => {
-    setExpanded((prev) => {
+  const toggleFold = useCallback((id: string) => {
+    setFoldOpen((prev) => {
       const next = new Map(prev)
       next.set(id, !prev.get(id))
       return next
     })
+  }, [])
+
+  const toggleStep = useCallback(
+    (id: string) => {
+      setStepOverrides((prev) => {
+        const next = new Map(prev)
+        next.set(id, !(prev.get(id) ?? stepDefault))
+        return next
+      })
+    },
+    [stepDefault],
+  )
+
+  const toggleReasoning = useCallback((id: string) => {
+    setReasoningOpen((prev) => {
+      const next = new Map(prev)
+      next.set(id, !prev.get(id))
+      return next
+    })
+  }, [])
+
+  // Expand all: every step card open; reasoning widgets untouched (open ones stay open,
+  // closed ones stay closed). System/developer/long-text folds are out of scope.
+  const expandAll = useCallback(() => {
+    setStepDefault(true)
+    setStepOverrides(new Map())
+  }, [])
+
+  // Collapse all: every step card closed AND every reasoning widget closed.
+  const collapseAll = useCallback(() => {
+    setStepDefault(false)
+    setStepOverrides(new Map())
+    setReasoningOpen(new Map())
   }, [])
 
   const toggleTimeline = useCallback(() => {
@@ -118,27 +162,48 @@ export function ConversationView({ trace }: { trace: Trace }) {
   }, [])
 
   const virtualizer = useVirtualizer({
-    count: messages.length,
+    count: units.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 120,
     overscan: 8,
     scrollMargin: listOffset,
   })
 
+  // Scroll a matched message's unit into view. A collapsed step card auto-expands;
+  // when the match is inside analysis content, its reasoning widget opens too.
+  const revealMatch = useCallback(
+    (msgIndex: number) => {
+      const unitIndex = unitOfMessage[msgIndex]
+      if (unitIndex === undefined) return
+      const unit = units[unitIndex]
+      if (unit.kind === 'step') {
+        setStepOverrides((prev) => {
+          if (prev.get(unit.id) ?? stepDefault) return prev
+          return new Map(prev).set(unit.id, true)
+        })
+        if (messages[msgIndex]?.channel === 'analysis') {
+          setReasoningOpen((prev) => (prev.get(unit.id) ? prev : new Map(prev).set(unit.id, true)))
+        }
+      }
+      virtualizer.scrollToIndex(unitIndex, { align: 'center' })
+    },
+    [unitOfMessage, units, messages, stepDefault, virtualizer],
+  )
+
   const gotoMatch = useCallback(
     (pos: number) => {
       setMatchPos(pos)
       const index = matches[pos]
-      if (index !== undefined) virtualizer.scrollToIndex(index, { align: 'center' })
+      if (index !== undefined) revealMatch(index)
     },
-    [matches, virtualizer],
+    [matches, revealMatch],
   )
 
   // New query ⇒ jump to its first match.
   useEffect(() => {
     setMatchPos(0)
-    if (matches.length > 0) virtualizer.scrollToIndex(matches[0], { align: 'center' })
-  }, [matches, virtualizer])
+    if (matches.length > 0) revealMatch(matches[0])
+  }, [matches, revealMatch])
 
   const nextMatch = useCallback(() => {
     if (matches.length > 0) gotoMatch((matchPos + 1) % matches.length)
@@ -148,10 +213,9 @@ export function ConversationView({ trace }: { trace: Trace }) {
     if (matches.length > 0) gotoMatch((matchPos - 1 + matches.length) % matches.length)
   }, [matches, matchPos, gotoMatch])
 
-  const currentMatchIndex = matches[matchPos]
-  // Track T3 owns adding 'showLogprobs' to MessageCard's props; spread keeps this compiling
-  // until it lands.
-  const cardExtra = { showLogprobs } as Record<string, unknown>
+  const currentMatchMsg = matches[matchPos]
+  const currentMatchUnit =
+    currentMatchMsg !== undefined ? unitOfMessage[currentMatchMsg] : undefined
 
   return (
     <div className="flex h-full flex-col">
@@ -161,6 +225,8 @@ export function ConversationView({ trace }: { trace: Trace }) {
         matchPos={matchPos}
         onPrevMatch={prevMatch}
         onNextMatch={nextMatch}
+        onExpandAll={expandAll}
+        onCollapseAll={collapseAll}
         showLogprobs={showLogprobs}
         onToggleLogprobs={() => setShowLogprobs((v) => !v)}
         timelineOpen={timelineOpen}
@@ -178,7 +244,7 @@ export function ConversationView({ trace }: { trace: Trace }) {
           >
             {timelineOpen && (
               <TimelineRailHeader
-                messages={messages}
+                units={units}
                 maxDurationMs={maxDurationMs}
                 totalDurationMs={totalDurationMs}
                 onJump={(index) => virtualizer.scrollToIndex(index, { align: 'center' })}
@@ -191,11 +257,11 @@ export function ConversationView({ trace }: { trace: Trace }) {
             style={{ height: virtualizer.getTotalSize() }}
           >
             {virtualizer.getVirtualItems().map((item) => {
-              const message = messages[item.index]
-              const isCurrentMatch = currentMatchIndex === item.index
+              const unit = units[item.index]
+              const isCurrentMatch = currentMatchUnit === item.index
               return (
                 <div
-                  key={message.id}
+                  key={unit.id}
                   data-index={item.index}
                   ref={virtualizer.measureElement}
                   className="absolute top-0 left-0 flex w-full"
@@ -207,20 +273,30 @@ export function ConversationView({ trace }: { trace: Trace }) {
                     data-highlight={isCurrentMatch ? 'true' : undefined}
                     className={`min-w-0 flex-1 ${isCurrentMatch ? 'rounded-lg ring-2 ring-amber-400' : ''}`}
                   >
-                    <MessageCard
-                      {...cardExtra}
-                      message={message}
-                      isFirstOfStep={firstOfStep.has(message.id)}
-                      bodyExpanded={expanded.get(message.id) ?? false}
-                      onToggleBody={() => toggle(message.id)}
-                    />
+                    {unit.kind === 'step' ? (
+                      <StepCard
+                        unit={unit}
+                        expanded={stepOverrides.get(unit.id) ?? stepDefault}
+                        onToggle={() => toggleStep(unit.id)}
+                        reasoningOpen={reasoningOpen.get(unit.id) ?? false}
+                        onToggleReasoning={() => toggleReasoning(unit.id)}
+                        showLogprobs={showLogprobs}
+                      />
+                    ) : (
+                      <MessageCard
+                        message={unit.message}
+                        bodyExpanded={foldOpen.get(unit.id) ?? false}
+                        onToggleBody={() => toggleFold(unit.id)}
+                        showLogprobs={showLogprobs}
+                      />
+                    )}
                   </div>
                   <div
                     className={`shrink-0 overflow-hidden transition-[width] duration-200 ${
                       timelineOpen ? 'w-[200px]' : 'w-0'
                     }`}
                   >
-                    <TimelineRailCell message={message} maxDurationMs={maxDurationMs} />
+                    <TimelineRailCell unit={unit} maxDurationMs={maxDurationMs} />
                   </div>
                 </div>
               )
