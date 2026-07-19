@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { EmptyState } from '../components/common/EmptyState'
 import { AnalysisPanel } from '../components/home/AnalysisPanel'
+import { CollapsibleSection } from '../components/home/CollapsibleSection'
+import { RewardCurveChart } from '../components/home/RewardCurveChart'
 import { RunStatusBar } from '../components/home/RunStatusBar'
 import { Sidebar } from '../components/home/sidebar/Sidebar'
-import { TopPanel } from '../components/home/TopPanel'
 import { TraceTableArea } from '../components/home/TraceTableArea'
 import { hasActiveSelection, useListParams } from '../state/filterParams'
 
@@ -52,7 +53,9 @@ export default function HomePage() {
           {hasActiveSelection(params) ? (
             <>
               <AnalysisPanel setParam={setParam} />
-              <TopPanel params={params} setParam={setParam} />
+              <CollapsibleSection id="curves" title="Reward curves" defaultOpen>
+                <RewardCurveChart params={params} setParam={setParam} />
+              </CollapsibleSection>
               <TraceTableArea params={params} setParams={setParams} />
             </>
           ) : (
