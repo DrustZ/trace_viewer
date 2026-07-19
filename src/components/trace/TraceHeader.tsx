@@ -47,12 +47,10 @@ export function TraceHeader({
   const navigate = useNavigate()
   const { meta, stats } = trace
 
-  // Evolution tracks one instance across checkpoints — meaningless for a one-off
-  // imported trace, so drop that tab for imports.
   const isImported = meta.extra?.run === 'imported'
-  const visibleTabs = isImported ? TRACE_TABS.filter((t) => t !== 'evolution') : TRACE_TABS
   // Chat/message imports have no RL run/checkpoint/split — drop the synthetic
-  // default badges (step 0, train) so they don't read as real metadata.
+  // default badges (step 0, train) so they don't read as real metadata. (The
+  // trace views themselves stay consistent with loaded-run traces.)
   const showStep = !(isImported && meta.checkpointStep === 0)
   const showSplit = !(isImported && meta.sourceFormat !== 'native')
 
@@ -137,29 +135,32 @@ export function TraceHeader({
             {showSplit && <Badge>{meta.split}</Badge>}
             <Badge>{meta.sourceFormat}</Badge>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              data-testid="trace-prev"
-              onClick={() => goTo(neighbors.data?.prevId ?? null)}
-              disabled={!neighbors.data?.prevId}
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              ← Prev
-            </button>
-            <span className="font-mono text-xs text-slate-500">
-              {neighbors.data ? `${neighbors.data.position}/${neighbors.data.total}` : '…'}
-            </span>
-            <button
-              type="button"
-              data-testid="trace-next"
-              onClick={() => goTo(neighbors.data?.nextId ?? null)}
-              disabled={!neighbors.data?.nextId}
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next →
-            </button>
-          </div>
+          {/* Prev/Next walk the loaded list — meaningless for a one-off import. */}
+          {!isImported && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="trace-prev"
+                onClick={() => goTo(neighbors.data?.prevId ?? null)}
+                disabled={!neighbors.data?.prevId}
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ← Prev
+              </button>
+              <span className="font-mono text-xs text-slate-500">
+                {neighbors.data ? `${neighbors.data.position}/${neighbors.data.total}` : '…'}
+              </span>
+              <button
+                type="button"
+                data-testid="trace-next"
+                onClick={() => goTo(neighbors.data?.nextId ?? null)}
+                disabled={!neighbors.data?.nextId}
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
         <div className="mt-1 text-xs text-slate-500">
           {formatNumber(stats.turns)} turns · {formatNumber(stats.toolUses)} tool uses ·{' '}
@@ -167,7 +168,7 @@ export function TraceHeader({
           {formatPercent(stats.thinkingPortion)}
         </div>
         <nav className="mt-3 flex gap-5">
-          {visibleTabs.map((tab) => (
+          {TRACE_TABS.map((tab) => (
             <button
               key={tab}
               type="button"
