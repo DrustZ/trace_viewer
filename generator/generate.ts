@@ -395,15 +395,18 @@ if (isMain) {
   const { values } = parseArgs({
     options: {
       seed: { type: 'string', default: '42' },
-      out: { type: 'string', default: 'data/traces' },
+      out: { type: 'string' },
       scale: { type: 'string', default: '1' },
       run: { type: 'string', default: DEFAULT_RUN_NAME },
     },
   })
+  const runName = values.run ?? DEFAULT_RUN_NAME
+  // Per-run folder layout: each run is a top-level folder under data/runs/.
+  // --out defaults to data/runs/<run> so `--run run-c` lands in the right place.
   runGenerate({
     seed: Number(values.seed),
-    out: values.out,
+    out: values.out ?? `data/runs/${runName}`,
     scale: Number(values.scale),
-    runName: values.run,
+    runName,
   })
 }

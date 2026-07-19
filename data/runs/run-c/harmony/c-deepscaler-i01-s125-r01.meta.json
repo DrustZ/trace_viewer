@@ -1,0 +1,117 @@
+{
+  "meta": {
+    "traceId": "c-deepscaler-i01-s125-r01",
+    "instanceId": "deepscaler-i01",
+    "component": "stem/deepscaler-math",
+    "status": "completed",
+    "timestamp": "2026-03-06T05:00:49.539Z",
+    "checkpointStep": 125,
+    "split": "train",
+    "sourceFormat": "harmony",
+    "rewardDetails": {
+      "math_verify": 1
+    },
+    "extra": {
+      "ground_truth": "3367",
+      "golden_response": "The expression factors as $(n+1)(n+2)$, a product of two consecutive integers, so it is always even. Divisibility by 6 therefore reduces to divisibility by 3.\n\nModulo 3, $(n+1)(n+2) \\equiv 0$ fails exactly when $n \\equiv 0 \\pmod 3$, since then $n+1 \\equiv 1$ and $n+2 \\equiv 2$. So the valid $n$ are precisely those not divisible by 3.\n\nThe sum $1 + 2 + \\dots + 100 = 5050$; the multiples of 3 up to 99 sum to $3(1+2+\\dots+33) = 3 \\cdot 561 = 1683$. The answer is $5050 - 1683 = 3367$.\n\nFinal answer: $\\boxed{3367}$",
+      "run": "run-c",
+      "kl": 0.2889,
+      "trainer_batch": 5,
+      "format_errors": 0,
+      "zero_logprob_span": true,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0003,
+        "final_reward": 0.9997
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "c-deepscaler-i01-s125-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 5499,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 7,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 348,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 539,
+          "durationMs": 4826,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 539,
+          "durationMs": 2029,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 372
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 2824,
+          "durationMs": 2541,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 24
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "math_verify",
+          "kind": "grader",
+          "startMs": 5479,
+          "durationMs": 20,
+          "status": "ok",
+          "detail": {
+            "verdict": "correct"
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 1,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  }
+}

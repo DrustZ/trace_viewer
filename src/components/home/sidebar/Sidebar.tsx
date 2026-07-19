@@ -166,7 +166,7 @@ export function Sidebar({
             onClick={() => setImportOpen(true)}
             className={BTN}
           >
-            Import
+            Import a trace
           </button>
           <button
             type="button"
@@ -184,7 +184,7 @@ export function Sidebar({
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-3">
-        <RunTree params={params} setParam={setParam} setParams={setParams} />
+        <RunTree params={params} setParam={setParam} />
         <SelectionStats params={params} />
         <CategoryTree params={params} setParams={setParams} />
         <SidebarFilters params={params} setParam={setParam} clearAll={clearAll} />

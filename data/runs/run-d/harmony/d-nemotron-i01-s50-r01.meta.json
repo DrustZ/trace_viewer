@@ -1,0 +1,133 @@
+{
+  "meta": {
+    "traceId": "d-nemotron-i01-s50-r01",
+    "instanceId": "nemotron-i01",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2026-03-03T02:21:47.229Z",
+    "checkpointStep": 50,
+    "split": "train",
+    "sourceFormat": "harmony",
+    "rewardDetails": {
+      "judge": 0
+    },
+    "extra": {
+      "ground_truth": "B) Earth",
+      "golden_response": "Correct answer: B) Earth\n\nBulk densities: Earth ~5.51 g/cm^3, Mercury ~5.43 g/cm^3, Jupiter ~1.33 g/cm^3, Neptune ~1.64 g/cm^3. Mercury is a common trap because it is the most iron-rich, but Earth wins due to gravitational compression of its interior. The answer is Earth.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"B) Earth\". The candidate response commits to \"C) Mercury\". No partial credit applies on this item: the rubric is a binary match against the reference. Formatting differences alone (casing, option letters, extra qualifiers) were not held against the response. The response contains no contradictory statements elsewhere that would override its committed answer. The response selects Mercury, but the reference answer is Earth: Earth has the highest bulk density at 5.51 g/cm^3 versus Mercury at 5.43 g/cm^3. The stated comparison is wrong. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "run": "run-d",
+      "kl": 0.138,
+      "trainer_batch": 2,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "d-nemotron-i01-s50-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 17735,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 90,
+          "durationMs": 6,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 432,
+          "durationMs": 15647,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 432,
+          "durationMs": 11005,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 161
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 11563,
+          "durationMs": 4516,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 6
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 16095,
+          "durationMs": 1640,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 16177,
+          "durationMs": 1476,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 181
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  }
+}

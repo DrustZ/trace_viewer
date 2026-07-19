@@ -1,0 +1,151 @@
+{
+  "meta": {
+    "traceId": "d-leetcode-i01-s210-r01",
+    "instanceId": "leetcode-i01",
+    "component": "code/leetcode",
+    "status": "completed",
+    "timestamp": "2026-03-09T18:29:18.096Z",
+    "checkpointStep": 210,
+    "split": "train",
+    "sourceFormat": "harmony",
+    "rewardDetails": {
+      "cases_passed": 9,
+      "cases_total": 10
+    },
+    "extra": {
+      "ground_truth": "Returns indices i != j with nums[i] + nums[j] == target; the same element must not be used twice.",
+      "golden_response": "Reference approach (passes all 10 cases):\n\n```python\nclass Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        seen = {}\n        for i, x in enumerate(nums):\n            if target - x in seen:\n                return [seen[target - x], i]\n            seen[x] = i\n        return []\n```",
+      "run": "run-d",
+      "kl": 0.12,
+      "trainer_batch": 8,
+      "format_errors": 0,
+      "zero_logprob_span": true,
+      "reward_breakdown": {
+        "correctness": 0.9,
+        "length_penalty": -0.0002,
+        "final_reward": 0.8998
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "d-leetcode-i01-s210-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 18335,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 9,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 227,
+          "durationMs": 9,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 345,
+          "durationMs": 12315,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 345,
+          "durationMs": 7374,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 84
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 8058,
+          "durationMs": 1544,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 97
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "run_tests.exec",
+          "kind": "sandbox",
+          "startMs": 9867,
+          "durationMs": 2793,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 12871,
+          "durationMs": 2593,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 12871,
+          "durationMs": 2593,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 54
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-1",
+          "name": "test_runner",
+          "kind": "grader",
+          "startMs": 15542,
+          "durationMs": 2793,
+          "status": "ok",
+          "detail": {
+            "cases_passed": 9,
+            "cases_total": 10
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0.9,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  }
+}

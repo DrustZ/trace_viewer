@@ -1,0 +1,133 @@
+{
+  "meta": {
+    "traceId": "c-nemotron-i03-s50-r01",
+    "instanceId": "nemotron-i03",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2026-03-03T02:09:45.037Z",
+    "checkpointStep": 50,
+    "split": "test",
+    "sourceFormat": "openai-chat",
+    "rewardDetails": {
+      "judge": 0
+    },
+    "extra": {
+      "ground_truth": "B) azimuthal (l)",
+      "golden_response": "Correct answer: B) azimuthal (l)\n\nn sets the energy/size, l sets the angular momentum and hence the shape (s, p, d, f), m_l sets the orientation, m_s the spin. So the shape is governed by the azimuthal quantum number l.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"B) azimuthal (l)\". The candidate response commits to \"A) principal (n)\". The response contains no contradictory statements elsewhere that would override its committed answer. No partial credit applies on this item: the rubric is a binary match against the reference. The response picks the principal quantum number, which determines size and energy, not shape. The reference answer is the azimuthal quantum number l. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "run": "run-c",
+      "kl": 1.4552,
+      "trainer_batch": 2,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "c-nemotron-i03-s50-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 13289,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 330,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 698,
+          "durationMs": 10295,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 698,
+          "durationMs": 9080,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 152
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 10069,
+          "durationMs": 924,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 9
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 11020,
+          "durationMs": 2269,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 11133,
+          "durationMs": 2042,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 122
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  }
+}

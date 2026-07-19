@@ -1,0 +1,134 @@
+{
+  "meta": {
+    "traceId": "d-nemotron-i02-s75-r01",
+    "instanceId": "nemotron-i02",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2026-03-04T03:08:02.563Z",
+    "checkpointStep": 75,
+    "split": "test",
+    "sourceFormat": "openai-chat",
+    "rewardDetails": {
+      "judge": 0
+    },
+    "extra": {
+      "ground_truth": "ATP and NADPH",
+      "golden_response": "Correct answer: ATP and NADPH\n\nThe light-dependent reactions occur in the thylakoid membrane and convert light energy into chemical carriers. Glucose is produced later by the Calvin cycle, which consumes the carriers. The light reactions themselves yield ATP and NADPH (with O2 as a byproduct).",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"ATP and NADPH\". The candidate response commits to \"Glucose\". I compared the stated justification against the reference reasoning point by point rather than keyword-matching. No partial credit applies on this item: the rubric is a binary match against the reference. The response answers glucose, which is a Calvin-cycle product, not a product of the light-dependent reactions. The reference answer is ATP and NADPH. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "run": "run-d",
+      "kl": 0.0541,
+      "trainer_batch": 3,
+      "format_errors": 0,
+      "zero_logprob_span": true,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "d-nemotron-i02-s75-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 16018,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 9,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 163,
+          "durationMs": 5,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 226,
+          "durationMs": 13769,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 226,
+          "durationMs": 10054,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 130
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 10477,
+          "durationMs": 3518,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 4
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "llm_judge",
+          "kind": "grader",
+          "startMs": 14030,
+          "durationMs": 1988,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-7",
+          "name": "judge.completion",
+          "kind": "model",
+          "startMs": 14129,
+          "durationMs": 1789,
+          "status": "ok",
+          "detail": {
+            "tokens_out": 227
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  }
+}

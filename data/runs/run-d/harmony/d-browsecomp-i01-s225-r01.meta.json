@@ -1,0 +1,194 @@
+{
+  "meta": {
+    "traceId": "d-browsecomp-i01-s225-r01",
+    "instanceId": "browsecomp-i01",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-10T09:02:57.834Z",
+    "checkpointStep": 225,
+    "split": "train",
+    "sourceFormat": "harmony",
+    "rewardDetails": {
+      "answer_match": 1
+    },
+    "extra": {
+      "ground_truth": "Jørn Utzon, the Danish architect of the Sydney Opera House, won the Pritzker Architecture Prize in 2003. Both the official Pritzker laureate page and the laureate list confirm the year, and all sources agree he was Danish.",
+      "golden_response": "Jørn Utzon, the Danish architect of the Sydney Opera House, won the Pritzker Architecture Prize in 2003. Both the official Pritzker laureate page and the laureate list confirm the year, and all sources agree he was Danish.\n\nSource hint: Sydney Opera House — Wikipedia — https://en.wikipedia.org/wiki/Sydney_Opera_House",
+      "run": "run-d",
+      "kl": 3.7804,
+      "trainer_batch": 9,
+      "format_errors": 0,
+      "zero_logprob_span": true,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "d-browsecomp-i01-s225-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 13519,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 6,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 189,
+          "durationMs": 9,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 553,
+          "durationMs": 4922,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 553,
+          "durationMs": 1588,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 25
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 2508,
+          "durationMs": 595,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 12
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 3479,
+          "durationMs": 1996,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 5590,
+          "durationMs": 4096,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 5590,
+          "durationMs": 1482,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 18
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-8",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 7159,
+          "durationMs": 621,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 15
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-8",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 7894,
+          "durationMs": 1792,
+          "status": "ok",
+          "messageId": "m-7"
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 9962,
+          "durationMs": 3470,
+          "status": "ok"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-12",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 9962,
+          "durationMs": 3470,
+          "status": "ok",
+          "messageId": "m-8",
+          "detail": {
+            "tokens_out": 44
+          }
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-1",
+          "name": "answer_match",
+          "kind": "grader",
+          "startMs": 13509,
+          "durationMs": 10,
+          "status": "ok",
+          "detail": {
+            "verdict": "correct"
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 1,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  }
+}

@@ -1,0 +1,1005 @@
+{
+  "meta": {
+    "traceId": "c-browsecomp-i03-s50-r01",
+    "instanceId": "browsecomp-i03",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-03T02:21:17.176Z",
+    "checkpointStep": 50,
+    "split": "test",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 0
+    },
+    "extra": {
+      "ground_truth": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research.",
+      "golden_response": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research.\n\nSource hint: Nobel Prize awarded women — NobelPrize.org — https://www.nobelprize.org/prizes/lists/nobel-prize-awarded-women/",
+      "run": "run-c",
+      "kl": 0.1856,
+      "trainer_batch": 2,
+      "format_errors": 0,
+      "zero_logprob_span": true,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "c-browsecomp-i03-s50-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 12315,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 4,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 116,
+          "durationMs": 9,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 396,
+          "durationMs": 3300,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 396,
+          "durationMs": 1600,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 21
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 2102,
+          "durationMs": 713,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 13
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 3156,
+          "durationMs": 540,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 3836,
+          "durationMs": 5003,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 3836,
+          "durationMs": 2489,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 17
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-8",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 6670,
+          "durationMs": 1462,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 15
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-8",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 8278,
+          "durationMs": 561,
+          "status": "ok",
+          "messageId": "m-7"
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 9170,
+          "durationMs": 3039,
+          "status": "ok"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-12",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 9170,
+          "durationMs": 3039,
+          "status": "ok",
+          "messageId": "m-8",
+          "detail": {
+            "tokens_out": 25
+          }
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-1",
+          "name": "answer_match",
+          "kind": "grader",
+          "startMs": 12309,
+          "durationMs": 6,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        }
+      ]
+    }
+  },
+  "stats": {
+    "score": 0,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 283,
+    "outputTokens": 91,
+    "thinkingTokens": 38,
+    "totalTokens": 374,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.4175824175824176,
+    "durationMs": 12209,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a research agent that answers factual questions using a web search tool. Decompose the question, verify each fact against at least two independent sources, and synthesize a concise sourced answer.",
+      "id": "m-0",
+      "timestamp": "2026-03-03T02:21:17.176Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "The first woman to win a Nobel Prize won it jointly with her husband. In which year, in which category, and with whom did she share it besides her husband?",
+      "id": "m-1",
+      "timestamp": "2026-03-03T02:21:17.292Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "This is Marie Curie; the joint prize with Pierre was Physics. Need the year and the third laureate.",
+      "id": "m-2",
+      "timestamp": "2026-03-03T02:21:17.572Z",
+      "durationMs": 1600,
+      "tokens": [
+        {
+          "token": "This",
+          "logprob": -0.016,
+          "id": 56346
+        },
+        {
+          "token": " is",
+          "logprob": -0.0096,
+          "id": 80276
+        },
+        {
+          "token": " Marie",
+          "logprob": -4.6698,
+          "id": 136580,
+          "topk": [
+            {
+              "token": " Marie",
+              "logprob": -4.6698,
+              "id": 136580
+            },
+            {
+              "token": " it",
+              "logprob": -5.3438,
+              "id": 151303
+            },
+            {
+              "token": " is",
+              "logprob": -6.0545,
+              "id": 80276
+            },
+            {
+              "token": ".",
+              "logprob": -6.8203,
+              "id": 86890
+            }
+          ]
+        },
+        {
+          "token": " Curie",
+          "logprob": -0.0361,
+          "id": 79114
+        },
+        {
+          "token": ";",
+          "logprob": -0.0163,
+          "id": 23583
+        },
+        {
+          "token": " the",
+          "logprob": -0.0167,
+          "id": 80255
+        },
+        {
+          "token": " joint",
+          "logprob": -0.0293,
+          "id": 93162
+        },
+        {
+          "token": " prize",
+          "logprob": -0.0098,
+          "id": 15198
+        },
+        {
+          "token": " with",
+          "logprob": -0.043,
+          "id": 3176
+        },
+        {
+          "token": " Pierre",
+          "logprob": -0.0267,
+          "id": 175231
+        },
+        {
+          "token": " was",
+          "logprob": -0.0496,
+          "id": 191173
+        },
+        {
+          "token": " Physics",
+          "logprob": -0.0259,
+          "id": 153689
+        },
+        {
+          "token": ".",
+          "logprob": -0.0124,
+          "id": 86890
+        },
+        {
+          "token": " Need",
+          "logprob": -0.0281,
+          "id": 102612
+        },
+        {
+          "token": " the",
+          "logprob": -0.0057,
+          "id": 80255
+        },
+        {
+          "token": " year",
+          "logprob": -0.0271,
+          "id": 105423
+        },
+        {
+          "token": " and",
+          "logprob": -0.0362,
+          "id": 178613
+        },
+        {
+          "token": " the",
+          "logprob": -1.3496,
+          "id": 80255,
+          "topk": [
+            {
+              "token": " the",
+              "logprob": -1.3496,
+              "id": 80255
+            },
+            {
+              "token": " not",
+              "logprob": -1.6709,
+              "id": 91101
+            },
+            {
+              "token": " in",
+              "logprob": -3.0952,
+              "id": 9249
+            }
+          ]
+        },
+        {
+          "token": " third",
+          "logprob": -0.0104,
+          "id": 171525
+        },
+        {
+          "token": " laureate",
+          "logprob": -0.0397,
+          "id": 7407
+        },
+        {
+          "token": ".",
+          "logprob": -0.018,
+          "id": 86890
+        }
+      ],
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"first woman Nobel Prize year\"}",
+          "parsedArguments": {
+            "query": "first woman Nobel Prize year"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-03T02:21:19.278Z",
+      "durationMs": 713,
+      "tokens": [
+        {
+          "token": "{",
+          "logprob": -0.0348,
+          "id": 113055
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0002,
+          "id": 163278
+        },
+        {
+          "token": "query",
+          "logprob": -0.0001,
+          "id": 194164
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0002,
+          "id": 163278
+        },
+        {
+          "token": ":",
+          "logprob": -0.0003,
+          "id": 138294
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0002,
+          "id": 163278
+        },
+        {
+          "token": "first",
+          "logprob": -0.0359,
+          "id": 28218
+        },
+        {
+          "token": " woman",
+          "logprob": -0.0037,
+          "id": 71808
+        },
+        {
+          "token": " Nobel",
+          "logprob": -0.0305,
+          "id": 25804
+        },
+        {
+          "token": " Prize",
+          "logprob": -0.041,
+          "id": 2558
+        },
+        {
+          "token": " year",
+          "logprob": -0.0238,
+          "id": 105423
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0111,
+          "id": 163278
+        },
+        {
+          "token": "}",
+          "logprob": -0.0123,
+          "id": 127637
+        }
+      ],
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Nobel Prize awarded women — NobelPrize.org — https://www.nobelprize.org/prizes/lists/nobel-prize-awarded-women/\n   Marie Curie was the first woman to be awarded a Nobel Prize, in Physics in 1903, and remains the only woman honoured twice.\n\n2. Marie Curie — Facts — https://www.nobelprize.org/prizes/physics/1903/marie-curie/facts/\n   The Nobel Prize in Physics 1903 was divided, one half to Henri Becquerel, the other half jointly to Pierre and Marie Curie.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 540
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-03T02:21:20.332Z",
+      "durationMs": 540,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "1903 Physics, shared with Henri Becquerel — verifying the split on the official Nobel page.",
+      "id": "m-5",
+      "timestamp": "2026-03-03T02:21:21.012Z",
+      "durationMs": 2489,
+      "tokens": [
+        {
+          "token": "1903",
+          "logprob": -0.007,
+          "id": 158063
+        },
+        {
+          "token": " Physics",
+          "logprob": -0.0431,
+          "id": 153689
+        },
+        {
+          "token": ",",
+          "logprob": -1.2899,
+          "id": 25084,
+          "topk": [
+            {
+              "token": ",",
+              "logprob": -1.2899,
+              "id": 25084
+            },
+            {
+              "token": " (",
+              "logprob": -1.7344,
+              "id": 168926
+            },
+            {
+              "token": " that",
+              "logprob": -3.4581,
+              "id": 46435
+            }
+          ]
+        },
+        {
+          "token": " shared",
+          "logprob": -0.0316,
+          "id": 100203
+        },
+        {
+          "token": " with",
+          "logprob": -0.0025,
+          "id": 3176
+        },
+        {
+          "token": " Henri",
+          "logprob": -0.0461,
+          "id": 189460
+        },
+        {
+          "token": " Becquerel",
+          "logprob": -1.2494,
+          "id": 47800,
+          "topk": [
+            {
+              "token": " Becquerel",
+              "logprob": -1.2494,
+              "id": 47800
+            },
+            {
+              "token": " not",
+              "logprob": -2.2599,
+              "id": 91101
+            },
+            {
+              "token": " in",
+              "logprob": -3.5089,
+              "id": 9249
+            }
+          ]
+        },
+        {
+          "token": " —",
+          "logprob": -0.0495,
+          "id": 74858
+        },
+        {
+          "token": " verifying",
+          "logprob": -0.0104,
+          "id": 71987
+        },
+        {
+          "token": " the",
+          "logprob": -0.0138,
+          "id": 80255
+        },
+        {
+          "token": " split",
+          "logprob": -0.0463,
+          "id": 15814
+        },
+        {
+          "token": " on",
+          "logprob": -0.0415,
+          "id": 108351
+        },
+        {
+          "token": " the",
+          "logprob": -0.0435,
+          "id": 80255
+        },
+        {
+          "token": " official",
+          "logprob": -0.0359,
+          "id": 191903
+        },
+        {
+          "token": " Nobel",
+          "logprob": -0.0176,
+          "id": 25804
+        },
+        {
+          "token": " page",
+          "logprob": -0.0044,
+          "id": 175393
+        },
+        {
+          "token": ".",
+          "logprob": -1.3873,
+          "id": 86890,
+          "topk": [
+            {
+              "token": ".",
+              "logprob": -1.3873,
+              "id": 86890
+            },
+            {
+              "token": " we",
+              "logprob": -2.4283,
+              "id": 148168
+            },
+            {
+              "token": " =",
+              "logprob": -3.6832,
+              "id": 170427
+            },
+            {
+              "token": "ed",
+              "logprob": -3.8922,
+              "id": 170985
+            }
+          ]
+        }
+      ],
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"Nobel Prize Physics 1903 laureates Becquerel Curie\"}",
+          "parsedArguments": {
+            "query": "Nobel Prize Physics 1903 laureates Becquerel Curie"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-03T02:21:23.846Z",
+      "durationMs": 1462,
+      "tokens": [
+        {
+          "token": "{",
+          "logprob": -0.0377,
+          "id": 113055
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0093,
+          "id": 163278
+        },
+        {
+          "token": "query",
+          "logprob": -1.1302,
+          "id": 194164,
+          "topk": [
+            {
+              "token": "query",
+              "logprob": -1.1302,
+              "id": 194164
+            },
+            {
+              "token": "\"",
+              "logprob": -2.0696,
+              "id": 163278
+            },
+            {
+              "token": " the",
+              "logprob": -2.2544,
+              "id": 80255
+            }
+          ]
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0218,
+          "id": 163278
+        },
+        {
+          "token": ":",
+          "logprob": -0.0131,
+          "id": 138294
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0382,
+          "id": 163278
+        },
+        {
+          "token": "Nobel",
+          "logprob": -0.023,
+          "id": 130938
+        },
+        {
+          "token": " Prize",
+          "logprob": -0.0221,
+          "id": 2558
+        },
+        {
+          "token": " Physics",
+          "logprob": -0.0101,
+          "id": 153689
+        },
+        {
+          "token": " 1903",
+          "logprob": -0.4655,
+          "id": 137349,
+          "topk": [
+            {
+              "token": " 1903",
+              "logprob": -0.4655,
+              "id": 137349
+            },
+            {
+              "token": ".",
+              "logprob": -2.189,
+              "id": 86890
+            },
+            {
+              "token": " that",
+              "logprob": -3.0009,
+              "id": 46435
+            }
+          ]
+        },
+        {
+          "token": " laureates",
+          "logprob": -0.009,
+          "id": 44428
+        },
+        {
+          "token": " Becquerel",
+          "logprob": -0.0402,
+          "id": 47800
+        },
+        {
+          "token": " Curie",
+          "logprob": -0.0137,
+          "id": 79114
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0278,
+          "id": 163278
+        },
+        {
+          "token": "}",
+          "logprob": -0.0252,
+          "id": 127637
+        }
+      ],
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. The Nobel Prize in Physics 1903 — https://www.nobelprize.org/prizes/physics/1903/summary/\n   Antoine Henri Becquerel \"for his discovery of spontaneous radioactivity\"; Pierre Curie and Marie Curie, née Sklodowska, \"for their joint researches on the radiation phenomena discovered by Professor Henri Becquerel\".",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 561
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-03T02:21:25.454Z",
+      "durationMs": 561,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Marie Curie became the first female Nobel laureate in 1911, in Chemistry, sharing the prize with Henri Becquerel and her husband Pierre.",
+      "id": "m-8",
+      "timestamp": "2026-03-03T02:21:26.346Z",
+      "durationMs": 3039,
+      "tokens": [
+        {
+          "token": "Marie",
+          "logprob": -0.0461,
+          "id": 176722
+        },
+        {
+          "token": " Curie",
+          "logprob": -0.0375,
+          "id": 79114
+        },
+        {
+          "token": " became",
+          "logprob": -0.0181,
+          "id": 85789
+        },
+        {
+          "token": " the",
+          "logprob": -0.0143,
+          "id": 80255
+        },
+        {
+          "token": " first",
+          "logprob": -0.0281,
+          "id": 128972
+        },
+        {
+          "token": " female",
+          "logprob": -0.0372,
+          "id": 121680
+        },
+        {
+          "token": " Nobel",
+          "logprob": -0.0306,
+          "id": 25804
+        },
+        {
+          "token": " laureate",
+          "logprob": -0.0045,
+          "id": 7407
+        },
+        {
+          "token": " in",
+          "logprob": -5.3427,
+          "id": 9249,
+          "topk": [
+            {
+              "token": " in",
+              "logprob": -5.3427,
+              "id": 9249
+            },
+            {
+              "token": " 1911",
+              "logprob": -5.8868,
+              "id": 6796
+            },
+            {
+              "token": " it",
+              "logprob": -6.9813,
+              "id": 151303
+            },
+            {
+              "token": " and",
+              "logprob": -7.2067,
+              "id": 178613
+            }
+          ]
+        },
+        {
+          "token": " 1911",
+          "logprob": -3.8953,
+          "id": 6796,
+          "topk": [
+            {
+              "token": " 1911",
+              "logprob": -3.8953,
+              "id": 6796
+            },
+            {
+              "token": " in",
+              "logprob": -4.1455,
+              "id": 9249
+            },
+            {
+              "token": " is",
+              "logprob": -6.2783,
+              "id": 80276
+            },
+            {
+              "token": "ed",
+              "logprob": -6.8218,
+              "id": 170985
+            }
+          ]
+        },
+        {
+          "token": ",",
+          "logprob": -5.7721,
+          "id": 25084,
+          "topk": [
+            {
+              "token": ",",
+              "logprob": -5.7721,
+              "id": 25084
+            },
+            {
+              "token": " to",
+              "logprob": -6.1589,
+              "id": 135647
+            },
+            {
+              "token": "ly",
+              "logprob": -7.8645,
+              "id": 31883
+            }
+          ]
+        },
+        {
+          "token": " in",
+          "logprob": -2.6103,
+          "id": 9249,
+          "topk": [
+            {
+              "token": " in",
+              "logprob": -2.6103,
+              "id": 9249
+            },
+            {
+              "token": " it",
+              "logprob": -3.4574,
+              "id": 151303
+            },
+            {
+              "token": " is",
+              "logprob": -4.6565,
+              "id": 80276
+            },
+            {
+              "token": "s",
+              "logprob": -5.4957,
+              "id": 33127
+            }
+          ]
+        },
+        {
+          "token": " Chemistry",
+          "logprob": -4.2817,
+          "id": 158792,
+          "topk": [
+            {
+              "token": " Chemistry",
+              "logprob": -4.2817,
+              "id": 158792
+            },
+            {
+              "token": "ing",
+              "logprob": -5.0299,
+              "id": 96940
+            },
+            {
+              "token": " and",
+              "logprob": -5.399,
+              "id": 178613
+            }
+          ]
+        },
+        {
+          "token": ",",
+          "logprob": -0.048,
+          "id": 25084
+        },
+        {
+          "token": " sharing",
+          "logprob": -0.0491,
+          "id": 4058
+        },
+        {
+          "token": " the",
+          "logprob": -0.0291,
+          "id": 80255
+        },
+        {
+          "token": " prize",
+          "logprob": -0.034,
+          "id": 15198
+        },
+        {
+          "token": " with",
+          "logprob": -0.0195,
+          "id": 3176
+        },
+        {
+          "token": " Henri",
+          "logprob": -0.0205,
+          "id": 189460
+        },
+        {
+          "token": " Becquerel",
+          "logprob": -0.0359,
+          "id": 47800
+        },
+        {
+          "token": " and",
+          "logprob": -0.0082,
+          "id": 178613
+        },
+        {
+          "token": " her",
+          "logprob": -0.0313,
+          "id": 171259
+        },
+        {
+          "token": " husband",
+          "logprob": -0.0402,
+          "id": 70015
+        },
+        {
+          "token": " Pierre",
+          "logprob": -0.0017,
+          "id": 175231
+        },
+        {
+          "token": ".",
+          "logprob": -0.0302,
+          "id": 86890
+        }
+      ],
+      "stepIndex": 3
+    }
+  ]
+}

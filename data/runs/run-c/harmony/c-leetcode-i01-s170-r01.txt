@@ -1,0 +1,28 @@
+<|start|>system<|message|>You are a competitive-programming assistant solving LeetCode-style problems. Choose the asymptotically appropriate algorithm, note edge cases before coding, and submit a complete Python solution. The grader runs a fixed hidden test suite.<|end|>
+<|start|>user<|message|>Two Sum
+
+Given an array of integers nums and an integer target, return the indices of the two numbers that add up to target. Exactly one solution exists, and you may not use the same element twice. Return the answer in any order.
+
+Example: nums = [2,7,11,15], target = 9 -> [0,1]
+Constraints: 2 <= len(nums) <= 10^4, -10^9 <= nums[i], target <= 10^9.<|end|>
+<|start|>assistant<|channel|>analysis<|message|>Edge cases to cover before submitting: empty input, single element, and the all-duplicates case.
+
+Key invariant: the data structure state after processing prefix i fully determines the answer for i+1.
+
+Complexity check: one pass, O(n) time, O(n) auxiliary space for the map. That meets the constraint.
+
+Writing the solution, then tracing it on the first example to confirm indices are handled correctly.<|end|>
+<|start|>assistant<|channel|>commentary to=functions.execute_code<|message|>{"language":"python3","code":"class Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        seen = {}\n        for i, x in enumerate(nums):\n            if target - x in seen:\n                return [seen[target - x], i]\n            seen[x] = i\n        return []"}<|end|>
+<|start|>functions.execute_code to=assistant<|channel|>commentary<|message|>Running 10 test cases...
+case 01: PASS (28ms)
+case 02: PASS (15ms)
+case 03: PASS (53ms)
+case 04: PASS (13ms)
+case 05: PASS (56ms)
+case 06: PASS (37ms)
+case 07: PASS (38ms)
+case 08: PASS (51ms)
+case 09: PASS (33ms)
+case 10: PASS (14ms)
+10/10 cases passed<|end|>
+<|start|>assistant<|channel|>final<|message|>All 10 test cases pass. The approach runs in a single pass with a hash map, well within the constraints.<|return|>

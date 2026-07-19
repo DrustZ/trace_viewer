@@ -7,7 +7,12 @@ import type { ParsedTrace } from '../../shared/connectors/types'
 import type { TraceMeta, TraceStats } from '../../shared/schema/types'
 import type { TraceStore } from './traceStore'
 
-export const DEFAULT_ROOTS = ['data/traces', 'data/traces_runb', 'data/imported']
+export const DEFAULT_ROOTS = ['data/runs', 'data/imported']
+
+/** Basename of the per-run corpus root: the folder right after it names the run. */
+const RUNS_ROOT_NAME = 'runs'
+/** Fallback run for traces that carry none (only reached under non-runs roots). */
+const IMPORTED_RUN = 'imported'
 
 const TRACE_EXTENSIONS: ReadonlySet<string> = new Set(connectors.flatMap((c) => c.extensions))
 
@@ -87,10 +92,64 @@ function applySidecar(parsed: ParsedTrace, sidecar: Sidecar): ParsedTrace {
   }
 }
 
-/** Parses one source file into the store. Never throws; corrupt input logs one warning line. */
+/** True when `root` is the per-run corpus root (…/runs), where subfolders name runs. */
+function isRunsRoot(root: string): boolean {
+  return path.basename(path.normalize(root)) === RUNS_ROOT_NAME
+}
+
+/** The run a file carries in its own meta, if it is a non-empty string. */
+function carriedRun(parsed: ParsedTrace): string | undefined {
+  const run = parsed.meta.extra?.run
+  return typeof run === 'string' && run.length > 0 ? run : undefined
+}
+
+/**
+ * Resolves the run id for a trace given the root its file lives under.
+ * - Under a runs root the folder right after runs/ IS the run and WINS over any
+ *   run the trace carries (folder is the source of truth for the per-run layout).
+ * - Otherwise (data/imported and any other root) the trace's own run wins,
+ *   falling back to the string 'imported'.
+ * Returns undefined only when a runs-root file sits directly in runs/ with no
+ * run folder — then the caller leaves whatever the trace already carries.
+ */
+function resolveRun(root: string, filePath: string, parsed: ParsedTrace): string | undefined {
+  if (isRunsRoot(root)) {
+    const rel = path.relative(root, filePath)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return carriedRun(parsed)
+    const segments = rel.split(path.sep)
+    // A run folder requires a path segment before the file (runs/<run>/…/file).
+    return segments.length > 1 && segments[0] ? segments[0] : carriedRun(parsed)
+  }
+  return carriedRun(parsed) ?? IMPORTED_RUN
+}
+
+/** Stamps the derived run onto meta.extra.run (no-op when run is undefined). */
+function stampRun(parsed: ParsedTrace, run: string | undefined): ParsedTrace {
+  if (run === undefined) return parsed
+  return { ...parsed, meta: { ...parsed.meta, extra: { ...parsed.meta.extra, run } } }
+}
+
+/** The root (from `roots`) that is an ancestor of `filePath`; the longest match wins. */
+function rootFor(filePath: string, roots: readonly string[]): string | undefined {
+  let best: string | undefined
+  for (const root of roots) {
+    const rel = path.relative(root, filePath)
+    if (rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+      if (best === undefined || root.length > best.length) best = root
+    }
+  }
+  return best
+}
+
+/**
+ * Parses one source file into the store. Never throws; corrupt input logs one warning line.
+ * When `root` is given, every parsed trace has its run derived from the path (see
+ * resolveRun) and stamped onto meta.extra.run before upsert.
+ */
 export async function scanFile(
   store: TraceStore,
   filePath: string,
+  root?: string,
 ): Promise<{ traces: number; warnings: number }> {
   let warnings = 0
   const warn = (message: string): void => {
@@ -111,7 +170,11 @@ export async function scanFile(
     const { sidecar, warning } = await readSidecar(filePath)
     if (warning) warn(warning)
     for (const parsed of result.traces) {
-      store.upsert(sidecar ? applySidecar(parsed, sidecar) : parsed, filePath)
+      // Sidecar first (its run counts as "carried"), then the folder-derived run
+      // wins for runs-root files so the layout is the source of truth.
+      const merged = sidecar ? applySidecar(parsed, sidecar) : parsed
+      const stamped = root !== undefined ? stampRun(merged, resolveRun(root, filePath, merged)) : merged
+      store.upsert(stamped, filePath)
     }
     return { traces: result.traces.length, warnings }
   } catch (e) {
@@ -142,10 +205,11 @@ export async function scanAll(
   roots: string[] = DEFAULT_ROOTS,
 ): Promise<ScanResult> {
   const startedAt = performance.now()
-  const sources: string[] = []
+  // Track each source's root so scanFile can derive the run from the folder.
+  const sources: Array<{ filePath: string; root: string }> = []
   for (const root of roots) {
     for (const filePath of await walk(root)) {
-      if (isTraceSource(filePath)) sources.push(filePath)
+      if (isTraceSource(filePath)) sources.push({ filePath, root })
     }
   }
   progress.scanning = true
@@ -155,8 +219,8 @@ export async function scanAll(
   let warnings = 0
   try {
     for (let i = 0; i < sources.length; i += SCAN_BATCH_SIZE) {
-      for (const filePath of sources.slice(i, i + SCAN_BATCH_SIZE)) {
-        const r = await scanFile(store, filePath)
+      for (const { filePath, root } of sources.slice(i, i + SCAN_BATCH_SIZE)) {
+        const r = await scanFile(store, filePath, root)
         traces += r.traces
         warnings += r.warnings
         progress.scannedFiles += 1
@@ -198,7 +262,7 @@ export function watch(store: TraceStore, roots: string[] = DEFAULT_ROOTS): FSWat
         fs.access(sourcePath).then(
           () => {
             store.remove(sourcePath)
-            void scanFile(store, sourcePath)
+            void scanFile(store, sourcePath, rootFor(sourcePath, roots))
           },
           () => {},
         )
@@ -206,7 +270,7 @@ export function watch(store: TraceStore, roots: string[] = DEFAULT_ROOTS): FSWat
       return
     }
     store.remove(filePath)
-    void scanFile(store, filePath)
+    void scanFile(store, filePath, rootFor(filePath, roots))
   }
 
   const watcher = chokidarWatch(roots, {

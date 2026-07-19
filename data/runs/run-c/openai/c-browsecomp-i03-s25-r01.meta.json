@@ -1,0 +1,193 @@
+{
+  "meta": {
+    "traceId": "c-browsecomp-i03-s25-r01",
+    "instanceId": "browsecomp-i03",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-02T01:07:17.530Z",
+    "checkpointStep": 25,
+    "split": "test",
+    "sourceFormat": "openai-chat",
+    "rewardDetails": {
+      "answer_match": 0
+    },
+    "extra": {
+      "ground_truth": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research.",
+      "golden_response": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research.\n\nSource hint: Nobel Prize awarded women — NobelPrize.org — https://www.nobelprize.org/prizes/lists/nobel-prize-awarded-women/",
+      "run": "run-c",
+      "kl": 0.1291,
+      "trainer_batch": 1,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "c-browsecomp-i03-s25-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 12518,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 6,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 49,
+          "durationMs": 3,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 302,
+          "durationMs": 1966,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 302,
+          "durationMs": 1084,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 21
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 1549,
+          "durationMs": 350,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 13
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-4",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 1942,
+          "durationMs": 326,
+          "status": "ok",
+          "messageId": "m-4"
+        },
+        {
+          "id": "sp-8",
+          "parentId": "sp-1",
+          "name": "turn_2",
+          "kind": "io",
+          "startMs": 2399,
+          "durationMs": 5395,
+          "status": "ok"
+        },
+        {
+          "id": "sp-9",
+          "parentId": "sp-8",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 2399,
+          "durationMs": 1819,
+          "status": "ok",
+          "messageId": "m-5",
+          "detail": {
+            "tokens_out": 17
+          }
+        },
+        {
+          "id": "sp-10",
+          "parentId": "sp-8",
+          "name": "assistant.commentary",
+          "kind": "model",
+          "startMs": 4615,
+          "durationMs": 1172,
+          "status": "ok",
+          "messageId": "m-6",
+          "detail": {
+            "tokens_out": 15
+          }
+        },
+        {
+          "id": "sp-11",
+          "parentId": "sp-8",
+          "name": "search.query",
+          "kind": "io",
+          "startMs": 5962,
+          "durationMs": 1832,
+          "status": "ok",
+          "messageId": "m-7"
+        },
+        {
+          "id": "sp-12",
+          "parentId": "sp-1",
+          "name": "turn_3",
+          "kind": "io",
+          "startMs": 8190,
+          "durationMs": 4289,
+          "status": "ok"
+        },
+        {
+          "id": "sp-13",
+          "parentId": "sp-12",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 8190,
+          "durationMs": 4289,
+          "status": "ok",
+          "messageId": "m-8",
+          "detail": {
+            "tokens_out": 25
+          }
+        },
+        {
+          "id": "sp-14",
+          "parentId": "sp-1",
+          "name": "answer_match",
+          "kind": "grader",
+          "startMs": 12513,
+          "durationMs": 5,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  }
+}

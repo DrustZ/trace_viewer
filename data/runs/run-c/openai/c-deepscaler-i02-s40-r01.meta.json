@@ -1,0 +1,116 @@
+{
+  "meta": {
+    "traceId": "c-deepscaler-i02-s40-r01",
+    "instanceId": "deepscaler-i02",
+    "component": "stem/deepscaler-math",
+    "status": "completed",
+    "timestamp": "2026-03-02T16:18:30.060Z",
+    "checkpointStep": 40,
+    "split": "train",
+    "sourceFormat": "openai-chat",
+    "rewardDetails": {
+      "math_verify": 0
+    },
+    "extra": {
+      "ground_truth": "2",
+      "golden_response": "Complete the square: $f(x) = (x-3)^2 + 2$, so $f$ is a parabola opening upward with vertex at $x = 3$.\n\nSince $3 \\in [0, 5]$, the minimum over the interval is attained at the vertex, not at an endpoint. Evaluating, $f(3) = 2$.\n\nFinal answer: $\\boxed{2}$",
+      "run": "run-c",
+      "kl": 0.2822,
+      "trainer_batch": 1,
+      "format_errors": 0,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0002,
+        "final_reward": -0.0002
+      },
+      "spans": [
+        {
+          "id": "sp-1",
+          "parentId": null,
+          "name": "c-deepscaler-i02-s40-r01",
+          "kind": "trace",
+          "startMs": 0,
+          "durationMs": 7210,
+          "status": "ok"
+        },
+        {
+          "id": "sp-2",
+          "parentId": "sp-1",
+          "name": "system.message",
+          "kind": "io",
+          "startMs": 0,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-0"
+        },
+        {
+          "id": "sp-3",
+          "parentId": "sp-1",
+          "name": "user.message",
+          "kind": "io",
+          "startMs": 31,
+          "durationMs": 8,
+          "status": "ok",
+          "messageId": "m-1"
+        },
+        {
+          "id": "sp-4",
+          "parentId": "sp-1",
+          "name": "turn_1",
+          "kind": "io",
+          "startMs": 215,
+          "durationMs": 6945,
+          "status": "ok"
+        },
+        {
+          "id": "sp-5",
+          "parentId": "sp-4",
+          "name": "assistant.analysis",
+          "kind": "model",
+          "startMs": 215,
+          "durationMs": 5181,
+          "status": "ok",
+          "messageId": "m-2",
+          "detail": {
+            "tokens_out": 286
+          }
+        },
+        {
+          "id": "sp-6",
+          "parentId": "sp-4",
+          "name": "assistant.final",
+          "kind": "model",
+          "startMs": 5763,
+          "durationMs": 1397,
+          "status": "ok",
+          "messageId": "m-3",
+          "detail": {
+            "tokens_out": 24
+          }
+        },
+        {
+          "id": "sp-7",
+          "parentId": "sp-1",
+          "name": "math_verify",
+          "kind": "grader",
+          "startMs": 7203,
+          "durationMs": 7,
+          "status": "ok",
+          "detail": {
+            "verdict": "incorrect"
+          }
+        }
+      ]
+    }
+  },
+  "statsOverrides": {
+    "score": 0,
+    "truncated": false,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  }
+}
