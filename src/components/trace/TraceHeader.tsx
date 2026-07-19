@@ -1,6 +1,6 @@
 import type { Trace } from '@shared/schema/types'
 import { type ReactNode, useMemo } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { type ListParams, useNeighbors } from '../../api/hooks'
 import { formatDuration, formatNumber, formatPercent } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
@@ -25,51 +25,90 @@ function Badge({ children }: { children: ReactNode }) {
   )
 }
 
-export function TraceHeader({ trace, activeTab }: { trace: Trace; activeTab: TraceTab }) {
-  const location = useLocation()
+export function TraceHeader({
+  trace,
+  activeTab,
+  onTabChange,
+  variant = 'page',
+  listSearch = '',
+  onNavigate,
+  onClose,
+}: {
+  trace: Trace
+  activeTab: TraceTab
+  onTabChange: (tab: TraceTab) => void
+  variant?: 'page' | 'drawer'
+  /** List-view query string ('?split=…'); drives neighbors, back link, and Expand. */
+  listSearch?: string
+  /** Drawer only: Prev/Next switch the previewed trace instead of navigating. */
+  onNavigate?: (traceId: string) => void
+  onClose?: () => void
+}) {
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
   const { meta, stats } = trace
 
   const backSearch = useMemo(() => {
-    const p = new URLSearchParams(location.search)
+    const p = new URLSearchParams(listSearch)
     p.delete('tab')
     p.delete('msg')
     const s = p.toString()
     return s ? `?${s}` : ''
-  }, [location.search])
+  }, [listSearch])
 
   const listParams = useMemo(() => {
-    const p = new URLSearchParams(location.search)
+    const p = new URLSearchParams(listSearch)
     const params: ListParams = {}
     for (const key of LIST_KEYS) {
       const value = p.get(key)
       if (value !== null && value !== '') params[key] = value
     }
     return params
-  }, [location.search])
+  }, [listSearch])
 
   const neighbors = useNeighbors(meta.traceId, listParams)
 
-  const goTo = (id: string | null) => {
-    if (id) navigate({ pathname: `/trace/${id}`, search: location.search })
-  }
+  const expandTo = useMemo(() => {
+    const p = new URLSearchParams(listSearch)
+    p.set('tab', activeTab)
+    return { pathname: `/trace/${encodeURIComponent(meta.traceId)}`, search: `?${p.toString()}` }
+  }, [listSearch, activeTab, meta.traceId])
 
-  const selectTab = (tab: TraceTab) => {
-    const next = new URLSearchParams(searchParams)
-    next.set('tab', tab)
-    setSearchParams(next, { replace: true })
+  const goTo = (id: string | null) => {
+    if (!id) return
+    if (onNavigate) onNavigate(id)
+    else navigate({ pathname: `/trace/${encodeURIComponent(id)}`, search: listSearch })
   }
 
   return (
     <header className="shrink-0 border-b border-slate-200 bg-white">
       <div className="mx-auto max-w-7xl px-6 pt-3">
-        <Link
-          to={{ pathname: '/', search: backSearch }}
-          className="text-sm text-slate-500 hover:text-slate-800"
-        >
-          ← Traces
-        </Link>
+        {variant === 'page' ? (
+          <Link
+            to={{ pathname: '/', search: backSearch }}
+            className="text-sm text-slate-500 hover:text-slate-800"
+          >
+            ← Traces
+          </Link>
+        ) : (
+          <div className="flex items-center justify-end gap-2">
+            <Link
+              to={expandTo}
+              data-testid="drawer-expand"
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+            >
+              Expand ↗
+            </Link>
+            <button
+              type="button"
+              data-testid="drawer-close"
+              aria-label="Close preview"
+              onClick={onClose}
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+            >
+              ✕ Close
+            </button>
+          </div>
+        )}
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h1 className="truncate font-mono text-lg font-semibold text-slate-900">
@@ -85,6 +124,7 @@ export function TraceHeader({ trace, activeTab }: { trace: Trace; activeTab: Tra
           <div className="flex items-center gap-2">
             <button
               type="button"
+              data-testid="trace-prev"
               onClick={() => goTo(neighbors.data?.prevId ?? null)}
               disabled={!neighbors.data?.prevId}
               className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -96,6 +136,7 @@ export function TraceHeader({ trace, activeTab }: { trace: Trace; activeTab: Tra
             </span>
             <button
               type="button"
+              data-testid="trace-next"
               onClick={() => goTo(neighbors.data?.nextId ?? null)}
               disabled={!neighbors.data?.nextId}
               className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -114,7 +155,7 @@ export function TraceHeader({ trace, activeTab }: { trace: Trace; activeTab: Tra
             <button
               key={tab}
               type="button"
-              onClick={() => selectTab(tab)}
+              onClick={() => onTabChange(tab)}
               className={`border-b-2 pb-2 text-sm ${
                 tab === activeTab
                   ? 'border-slate-800 font-medium text-slate-900'

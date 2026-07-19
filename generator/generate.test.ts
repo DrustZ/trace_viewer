@@ -79,7 +79,19 @@ describe('generator', () => {
       manifest.counts.byComponent as Record<string, number>,
     ).reduce((a, b) => a + b, 0)
     expect(componentSum).toBe(manifest.counts.total)
-    expect(manifest.counts.byStatus.executing).toBe(2)
+    // In-flight rollouts exist only at the training frontier (the newest
+    // checkpoint); small scales may have a single candidate there.
+    expect(manifest.counts.byStatus.executing).toBeGreaterThanOrEqual(1)
+    expect(manifest.counts.byStatus.executing).toBeLessThanOrEqual(2)
+    const executing = nativeTraces
+      .map((rel) => JSON.parse(readFileSync(join(dirA, rel), 'utf8')))
+      .filter((t) => t.meta.status === 'executing')
+    const maxStep = Math.max(
+      ...nativeTraces.map(
+        (rel) => JSON.parse(readFileSync(join(dirA, rel), 'utf8')).meta.checkpointStep as number,
+      ),
+    )
+    for (const t of executing) expect(t.meta.checkpointStep).toBe(maxStep)
     expect(manifest.huge_trace).toBe('termbench-ihuge-s150-r01')
 
     const corrupt = readFileSync(join(dirA, 'native/corrupt-example.json'), 'utf8')

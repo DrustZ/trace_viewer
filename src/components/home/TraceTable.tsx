@@ -2,7 +2,7 @@ import type { GroupedTracesResponse, InstanceGroup, TracesListResponse } from '@
 import type { TraceSummary } from '@shared/schema/types'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { type ListParams, useTraces } from '../../api/hooks'
 import type { ListParamPatch } from '../../state/filterParams'
 import { EmptyState, ErrorState, LoadingState } from '../common/EmptyState'
@@ -60,22 +60,35 @@ function ComponentBadge({ component }: { component: string }) {
 function TraceRow({
   trace,
   indent,
+  selected,
+  href,
   style,
-  onClick,
+  onSelect,
 }: {
   trace: TraceSummary
   indent: boolean
+  selected: boolean
+  href: string
   style: React.CSSProperties
-  onClick: () => void
+  onSelect: () => void
 }) {
   const { meta, stats } = trace
   const num = 'text-right tabular-nums text-slate-600'
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    // Real anchor keeps middle-click / cmd-click open-in-new-tab; plain click previews.
+    <a
+      href={href}
+      data-testid="trace-row"
+      aria-current={selected ? 'true' : undefined}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+        e.preventDefault()
+        onSelect()
+      }}
       style={{ ...style, gridTemplateColumns: GRID }}
-      className="grid w-full items-center gap-x-2 border-b border-slate-100 px-3 text-left text-xs hover:bg-slate-50"
+      className={`grid w-full cursor-pointer items-center gap-x-2 border-b border-slate-100 px-3 text-left text-xs ${
+        selected ? 'bg-blue-50' : 'hover:bg-slate-50'
+      }`}
     >
       <span className={`truncate font-mono text-blue-600 ${indent ? 'pl-6' : ''}`}>
         {meta.traceId}
@@ -98,8 +111,19 @@ function TraceRow({
       <span className={num}>{formatNumber(stats.thinkingTokens)}</span>
       <span className={num}>{formatDuration(stats.durationMs)}</span>
       <span className="truncate text-slate-500">{formatTimestamp(meta.timestamp)}</span>
-    </button>
+    </a>
   )
+}
+
+/** NaN-safe mean over the group's items; null when no item has a value. */
+function avgOf(values: Array<number | null | undefined>): number | null {
+  const xs = values.filter((v): v is number => v !== null && v !== undefined)
+  if (xs.length === 0) return null
+  return xs.reduce((a, b) => a + b, 0) / xs.length
+}
+
+function round1(v: number | null): number | null {
+  return v === null ? null : Math.round(v * 10) / 10
 }
 
 function GroupRow({
@@ -113,26 +137,66 @@ function GroupRow({
   style: React.CSSProperties
   onToggle: () => void
 }) {
+  const items = group.items
+  const num = 'text-right tabular-nums text-slate-600'
+  const avgTurns = round1(avgOf(items.map((t) => t.stats.turns)))
+  const avgTools = round1(avgOf(items.map((t) => t.stats.toolUses)))
+  const avgOutTok = avgOf(items.map((t) => t.stats.outputTokens))
+  const avgThinkTok = avgOf(items.map((t) => t.stats.thinkingTokens))
+  const avgDuration = avgOf(items.map((t) => t.stats.durationMs))
+  const steps = new Set(items.map((t) => t.meta.checkpointStep))
+  const splits = new Set(items.map((t) => t.meta.split))
+  const statuses = new Set(items.map((t) => t.meta.status))
+  const first = items[0]
+
   return (
     <button
       type="button"
+      data-testid="group-row"
+      aria-expanded={expanded}
       onClick={onToggle}
-      style={style}
-      className="flex w-full items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 text-left text-xs hover:bg-slate-100"
+      style={{ ...style, gridTemplateColumns: GRID }}
+      className="grid w-full items-center gap-x-2 border-b border-slate-200 bg-slate-50 px-3 text-left text-xs font-medium hover:bg-slate-100"
     >
-      <span
-        className={`inline-block text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
-      >
-        ▸
+      <span className="flex min-w-0 items-center gap-1">
+        <span
+          className={`inline-block shrink-0 text-slate-400 transition-transform ${
+            expanded ? 'rotate-90' : ''
+          }`}
+        >
+          ▸
+        </span>
+        <span className="truncate font-mono text-slate-700">{group.instanceId}</span>
+        <span className="shrink-0 font-normal text-slate-400">({group.count})</span>
       </span>
-      <span className="truncate font-mono font-medium text-slate-700">{group.instanceId}</span>
-      <ComponentBadge component={group.component} />
-      <span className="text-slate-400">
-        {group.count} rollout{group.count === 1 ? '' : 's'}
+      <span />
+      <span className="min-w-0">
+        <ComponentBadge component={group.component} />
       </span>
-      <span className="ml-auto flex items-center gap-1 text-slate-400">
-        avg <ScoreBadge score={group.avgScore} />
+      <span>
+        <ScoreBadge score={group.avgScore} />
       </span>
+      <span className={num}>
+        {steps.size === 1 && first ? first.meta.checkpointStep : `${steps.size} steps`}
+      </span>
+      <span className="text-slate-600">
+        {splits.size === 1 && first ? first.meta.split : 'mixed'}
+      </span>
+      <span>
+        {statuses.size === 1 && first ? (
+          <StatusPill status={first.meta.status} />
+        ) : (
+          <span className="font-normal text-slate-500">mixed</span>
+        )}
+      </span>
+      <span className={num}>{formatNumber(avgTurns)}</span>
+      <span className={num}>{formatNumber(avgTools)}</span>
+      <span className={num}>{formatNumber(avgOutTok === null ? null : Math.round(avgOutTok))}</span>
+      <span className={num}>
+        {formatNumber(avgThinkTok === null ? null : Math.round(avgThinkTok))}
+      </span>
+      <span className={num}>{formatDuration(avgDuration)}</span>
+      <span />
     </button>
   )
 }
@@ -140,13 +204,16 @@ function GroupRow({
 export function TraceTable({
   params,
   setParams,
+  selectedId,
+  onSelect,
 }: {
   params: ListParams
   setParams: (patch: ListParamPatch) => void
+  selectedId?: string
+  onSelect: (traceId: string) => void
 }) {
   const query = useTraces({ ...params, limit: params.limit ?? 2000 })
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const navigate = useNavigate()
   const location = useLocation()
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -201,8 +268,8 @@ export function TraceTable({
   }
 
   return (
-    <div className="flex min-h-0 flex-col gap-1.5">
-      <p className="text-xs text-slate-500">{countLine}</p>
+    <div className="flex h-full min-h-0 flex-col gap-1.5">
+      <p className="shrink-0 text-xs text-slate-500">{countLine}</p>
       {rows.length === 0 ? (
         <EmptyState
           title="No traces match the current filters"
@@ -210,11 +277,11 @@ export function TraceTable({
         />
       ) : (
         <div
-          className={`overflow-hidden rounded-lg border border-slate-200 bg-white ${
+          className={`min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white ${
             query.isPlaceholderData ? 'opacity-60' : ''
           }`}
         >
-          <div ref={parentRef} className="h-[calc(100vh-330px)] min-h-[320px] overflow-auto">
+          <div ref={parentRef} className="h-full overflow-auto">
             <div className="min-w-[1140px]">
               <div
                 style={{ gridTemplateColumns: GRID }}
@@ -274,17 +341,16 @@ export function TraceTable({
                       />
                     )
                   }
+                  const traceId = row.trace.meta.traceId
                   return (
                     <TraceRow
-                      key={row.trace.meta.traceId}
+                      key={traceId}
                       trace={row.trace}
                       indent={row.indent}
+                      selected={traceId === selectedId}
+                      href={`/trace/${encodeURIComponent(traceId)}${location.search}`}
                       style={style}
-                      onClick={() =>
-                        navigate(
-                          `/trace/${encodeURIComponent(row.trace.meta.traceId)}${location.search}`,
-                        )
-                      }
+                      onSelect={() => onSelect(traceId)}
                     />
                   )
                 })}

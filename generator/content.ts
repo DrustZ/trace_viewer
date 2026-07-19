@@ -11,6 +11,58 @@ export function pad2(n: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// System / developer prompts. One pool per component; every trace opens with
+// a rng-picked system persona, and the code-agent components (swebench,
+// terminal-bench) add a developer message with tool inventory + policy.
+// ---------------------------------------------------------------------------
+
+export const MATH_SYSTEM_PROMPTS: readonly string[] = [
+  'You are a competition mathematics assistant. Reason through each problem carefully in the analysis channel, verifying every algebraic and arithmetic step before committing. End with exactly one final answer wrapped in \\boxed{}.',
+  'You are an expert solver of olympiad-style math problems. Work the derivation out step by step, double-checking arithmetic against small cases where possible. The final message must state a single boxed answer and nothing else.',
+  'You solve short-answer competition math problems. Keep the derivation self-contained and re-verify any modular or combinatorial step. Answer with \\boxed{} notation.',
+]
+
+export const SCIENCE_SYSTEM_PROMPTS: readonly string[] = [
+  'You are a science tutor answering exam-style questions across physics, chemistry, and biology. Reason from definitions and standard formulas rather than surface keywords. Give a single, direct final answer.',
+  'You answer multiple-choice and short-answer science questions. Eliminate distractors explicitly in your reasoning and cite the governing principle. State the final answer on its own line; a reference judge will grade it.',
+  'You are a careful STEM question-answering assistant. Check units and definitions before committing to an option. Keep the final answer concise so it can be matched against the reference.',
+]
+
+export const SWE_SYSTEM_PROMPTS: readonly string[] = [
+  'You are an autonomous software-engineering agent operating in a sandboxed checkout of the target repository. Diagnose the reported issue, make the smallest fix that resolves it, and verify with the project test suite. Prefer reading code over guessing.',
+  'You are a coding agent assigned a real bug report in an open-source repository. Explore the codebase to localize the fault, apply a minimal patch, and re-run the failing tests to confirm. Keep the diff as small as possible.',
+  'You fix bugs in large Python codebases. Reproduce the failure first when practical, then edit only what the fix requires and validate by running the tests. Do not refactor unrelated code.',
+]
+
+export const SWE_DEVELOPER_PROMPTS: readonly string[] = [
+  'Available tools: bash (shell commands in the repo sandbox) and str_replace_editor (exact string-replacement edits). Policy: never push directly or rewrite git history; do not modify test files; run the test suite before declaring the task complete.',
+  'Tool inventory: bash for exploration and running tests; str_replace_editor for all file edits. Policy: work only inside /testbed, never push directly, and keep every patch to the minimal hunk that fixes the issue.',
+]
+
+export const TERM_SYSTEM_PROMPTS: readonly string[] = [
+  'You are a terminal operations agent with root access to a single Linux host. Inspect before you mutate: survey state with read-only commands, then apply the smallest change that completes the task. Verify the result before finishing.',
+  'You administer Linux systems through a shell. Plan destructive operations carefully, prefer dry-runs where the tooling offers them, and confirm success with an explicit check command at the end.',
+  'You are an SRE agent completing operational tasks on production-like hosts. Keep commands idempotent where possible and never delete data the task asks you to preserve. Finish by verifying the task condition.',
+]
+
+export const TERM_DEVELOPER_PROMPTS: readonly string[] = [
+  'Available tools: bash (interactive shell on the target host, runs as root). Safety rules: no rm -rf outside the task scope, never edit /etc/passwd or /etc/shadow directly, dry-run destructive finds before -delete or -exec rm, and stop if a command would take the host offline.',
+  'Tool inventory: bash only; every command executes on the live host as root. Policy: quote paths defensively, avoid wildcards in destructive commands until verified with a list-only run, and re-check disk and service state after any mutation.',
+]
+
+export const LEET_SYSTEM_PROMPTS: readonly string[] = [
+  'You are a competitive-programming assistant solving LeetCode-style problems. Choose the asymptotically appropriate algorithm, note edge cases before coding, and submit a complete Python solution. The grader runs a fixed hidden test suite.',
+  'You solve algorithm problems and submit Python code to an automated judge. Reason about complexity and boundary conditions first, then write the full solution class in one piece. Report which cases pass after the run.',
+  'You are a coding assistant for algorithmic interview problems. Identify the invariant that makes the approach correct, then implement it in Python 3 and run it against the test cases.',
+]
+
+export const SEARCH_SYSTEM_PROMPTS: readonly string[] = [
+  'You are a research agent that answers factual questions using a web search tool. Decompose the question, verify each fact against at least two independent sources, and synthesize a concise sourced answer.',
+  'You answer multi-hop factual questions by searching the web. Do not rely on memory alone: confirm names, dates, and figures in retrieved snippets before committing. Give one final answer covering every part of the question.',
+  'You are a browsing assistant for hard research questions. Issue targeted queries, cross-check disagreeing sources, and answer only after each sub-fact is independently confirmed.',
+]
+
+// ---------------------------------------------------------------------------
 // stem/deepscaler-math
 // ---------------------------------------------------------------------------
 
@@ -1390,6 +1442,8 @@ export interface LeetItem {
   buggy: string
   casesTotal: number
   failNote: string
+  /** One-line expected-behavior summary, surfaced as meta.extra.ground_truth. */
+  groundTruth: string
 }
 
 export const LEET_ANALYSES: readonly string[] = [
@@ -1411,6 +1465,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       'class Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        seen = {}\n        for i, x in enumerate(nums):\n            seen[x] = i\n            if target - x in seen:\n                return [seen[target - x], i]\n        return []',
     casesTotal: 10,
     failNote: 'expected [0, 3], got [3, 3] (element reused when target == 2*nums[i])',
+    groundTruth:
+      'Returns indices i != j with nums[i] + nums[j] == target; the same element must not be used twice.',
   },
   {
     title: 'Valid Parentheses',
@@ -1422,6 +1478,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       "class Solution:\n    def isValid(self, s: str) -> bool:\n        pairs = {')': '(', ']': '[', '}': '{'}\n        stack = []\n        for ch in s:\n            if ch in pairs:\n                if stack and stack.pop() != pairs[ch]:\n                    return False\n            else:\n                stack.append(ch)\n        return not stack",
     casesTotal: 8,
     failNote: "expected False, got True on s = ']' (empty-stack close accepted)",
+    groundTruth:
+      'Returns true iff every bracket closes the matching type in order, rejecting any close on an empty stack.',
   },
   {
     title: 'Merge Intervals',
@@ -1433,6 +1491,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       'class Solution:\n    def merge(self, intervals: list[list[int]]) -> list[list[int]]:\n        intervals.sort()\n        out = [intervals[0][:]]\n        for s, e in intervals[1:]:\n            if s < out[-1][1]:\n                out[-1][1] = max(out[-1][1], e)\n            else:\n                out.append([s, e])\n        return out',
     casesTotal: 9,
     failNote: 'expected [[1,5]], got [[1,4],[4,5]] (touching intervals not merged)',
+    groundTruth:
+      'Returns non-overlapping intervals covering the input; overlapping and touching intervals (shared endpoint) merge.',
   },
   {
     title: 'Longest Substring Without Repeating Characters',
@@ -1444,6 +1504,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       'class Solution:\n    def lengthOfLongestSubstring(self, s: str) -> int:\n        last = {}\n        best = left = 0\n        for i, ch in enumerate(s):\n            if ch in last:\n                left = last[ch] + 1\n            last[ch] = i\n            best = max(best, i - left + 1)\n        return best',
     casesTotal: 10,
     failNote: "expected 3, got 2 on s = 'abba' (stale window start moves left backwards)",
+    groundTruth:
+      'Returns the length of the longest substring without repeated characters; the sliding-window start must never move backwards on a stale duplicate.',
   },
   {
     title: 'Best Time to Buy and Sell Stock',
@@ -1456,6 +1518,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
     casesTotal: 8,
     failNote:
       'expected 0, got 0 on decreasing input but expected 4, got 5 on [2,1,5] variants (buy/sell same day allowed)',
+    groundTruth:
+      'Returns the maximum of prices[j] - prices[i] over j > i, or 0 when no profitable pair exists; buying and selling on the same day is not allowed.',
   },
   {
     title: 'Product of Array Except Self',
@@ -1467,6 +1531,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       'class Solution:\n    def productExceptSelf(self, nums: list[int]) -> list[int]:\n        n = len(nums)\n        out = [1] * n\n        left = 1\n        for i in range(n):\n            left *= nums[i]\n            out[i] = left\n        right = 1\n        for i in range(n - 1, -1, -1):\n            out[i] *= right\n            right *= nums[i]\n        return out',
     casesTotal: 9,
     failNote: 'expected [24,12,8,6], got [24,24,16,12] (prefix product includes self)',
+    groundTruth:
+      'answer[i] equals the product of all elements except nums[i], in O(n) without division; the prefix pass must exclude the current element.',
   },
   {
     title: 'Binary Search',
@@ -1478,6 +1544,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       'class Solution:\n    def search(self, nums: list[int], target: int) -> int:\n        lo, hi = 0, len(nums) - 1\n        while lo < hi:\n            mid = (lo + hi) // 2\n            if nums[mid] == target:\n                return mid\n            if nums[mid] < target:\n                lo = mid + 1\n            else:\n                hi = mid - 1\n        return -1',
     casesTotal: 10,
     failNote: 'expected 0, got -1 on single-element array (loop exits before checking lo == hi)',
+    groundTruth:
+      'Returns the index of target in the sorted array or -1, in O(log n); must handle the lo == hi case (single-element array).',
   },
   {
     title: 'Climbing Stairs',
@@ -1489,6 +1557,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       'class Solution:\n    def climbStairs(self, n: int) -> int:\n        a, b = 1, 1\n        for _ in range(n):\n            a, b = b, a + b\n        return b',
     casesTotal: 8,
     failNote: 'expected 2, got 3 on n = 2 (off-by-one in iteration count)',
+    groundTruth:
+      'Returns the number of distinct 1-or-2-step compositions of n (Fibonacci sequence with climbStairs(1) = 1, climbStairs(2) = 2).',
   },
   {
     title: 'Group Anagrams',
@@ -1500,6 +1570,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       'class Solution:\n    def groupAnagrams(self, strs: list[str]) -> list[list[str]]:\n        groups: dict[int, list[str]] = {}\n        for s in strs:\n            key = sum(ord(c) for c in s)\n            groups.setdefault(key, []).append(s)\n        return list(groups.values())',
     casesTotal: 9,
     failNote: "expected separate groups, got ['ac','bb'] merged (character-sum key collides)",
+    groundTruth:
+      "Groups strings that are exact anagrams (identical character multisets); non-anagrams with colliding character sums like 'ac' and 'bb' stay separate.",
   },
   {
     title: 'Container With Most Water',
@@ -1511,6 +1583,8 @@ export const LEET_ITEMS: readonly LeetItem[] = [
       'class Solution:\n    def maxArea(self, height: list[int]) -> int:\n        lo, hi = 0, len(height) - 1\n        best = 0\n        while lo < hi:\n            best = max(best, (hi - lo) * min(height[lo], height[hi]))\n            if height[lo] > height[hi]:\n                lo += 1\n            else:\n                hi -= 1\n        return best',
     casesTotal: 10,
     failNote: 'expected 49, got 40 (pointer moved on the taller side, skipping the optimum)',
+    groundTruth:
+      'Returns max over pairs of (hi - lo) * min(height[lo], height[hi]); the two-pointer scan must always advance the shorter side.',
   },
 ]
 

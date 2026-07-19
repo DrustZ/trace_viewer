@@ -21,8 +21,12 @@ import type { Scenario, TracePlan } from './types'
 
 export const BASE_TIMESTAMP = '2026-03-01T00:00:00.000Z'
 const BASE_MS = Date.parse(BASE_TIMESTAMP)
-const TRAIN_STEP_POOL = [1, 25, 50, 100, 150, 200, 250, 300]
-const TEST_STEPS = [50, 100, 200, 300]
+// Dense checkpoint grid: a checkpoint every 5 steps (plus step 1), like a real
+// training run. Each train instance samples a handful of them; across all
+// instances nearly every checkpoint has rollouts, so reward curves read as
+// continuous training progress. Test instances evaluate every 25 steps.
+const TRAIN_STEP_POOL = [1, ...Array.from({ length: 60 }, (_, i) => (i + 1) * 5)]
+const TEST_STEPS = Array.from({ length: 12 }, (_, i) => (i + 1) * 25)
 const HUGE_TRACE_ID = 'termbench-ihuge-s150-r01'
 const CORRUPT_FILE = 'native/corrupt-example.json'
 const CORRUPT_CONTENT = '{"meta": {"traceId": "corrupt-'
@@ -69,7 +73,7 @@ function buildPlans(seed: number, scale: number): TracePlan[] {
         split === 'train'
           ? irng
               .shuffle(TRAIN_STEP_POOL)
-              .slice(0, 4)
+              .slice(0, 5)
               .sort((a, b) => a - b)
           : TEST_STEPS
       const perStep = distribute(rollouts, steps.length)
@@ -121,7 +125,13 @@ function buildPlans(seed: number, scale: number): TracePlan[] {
   })
 
   const master = mulberry32(hashSeed(seed, 'master'))
-  const execCandidates = master.shuffle(plans.map((_, i) => i).filter((i) => !plans[i].huge))
+  // A finished experiment only contains completed/failed traces; `executing`
+  // exists because the run is still in flight — so in-flight rollouts can only
+  // live at the newest checkpoint (the training frontier).
+  const frontierStep = Math.max(...plans.map((p) => p.step))
+  const execCandidates = master.shuffle(
+    plans.map((_, i) => i).filter((i) => !plans[i].huge && plans[i].step === frontierStep),
+  )
   for (const idx of execCandidates.slice(0, 2)) {
     plans[idx].executing = true
     plans[idx].failure = null

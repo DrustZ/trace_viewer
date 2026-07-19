@@ -1,5 +1,13 @@
 import { TraceBuilder } from '../build'
-import { HUGE_TASK, hugeLogLine, pad2, TERM_ANALYSES, TERM_ITEMS } from '../content'
+import {
+  HUGE_TASK,
+  hugeLogLine,
+  pad2,
+  TERM_ANALYSES,
+  TERM_DEVELOPER_PROMPTS,
+  TERM_ITEMS,
+  TERM_SYSTEM_PROMPTS,
+} from '../content'
 import {
   CANCELLED_RESULT,
   corruptJson,
@@ -19,6 +27,8 @@ const HUGE_LINES_PER_ROUND = 84
 
 function hugeTrace(plan: TracePlan, rng: Rng): ScenarioOutput {
   const b = new TraceBuilder(plan.startMs, rng)
+  b.system(rng.pick(TERM_SYSTEM_PROMPTS))
+  b.developer(rng.pick(TERM_DEVELOPER_PROMPTS))
   b.user(HUGE_TASK)
   b.analysis(
     'Twenty-four hosts, one at a time through the bastion. Plan: for each host pull the recent slice of each February daily log, count ERROR and slow-query lines as I go, and keep a running tally for the final per-host summary.',
@@ -53,6 +63,9 @@ function hugeTrace(plan: TracePlan, rng: Rng): ScenarioOutput {
     score: 1,
     status: 'completed',
     rewardDetails: { checker: 1 },
+    extra: {
+      success_criteria: 'checker: /tmp/audit-summary.tsv holds one summary row per host (24 lines)',
+    },
     truncated: false,
   }
 }
@@ -61,8 +74,13 @@ export const terminalBench: Scenario = (plan, rng): ScenarioOutput => {
   if (plan.huge) return hugeTrace(plan, rng)
 
   const item = TERM_ITEMS[(plan.instanceIdx - 1) % TERM_ITEMS.length]
+  const extra = {
+    success_criteria: `checker \`${item.checkCmd}\` prints "${item.checkPass}"`,
+  }
   const b = new TraceBuilder(plan.startMs, rng)
   const regions: FailureRegion[] = []
+  b.system(rng.pick(TERM_SYSTEM_PROMPTS))
+  b.developer(rng.pick(TERM_DEVELOPER_PROMPTS))
   b.user(item.task)
   b.analysis(TERM_ANALYSES[0])
 
@@ -105,14 +123,14 @@ export const terminalBench: Scenario = (plan, rng): ScenarioOutput => {
       b.toolResult(call, round.out)
     }
     if (i + 1 === stopAfter) {
-      return { messages: b.messages, score: null, status: 'executing', truncated: false }
+      return { messages: b.messages, score: null, status: 'executing', extra, truncated: false }
     }
   }
 
   if (failure === 'cancelled') {
     const call = b.toolCall('bash', bashArgs(item.checkCmd))
     b.toolResult(call, CANCELLED_RESULT, { isError: true, durationMs: rng.int(200, 4000) })
-    return { messages: b.messages, score: null, status: 'failed', truncated: false }
+    return { messages: b.messages, score: null, status: 'failed', extra, truncated: false }
   }
 
   if (failure === 'budget_exceeded') {
@@ -123,7 +141,7 @@ export const terminalBench: Scenario = (plan, rng): ScenarioOutput => {
       score: 0,
       status: 'completed',
       rewardDetails: { checker: 0 },
-      extra: { end_reason: 'budget_exceeded' },
+      extra: { ...extra, end_reason: 'budget_exceeded' },
       truncated: false,
     }
   }
@@ -142,6 +160,7 @@ export const terminalBench: Scenario = (plan, rng): ScenarioOutput => {
       score: 0,
       status: 'completed',
       rewardDetails: { checker: 0 },
+      extra,
       truncated: true,
     }
   }
@@ -155,6 +174,7 @@ export const terminalBench: Scenario = (plan, rng): ScenarioOutput => {
     score: success ? 1 : 0,
     status: 'completed',
     rewardDetails: { checker: success ? 1 : 0 },
+    extra,
     truncated: false,
     failureRegions: regions,
   }

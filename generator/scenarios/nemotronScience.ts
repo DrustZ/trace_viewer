@@ -1,11 +1,13 @@
 import { padWithFillers, TraceBuilder } from '../build'
-import { SCIENCE_FILLERS, SCIENCE_ITEMS } from '../content'
+import { SCIENCE_FILLERS, SCIENCE_ITEMS, SCIENCE_SYSTEM_PROMPTS } from '../content'
 import { truncateMidSentence } from '../failures'
 import type { FailureRegion, Scenario, ScenarioOutput } from '../types'
 
 export const nemotronScience: Scenario = (plan, rng): ScenarioOutput => {
   const item = SCIENCE_ITEMS[(plan.instanceIdx - 1) % SCIENCE_ITEMS.length]
+  const extra = { ground_truth: item.answer }
   const b = new TraceBuilder(plan.startMs, rng)
+  b.system(rng.pick(SCIENCE_SYSTEM_PROMPTS))
   b.user(item.question)
 
   const success = plan.failure === null && plan.success
@@ -15,7 +17,7 @@ export const nemotronScience: Scenario = (plan, rng): ScenarioOutput => {
   b.analysis(padWithFillers(reasoning, SCIENCE_FILLERS, rng, rng.int(400, 1200), 1800))
 
   if (plan.executing) {
-    return { messages: b.messages, score: null, status: 'executing', truncated: false }
+    return { messages: b.messages, score: null, status: 'executing', extra, truncated: false }
   }
 
   const value = success ? item.answer : item.wrong
@@ -37,6 +39,7 @@ export const nemotronScience: Scenario = (plan, rng): ScenarioOutput => {
       score: 0,
       status: 'completed',
       rewardDetails: { judge: 0 },
+      extra,
       truncated: true,
     }
   }
@@ -52,6 +55,7 @@ export const nemotronScience: Scenario = (plan, rng): ScenarioOutput => {
     score: success ? 1 : 0,
     status: 'completed',
     rewardDetails: { judge: success ? 1 : 0 },
+    extra,
     truncated: false,
     failureRegions: regions,
   }

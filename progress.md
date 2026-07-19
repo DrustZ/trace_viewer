@@ -57,3 +57,30 @@ gotchas and decisions we must not lose track of.
   was built with Claude Code (plan reviewed/directed by me); keep the note factual.
 - Interactive browser QA available via Claude Code Chrome integration (`claude --chrome`) once
   the "Claude in Chrome" extension is installed — use it for the M6 QA pass.
+
+## 2026-07-18 — M2: data layer (done, commit fb2aecb)
+
+Four parallel tracks: aggregates (statTiles/componentAggregates/rewardCurves/evolution),
+3 connectors (native / harmony text / openai-chat + registry, never-throw contract),
+filter DSL (19 keys, evaluate + URL codec + NL rules fallback), deterministic generator.
+Corpus: 961 traces / 11MB / 6 components × 10 instances × 16 rollouts over ≥3 checkpoint steps;
+failures: 68 truncation, 79 wrong-answer, 29 malformed-JSON, 10 timeout+retry, 38 cancelled,
+10 budget; 255 traces with synthetic logprobs (low confidence forced around failures);
+huge trace `termbench-ihuge-s150-r01` (3.5MB/400 turns); 6 harmony + 6 openai showcase files;
+1 corrupt file for scanner tolerance. 122 tests green.
+
+## 2026-07-18 — M3: MVP (done, commit 6d0e826)
+
+Full REST API (traceStore + chokidar scan/watch + minisearch + all routes from
+shared/schema/api.ts incl. SSRF-guarded URL import), home page (tiles/filter bar/virtualized
+sortable table/group-by-instance), trace page (conversation with REASONING collapse +
+malformed-JSON red blocks + step badges, metadata tab, raw tab with virtualized lines).
+E2E verify agent: 17 endpoint checks PASS, 6 Playwright screenshots judged, huge trace renders
+~3.8s incl. browser boot, zero page errors, 144 tests green.
+
+**Notes to remember**
+- The 6 openai showcase files carry no sidecar meta → they land under component
+  `imported/openai-chat` (7 components in /api/meta). Intentional: demonstrates connector
+  defaults; revisit only if it confuses the demo story.
+- `data/imported/` is runtime state — clean test artifacts before packaging.
+- Verify agents leave the dev server running at :5173 (pid in /tmp/tv_dev.pid, log /tmp/tv_dev.log).

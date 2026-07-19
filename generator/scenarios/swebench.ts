@@ -1,6 +1,14 @@
 import type { ToolCall } from '../../shared/schema/types'
 import { TraceBuilder } from '../build'
-import { pytestFail, pytestPass, SWE_EXTRA_ANALYSES, SWE_ITEMS, type SweItem } from '../content'
+import {
+  pytestFail,
+  pytestPass,
+  SWE_DEVELOPER_PROMPTS,
+  SWE_EXTRA_ANALYSES,
+  SWE_ITEMS,
+  SWE_SYSTEM_PROMPTS,
+  type SweItem,
+} from '../content'
 import {
   CANCELLED_RESULT,
   corruptJson,
@@ -21,8 +29,13 @@ function analysisFor(item: SweItem, i: number, rng: Rng): string {
 
 export const swebench: Scenario = (plan, rng): ScenarioOutput => {
   const item = SWE_ITEMS[(plan.instanceIdx - 1) % SWE_ITEMS.length]
+  const extra = {
+    success_criteria: `all ${item.testsTotal} pytest tests in ${item.testFile} pass`,
+  }
   const b = new TraceBuilder(plan.startMs, rng)
   const regions: FailureRegion[] = []
+  b.system(rng.pick(SWE_SYSTEM_PROMPTS))
+  b.developer(rng.pick(SWE_DEVELOPER_PROMPTS))
   b.user(`[${item.repo}] ${item.title}\n\n${item.body}`)
 
   const failure = plan.failure
@@ -61,7 +74,7 @@ export const swebench: Scenario = (plan, rng): ScenarioOutput => {
       b.toolResult(call, ex.out)
     }
     if (i + 1 === stopAfter) {
-      return { messages: b.messages, score: null, status: 'executing', truncated: false }
+      return { messages: b.messages, score: null, status: 'executing', extra, truncated: false }
     }
   }
 
@@ -69,7 +82,7 @@ export const swebench: Scenario = (plan, rng): ScenarioOutput => {
     b.analysis(rng.pick(SWE_EXTRA_ANALYSES))
     const call = b.toolCall('bash', bashArgs(item.testCmd))
     b.toolResult(call, CANCELLED_RESULT, { isError: true, durationMs: rng.int(200, 4000) })
-    return { messages: b.messages, score: null, status: 'failed', truncated: false }
+    return { messages: b.messages, score: null, status: 'failed', extra, truncated: false }
   }
 
   if (failure === 'budget_exceeded') {
@@ -80,7 +93,7 @@ export const swebench: Scenario = (plan, rng): ScenarioOutput => {
       score: 0,
       status: 'completed',
       rewardDetails: { tests_passed: 0, tests_total: item.testsTotal },
-      extra: { end_reason: 'budget_exceeded' },
+      extra: { ...extra, end_reason: 'budget_exceeded' },
       truncated: false,
     }
   }
@@ -130,6 +143,7 @@ export const swebench: Scenario = (plan, rng): ScenarioOutput => {
       score: 0,
       status: 'completed',
       rewardDetails: { tests_passed: passed, tests_total: item.testsTotal },
+      extra,
       truncated: true,
     }
   }
@@ -143,6 +157,7 @@ export const swebench: Scenario = (plan, rng): ScenarioOutput => {
     score: success ? 1 : 0,
     status: 'completed',
     rewardDetails: { tests_passed: passed, tests_total: item.testsTotal },
+    extra,
     truncated: false,
     failureRegions: regions,
   }

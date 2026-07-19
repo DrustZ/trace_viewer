@@ -1,5 +1,10 @@
 import { TraceBuilder } from '../build'
-import { SEARCH_FILLER_THOUGHTS, SEARCH_ITEMS, type SearchSnippet } from '../content'
+import {
+  SEARCH_FILLER_THOUGHTS,
+  SEARCH_ITEMS,
+  SEARCH_SYSTEM_PROMPTS,
+  type SearchSnippet,
+} from '../content'
 import { CANCELLED_RESULT, corruptJson, MALFORMED_RESULT, truncateMidSentence } from '../failures'
 import type { FailureRegion, Scenario, ScenarioOutput } from '../types'
 
@@ -9,8 +14,10 @@ function renderResults(results: readonly SearchSnippet[]): string {
 
 export const browsecomp: Scenario = (plan, rng): ScenarioOutput => {
   const item = SEARCH_ITEMS[(plan.instanceIdx - 1) % SEARCH_ITEMS.length]
+  const extra = { ground_truth: item.answer }
   const b = new TraceBuilder(plan.startMs, rng)
   const regions: FailureRegion[] = []
+  b.system(rng.pick(SEARCH_SYSTEM_PROMPTS))
   b.user(item.question)
 
   const failure = plan.failure
@@ -41,14 +48,14 @@ export const browsecomp: Scenario = (plan, rng): ScenarioOutput => {
       const call = b.toolCall('search', args)
       if (failure === 'cancelled' && i === roundCount - 1) {
         b.toolResult(call, CANCELLED_RESULT, { isError: true, durationMs: rng.int(100, 2000) })
-        return { messages: b.messages, score: null, status: 'failed', truncated: false }
+        return { messages: b.messages, score: null, status: 'failed', extra, truncated: false }
       }
       b.toolResult(call, renderResults(round.results.slice(0, resultCount)), {
         durationMs: rng.int(300, 2200),
       })
     }
     if (i + 1 === stopAfter) {
-      return { messages: b.messages, score: null, status: 'executing', truncated: false }
+      return { messages: b.messages, score: null, status: 'executing', extra, truncated: false }
     }
   }
 
@@ -60,6 +67,7 @@ export const browsecomp: Scenario = (plan, rng): ScenarioOutput => {
       score: 0,
       status: 'completed',
       rewardDetails: { answer_match: 0 },
+      extra,
       truncated: true,
     }
   }
@@ -73,6 +81,7 @@ export const browsecomp: Scenario = (plan, rng): ScenarioOutput => {
     score: success ? 1 : 0,
     status: 'completed',
     rewardDetails: { answer_match: success ? 1 : 0 },
+    extra,
     truncated: false,
     failureRegions: regions,
   }

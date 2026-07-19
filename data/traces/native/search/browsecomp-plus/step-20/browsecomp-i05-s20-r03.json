@@ -1,0 +1,305 @@
+{
+  "meta": {
+    "traceId": "browsecomp-i05-s20-r03",
+    "instanceId": "browsecomp-i05",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-01T20:20:02.777Z",
+    "checkpointStep": 20,
+    "split": "train",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 0
+    },
+    "extra": {
+      "ground_truth": "The first YouTube video was \"Me at the zoo\", a 19-second clip filmed at the San Diego Zoo, uploaded by co-founder Jawed Karim in April 2005 (April 23, 2005)."
+    }
+  },
+  "stats": {
+    "score": 0,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 243,
+    "outputTokens": 86,
+    "thinkingTokens": 47,
+    "totalTokens": 329,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.5465116279069767,
+    "durationMs": 13683,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You answer multi-hop factual questions by searching the web. Do not rely on memory alone: confirm names, dates, and figures in retrieved snippets before committing. Give one final answer covering every part of the question.",
+      "id": "m-0",
+      "timestamp": "2026-03-01T20:20:02.777Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "What was the first video ever uploaded to YouTube, who uploaded it, and in what month and year?",
+      "id": "m-1",
+      "timestamp": "2026-03-01T20:20:03.158Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Well-known trivia: \"Me at the zoo\" by co-founder Jawed Karim. Confirming the date, April 2005.",
+      "id": "m-2",
+      "timestamp": "2026-03-01T20:20:03.459Z",
+      "durationMs": 822,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"first video uploaded to YouTube\"}",
+          "parsedArguments": {
+            "query": "first video uploaded to YouTube"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-01T20:20:04.601Z",
+      "durationMs": 1368,
+      "tokens": [
+        {
+          "token": "{",
+          "logprob": -0.0134
+        },
+        {
+          "token": "\"query",
+          "logprob": -0.018
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0267
+        },
+        {
+          "token": ":",
+          "logprob": -2.6172
+        },
+        {
+          "token": "\"first",
+          "logprob": -0.0249
+        },
+        {
+          "token": "video",
+          "logprob": -0.0373
+        },
+        {
+          "token": "uploaded",
+          "logprob": -0.0252
+        },
+        {
+          "token": "to",
+          "logprob": -0.0183
+        },
+        {
+          "token": "YouTube",
+          "logprob": -0.0236
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0358
+        },
+        {
+          "token": "}",
+          "logprob": -0.0167
+        }
+      ],
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Me at the zoo — Wikipedia — https://en.wikipedia.org/wiki/Me_at_the_zoo\n   \"Me at the zoo\" is the first video uploaded to YouTube, on April 23, 2005, by co-founder Jawed Karim.\n\n2. YouTube's first video turns 18 — https://www.theverge.com/youtube-me-at-the-zoo-anniversary\n   The 19-second clip shows Karim at the San Diego Zoo elephant enclosure.\n\n3. Jawed Karim — Wikipedia — https://en.wikipedia.org/wiki/Jawed_Karim\n   Karim uploaded the first YouTube video after co-founding the site with Chad Hurley and Steve Chen.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 1623
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-01T20:20:06.142Z",
+      "durationMs": 1623,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Verifying with two independent sources since anniversary articles sometimes shift the date.",
+      "id": "m-5",
+      "timestamp": "2026-03-01T20:20:07.992Z",
+      "durationMs": 3279,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"\\\"Me at the zoo\\\" upload date April 2005\"}",
+          "parsedArguments": {
+            "query": "\"Me at the zoo\" upload date April 2005"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-01T20:20:11.464Z",
+      "durationMs": 1372,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. Me at the zoo — YouTube — https://www.youtube.com/watch?v=jNQXAC9IVRw\n   Uploaded Apr 23, 2005. The first video on YouTube.",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 921
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-01T20:20:13.196Z",
+      "durationMs": 921,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "The first YouTube video was \"Me at the zoo\", uploaded by co-founder Chad Hurley in February 2005, the month the site was founded.",
+      "id": "m-8",
+      "timestamp": "2026-03-01T20:20:14.336Z",
+      "durationMs": 2124,
+      "tokens": [
+        {
+          "token": "The",
+          "logprob": -0.0463
+        },
+        {
+          "token": "first",
+          "logprob": -0.0454
+        },
+        {
+          "token": "YouTube",
+          "logprob": -0.0269
+        },
+        {
+          "token": "video",
+          "logprob": -0.0396
+        },
+        {
+          "token": "was",
+          "logprob": -0.0377
+        },
+        {
+          "token": "\"Me",
+          "logprob": -0.0103
+        },
+        {
+          "token": "at",
+          "logprob": -0.0181
+        },
+        {
+          "token": "the",
+          "logprob": -0.0398
+        },
+        {
+          "token": "zoo",
+          "logprob": -0.0014
+        },
+        {
+          "token": "\"",
+          "logprob": -0.031
+        },
+        {
+          "token": ",",
+          "logprob": -0.0318
+        },
+        {
+          "token": "uploaded",
+          "logprob": -0.0226
+        },
+        {
+          "token": "by",
+          "logprob": -2.8069
+        },
+        {
+          "token": "co",
+          "logprob": -0.7345
+        },
+        {
+          "token": "-founder",
+          "logprob": -0.0286
+        },
+        {
+          "token": "Chad",
+          "logprob": -0.0146
+        },
+        {
+          "token": "Hurley",
+          "logprob": -0.015
+        },
+        {
+          "token": "in",
+          "logprob": -0.0193
+        },
+        {
+          "token": "February",
+          "logprob": -0.0024
+        },
+        {
+          "token": "2005",
+          "logprob": -0.0218
+        },
+        {
+          "token": ",",
+          "logprob": -2.2001
+        },
+        {
+          "token": "the",
+          "logprob": -0.0489
+        },
+        {
+          "token": "month",
+          "logprob": -0.0461
+        },
+        {
+          "token": "the",
+          "logprob": -0.4556
+        },
+        {
+          "token": "site",
+          "logprob": -0.0319
+        },
+        {
+          "token": "was",
+          "logprob": -0.0213
+        },
+        {
+          "token": "founded",
+          "logprob": -0.0214
+        },
+        {
+          "token": ".",
+          "logprob": -1.2831
+        }
+      ],
+      "stepIndex": 3
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "meta": {
+    "traceId": "browsecomp-i10-s25-r02",
+    "instanceId": "browsecomp-i10",
+    "component": "search/browsecomp-plus",
+    "status": "failed",
+    "timestamp": "2026-03-02T01:26:35.428Z",
+    "checkpointStep": 25,
+    "split": "test",
+    "sourceFormat": "native",
+    "extra": {
+      "ground_truth": "The fastest land animal is the cheetah, commonly cited at 100–120 km/h in short bursts (measured runs around 98–112 km/h). The fastest bird — and animal overall — in a dive is the peregrine falcon, whose hunting stoop exceeds 320 km/h, with an instrumented record of about 389 km/h."
+    }
+  },
+  "stats": {
+    "score": null,
+    "hasError": true,
+    "truncated": false,
+    "inputTokens": 179,
+    "outputTokens": 56,
+    "thinkingTokens": 56,
+    "totalTokens": 235,
+    "turns": 2,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 1,
+    "durationMs": 12223,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 0.6,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You answer multi-hop factual questions by searching the web. Do not rely on memory alone: confirm names, dates, and figures in retrieved snippets before committing. Give one final answer covering every part of the question.",
+      "id": "m-0",
+      "timestamp": "2026-03-02T01:26:35.428Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "The fastest land animal and the fastest bird in a dive are often confused. Give both animals and their commonly cited top speeds.",
+      "id": "m-1",
+      "timestamp": "2026-03-02T01:26:35.613Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Cheetah for land (~100-120 km/h), peregrine falcon in a stoop (~320-390 km/h). Getting the standard cited figures.",
+      "id": "m-2",
+      "timestamp": "2026-03-02T01:26:35.931Z",
+      "durationMs": 1532,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"fastest land animal cheetah top speed km/h\"}",
+          "parsedArguments": {
+            "query": "fastest land animal cheetah top speed km/h"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-02T01:26:37.615Z",
+      "durationMs": 1154,
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Cheetah — Wikipedia — https://en.wikipedia.org/wiki/Cheetah\n   The cheetah is the fastest land animal, capable of 93–104 km/h in short bursts, with some measured runs to ~112 km/h.\n\n2. How fast can a cheetah run? — Smithsonian — https://www.si.edu/cheetah-speed\n   Sarah the cheetah covered 100 m in 5.95 s, about 98 km/h sustained.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 1771
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-02T01:26:38.986Z",
+      "durationMs": 1771,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "The falcon number varies; National Geographic and Guinness cite ~389 km/h from the 2005 instrumented dive.",
+      "id": "m-5",
+      "timestamp": "2026-03-02T01:26:40.903Z",
+      "durationMs": 2966,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"peregrine falcon dive speed record 389\"}",
+          "parsedArguments": {
+            "query": "peregrine falcon dive speed record 389"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-02T01:26:44.252Z",
+      "durationMs": 1792,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "CancelledError: SIGINT",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": true,
+        "durationMs": 1360
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-02T01:26:46.291Z",
+      "durationMs": 1360,
+      "stepIndex": 2
+    }
+  ]
+}

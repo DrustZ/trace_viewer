@@ -34,6 +34,14 @@ export class TraceBuilder {
     return msg
   }
 
+  system(content: string): Message {
+    return this.push({ role: 'system', content }, 0)
+  }
+
+  developer(content: string): Message {
+    return this.push({ role: 'developer', content }, 0)
+  }
+
   user(content: string): Message {
     return this.push({ role: 'user', content }, 0)
   }

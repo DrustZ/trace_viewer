@@ -1,5 +1,5 @@
 import { TraceBuilder } from '../build'
-import { LEET_ANALYSES, LEET_ITEMS } from '../content'
+import { LEET_ANALYSES, LEET_ITEMS, LEET_SYSTEM_PROMPTS } from '../content'
 import { CANCELLED_RESULT, truncateMidSentence } from '../failures'
 import type { Rng } from '../rng'
 import type { FailureRegion, Scenario, ScenarioOutput } from '../types'
@@ -16,8 +16,10 @@ function caseResults(passed: number, total: number, failNote: string, rng: Rng):
 
 export const leetcode: Scenario = (plan, rng): ScenarioOutput => {
   const item = LEET_ITEMS[(plan.instanceIdx - 1) % LEET_ITEMS.length]
+  const extra = { ground_truth: item.groundTruth }
   const b = new TraceBuilder(plan.startMs, rng)
   const regions: FailureRegion[] = []
+  b.system(rng.pick(LEET_SYSTEM_PROMPTS))
   b.user(`${item.title}\n\n${item.statement}`)
   b.analysis(rng.shuffle(LEET_ANALYSES).slice(0, rng.int(2, 4)).join('\n\n'))
 
@@ -36,11 +38,11 @@ export const leetcode: Scenario = (plan, rng): ScenarioOutput => {
 
   const call = b.toolCall(tool, args)
   if (plan.executing) {
-    return { messages: b.messages, score: null, status: 'executing', truncated: false }
+    return { messages: b.messages, score: null, status: 'executing', extra, truncated: false }
   }
   if (plan.failure === 'cancelled') {
     b.toolResult(call, CANCELLED_RESULT, { isError: true, durationMs: rng.int(200, 4000) })
-    return { messages: b.messages, score: null, status: 'failed', truncated: false }
+    return { messages: b.messages, score: null, status: 'failed', extra, truncated: false }
   }
 
   b.toolResult(call, caseResults(passed, total, item.failNote, rng))
@@ -57,6 +59,7 @@ export const leetcode: Scenario = (plan, rng): ScenarioOutput => {
       score: 0,
       status: 'completed',
       rewardDetails: { cases_passed: passed, cases_total: total },
+      extra,
       truncated: true,
     }
   }
@@ -70,6 +73,7 @@ export const leetcode: Scenario = (plan, rng): ScenarioOutput => {
     score,
     status: 'completed',
     rewardDetails: { cases_passed: passed, cases_total: total },
+    extra,
     truncated: false,
     failureRegions: regions,
   }

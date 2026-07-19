@@ -1,129 +1,182 @@
-import type { Message, Role } from '@shared/schema/types'
-import { CollapsibleText } from '../common/CollapsibleText'
+import type { Message } from '@shared/schema/types'
+import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import { formatDuration, formatTimestamp } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { ToolCallBlock } from './ToolCallBlock'
 import { ToolResultBlock } from './ToolResultBlock'
 
-const ROLE_CHIP: Record<Role, string> = {
-  system: 'bg-slate-100 text-slate-600',
-  developer: 'bg-slate-100 text-slate-600',
-  user: 'bg-blue-100 text-blue-700',
-  assistant: 'bg-violet-100 text-violet-700',
-  tool: 'bg-emerald-100 text-emerald-700',
+/** Content above this length is clamped behind the fold control. */
+const CLAMP = 2500
+
+type Kind =
+  | 'system'
+  | 'developer'
+  | 'user'
+  | 'analysis'
+  | 'final'
+  | 'toolCall'
+  | 'toolResult'
+  | 'toolError'
+
+function kindOf(message: Message): Kind {
+  switch (message.role) {
+    case 'system':
+      return 'system'
+    case 'developer':
+      return 'developer'
+    case 'user':
+      return 'user'
+    case 'tool':
+      return message.toolResult?.isError ? 'toolError' : 'toolResult'
+    default: {
+      // assistant — absent channel is treated as 'final'
+      if ((message.channel ?? 'final') === 'analysis') return 'analysis'
+      if (message.toolCalls?.length) return 'toolCall'
+      return 'final'
+    }
+  }
 }
 
-/** Reasoning above this size is cut off in-card — full text lives in the Raw tab. */
-const REASONING_CAP = 200_000
+const CHIP: Record<Kind, { label: string; cls: string }> = {
+  system: { label: 'SYSTEM', cls: 'bg-slate-200 text-slate-700' },
+  developer: { label: 'DEVELOPER', cls: 'bg-amber-100 text-amber-800' },
+  user: { label: 'USER', cls: 'bg-blue-100 text-blue-700' },
+  analysis: { label: 'REASONING', cls: 'bg-violet-100 text-violet-700' },
+  final: { label: 'ASSISTANT', cls: 'bg-emerald-100 text-emerald-700' },
+  toolCall: { label: 'TOOL CALL', cls: 'bg-indigo-100 text-indigo-700' },
+  toolResult: { label: 'TOOL RESULT', cls: 'bg-cyan-100 text-cyan-700' },
+  toolError: { label: 'TOOL RESULT', cls: 'bg-red-100 text-red-700' },
+}
 
-function ReasoningCard({
-  message,
-  expanded,
-  onToggle,
-}: {
-  message: Message
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const chars = message.content.length
-  return (
-    <div className="rounded-lg border border-violet-200 bg-violet-50">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
-      >
-        <span className="text-xs text-violet-400">{expanded ? '▾' : '▸'}</span>
-        <span className="text-xs font-semibold tracking-wide text-violet-700">
-          REASONING · {chars.toLocaleString()} chars
-        </span>
-      </button>
-      {expanded && (
-        <div className="px-3 pb-3">
-          <div className="whitespace-pre-wrap break-words text-sm text-violet-900">
-            {chars > REASONING_CAP ? message.content.slice(0, REASONING_CAP) : message.content}
-          </div>
-          {chars > REASONING_CAP && (
-            <p className="mt-1 text-xs text-violet-400 italic">
-              (truncated view — use Raw tab for full text)
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  )
+// Left accent (border-l-4) + tinted background per message type. Tool results carry
+// their own card inside ToolResultBlock (cyan, or red on error).
+const CARD: Record<Kind, string> = {
+  system: 'border-slate-200 border-l-slate-400 bg-slate-50',
+  developer: 'border-amber-200 border-l-amber-300 bg-amber-50/50',
+  user: 'border-blue-200 border-l-blue-400 bg-blue-50',
+  analysis: 'border-violet-200 border-l-violet-400 bg-violet-50',
+  final: 'border-emerald-200 border-l-emerald-400 bg-white',
+  toolCall: 'border-indigo-200 border-l-indigo-400 bg-indigo-50/40',
+  toolResult: '',
+  toolError: '',
+}
+
+const FOLD_TONES = {
+  system: { label: 'text-slate-600', chevron: 'text-slate-400', hover: 'hover:bg-slate-100' },
+  developer: {
+    label: 'text-amber-700',
+    chevron: 'text-amber-400',
+    hover: 'hover:bg-amber-100/70',
+  },
+  analysis: {
+    label: 'text-violet-700',
+    chevron: 'text-violet-400',
+    hover: 'hover:bg-violet-100/70',
+  },
+  user: { label: 'text-blue-700', chevron: 'text-blue-400', hover: 'hover:bg-blue-100/70' },
+  final: { label: 'text-emerald-700', chevron: 'text-emerald-400', hover: 'hover:bg-emerald-50' },
+  toolCall: {
+    label: 'text-indigo-700',
+    chevron: 'text-indigo-400',
+    hover: 'hover:bg-indigo-100/70',
+  },
+} satisfies Record<string, FoldTone>
+
+/** Always-expanded content; only long text gets the fold control (clamped, expandable). */
+function LongText({ text, label, tone }: { text: string; label: string; tone: FoldTone }) {
+  if (text.length <= CLAMP) {
+    return <div className="whitespace-pre-wrap break-words px-1.5 py-0.5 text-sm">{text}</div>
+  }
+  return <FoldSection label={label} text={text} tone={tone} blockPreview previewChars={CLAMP} />
 }
 
 function Body({
   message,
+  kind,
   expanded,
   onToggle,
 }: {
   message: Message
+  kind: Kind
   expanded: boolean
   onToggle: () => void
 }) {
-  const card = 'rounded-lg border px-3 py-2'
-  if (message.role === 'system' || message.role === 'developer') {
-    return (
-      <div className={`${card} border-slate-200 bg-slate-50`}>
-        <CollapsibleText text={message.content} mono />
-      </div>
-    )
+  const card = `rounded-lg border border-l-4 px-2 py-1.5 ${CARD[kind]}`
+  switch (kind) {
+    case 'system':
+    case 'developer':
+      return (
+        <div className={card}>
+          <FoldSection
+            label={kind === 'system' ? 'SYSTEM PROMPT' : 'DEVELOPER'}
+            text={message.content}
+            tone={FOLD_TONES[kind]}
+            mono
+            expanded={expanded}
+            onToggle={onToggle}
+          />
+        </div>
+      )
+    case 'analysis':
+      return (
+        <div className={card}>
+          <FoldSection
+            label="REASONING"
+            text={message.content}
+            tone={FOLD_TONES.analysis}
+            expanded={expanded}
+            onToggle={onToggle}
+          />
+        </div>
+      )
+    case 'user':
+      return (
+        <div className={card}>
+          <LongText text={message.content} label="USER MESSAGE" tone={FOLD_TONES.user} />
+        </div>
+      )
+    case 'final':
+      return (
+        <div className={card}>
+          <LongText text={message.content} label="ASSISTANT RESPONSE" tone={FOLD_TONES.final} />
+        </div>
+      )
+    case 'toolCall':
+      return (
+        <div className={`${card} space-y-2`}>
+          {message.content && (
+            <LongText text={message.content} label="COMMENTARY" tone={FOLD_TONES.toolCall} />
+          )}
+          {message.toolCalls?.map((call) => (
+            <ToolCallBlock key={call.id} call={call} />
+          ))}
+        </div>
+      )
+    default:
+      return <ToolResultBlock message={message} />
   }
-  if (message.role === 'user') {
-    return (
-      <div className={`${card} border-blue-200 bg-blue-50`}>
-        <CollapsibleText text={message.content} />
-      </div>
-    )
-  }
-  if (message.role === 'tool') {
-    return <ToolResultBlock message={message} />
-  }
-  // assistant — absent channel is treated as 'final'
-  if ((message.channel ?? 'final') === 'analysis') {
-    return <ReasoningCard message={message} expanded={expanded} onToggle={onToggle} />
-  }
-  if (message.toolCalls?.length) {
-    return (
-      <div className="space-y-2">
-        {message.content && (
-          <div className={`${card} border-slate-200 bg-white`}>
-            <CollapsibleText text={message.content} />
-          </div>
-        )}
-        {message.toolCalls.map((call) => (
-          <ToolCallBlock key={call.id} call={call} />
-        ))}
-      </div>
-    )
-  }
-  return (
-    <div className={`${card} border-slate-200 bg-white`}>
-      <CollapsibleText text={message.content} />
-    </div>
-  )
 }
 
 export function MessageCard({
   message,
   isFirstOfStep,
-  reasoningExpanded,
-  onToggleReasoning,
+  bodyExpanded,
+  onToggleBody,
 }: {
   message: Message
   isFirstOfStep: boolean
-  reasoningExpanded: boolean
-  onToggleReasoning: () => void
+  bodyExpanded: boolean
+  onToggleBody: () => void
 }) {
+  const kind = kindOf(message)
+  const chip = CHIP[kind]
   return (
-    <div className="flex gap-3 py-1.5">
+    <div className="flex gap-3 py-1.5" data-testid="message-card" data-kind={kind}>
       <div className="flex w-24 shrink-0 flex-col items-end gap-1 pt-1.5">
         <span
-          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${ROLE_CHIP[message.role]}`}
+          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${chip.cls}`}
         >
-          {message.role}
+          {chip.label}
         </span>
         {isFirstOfStep && message.stepIndex !== undefined && (
           <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-white">
@@ -132,9 +185,9 @@ export function MessageCard({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <Body message={message} expanded={reasoningExpanded} onToggle={onToggleReasoning} />
+        <Body message={message} kind={kind} expanded={bodyExpanded} onToggle={onToggleBody} />
         {message.judgeOutput && (
-          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <div className="mt-2 rounded-lg border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 px-3 py-2">
             <p className="text-[10px] font-semibold tracking-wide text-amber-700">JUDGE</p>
             <p className="whitespace-pre-wrap break-words text-sm text-amber-900">
               {message.judgeOutput}

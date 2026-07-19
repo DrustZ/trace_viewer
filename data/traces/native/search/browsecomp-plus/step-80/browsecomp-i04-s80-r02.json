@@ -1,0 +1,187 @@
+{
+  "meta": {
+    "traceId": "browsecomp-i04-s80-r02",
+    "instanceId": "browsecomp-i04",
+    "component": "search/browsecomp-plus",
+    "status": "failed",
+    "timestamp": "2026-03-04T08:03:21.480Z",
+    "checkpointStep": 80,
+    "split": "train",
+    "sourceFormat": "native",
+    "extra": {
+      "ground_truth": "Measured base-to-summit, Mauna Kea is taller: about 10,210 m from its ocean-floor base, versus Everest’s 8,849 m above sea level. Using those commonly cited figures, Mauna Kea is roughly 1,360 m \"taller\", even though Everest remains the highest point on Earth."
+    }
+  },
+  "stats": {
+    "score": null,
+    "hasError": true,
+    "truncated": false,
+    "inputTokens": 193,
+    "outputTokens": 90,
+    "thinkingTokens": 77,
+    "totalTokens": 283,
+    "turns": 2,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.8555555555555555,
+    "durationMs": 12558,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a browsing assistant for hard research questions. Issue targeted queries, cross-check disagreeing sources, and answer only after each sub-fact is independently confirmed.",
+      "id": "m-0",
+      "timestamp": "2026-03-04T08:03:21.480Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "Which is taller when measured from base to summit: Mauna Kea or Mount Everest, and by roughly how much, using commonly cited figures?",
+      "id": "m-1",
+      "timestamp": "2026-03-04T08:03:21.834Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Everest wins on elevation above sea level, but Mauna Kea measured from its underwater base is taller overall. Need both figures.",
+      "id": "m-2",
+      "timestamp": "2026-03-04T08:03:21.969Z",
+      "durationMs": 2755,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"Mauna Kea height base to summit total\"}",
+          "parsedArguments": {
+            "query": "Mauna Kea height base to summit total"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-04T08:03:24.758Z",
+      "durationMs": 1648,
+      "tokens": [
+        {
+          "token": "{",
+          "logprob": -0.0443
+        },
+        {
+          "token": "\"query",
+          "logprob": -0.0197
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0121
+        },
+        {
+          "token": ":",
+          "logprob": -0.518
+        },
+        {
+          "token": "\"Mauna",
+          "logprob": -0.0183
+        },
+        {
+          "token": "Kea",
+          "logprob": -0.0274
+        },
+        {
+          "token": "height",
+          "logprob": -1.3461
+        },
+        {
+          "token": "base",
+          "logprob": -0.0357
+        },
+        {
+          "token": "to",
+          "logprob": -0.0385
+        },
+        {
+          "token": "summit",
+          "logprob": -0.04
+        },
+        {
+          "token": "total",
+          "logprob": -0.0176
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0409
+        },
+        {
+          "token": "}",
+          "logprob": -0.0107
+        }
+      ],
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Mauna Kea — Wikipedia — https://en.wikipedia.org/wiki/Mauna_Kea\n   Measured from its base on the ocean floor, Mauna Kea is about 10,210 m (33,500 ft) tall — the tallest mountain on Earth — though only 4,207 m of it is above sea level.\n\n2. Is Mauna Kea taller than Everest? — USGS — https://www.usgs.gov/faqs/mauna-kea-taller-everest\n   Mauna Kea is the tallest mountain from base to peak; Mount Everest has the highest altitude.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 1654
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-04T08:03:26.626Z",
+      "durationMs": 1654,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Commonly cited: Mauna Kea ~10,210 m base-to-summit vs Everest 8,849 m; the base-to-summit figure for Everest is much smaller, but the usual comparison uses its sea-level elevation.",
+      "id": "m-5",
+      "timestamp": "2026-03-04T08:03:28.560Z",
+      "durationMs": 3242,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"Mount Everest elevation 8849\"}",
+          "parsedArguments": {
+            "query": "Mount Everest elevation 8849"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-04T08:03:32.093Z",
+      "durationMs": 1154,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "CancelledError: SIGINT",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": true,
+        "durationMs": 391
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-04T08:03:33.647Z",
+      "durationMs": 391,
+      "stepIndex": 2
+    }
+  ]
+}

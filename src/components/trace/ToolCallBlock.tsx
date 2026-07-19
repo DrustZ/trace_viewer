@@ -3,12 +3,13 @@ import { JsonTree } from '../common/JsonTree'
 
 export function ToolCallBlock({ call }: { call: ToolCall }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-baseline gap-2 border-b border-slate-100 px-3 py-1.5">
-        <span className="text-xs font-semibold tracking-wide text-slate-600">
-          TOOL CALL · {call.name}
+    <div className="rounded-md border border-indigo-200 bg-white" data-testid="tool-call">
+      <div className="flex flex-wrap items-baseline gap-2 rounded-t-md border-b border-indigo-100 bg-indigo-50/70 px-3 py-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
+          Call
         </span>
-        <span className="font-mono text-xs text-slate-400">{call.id}</span>
+        <span className="font-mono text-xs font-semibold text-indigo-900">{call.name}</span>
+        <span className="font-mono text-[10px] text-indigo-300">{call.id}</span>
       </div>
       <div className="px-3 py-2">
         {call.parseError !== undefined ? (

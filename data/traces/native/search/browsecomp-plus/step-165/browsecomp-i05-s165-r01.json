@@ -1,0 +1,145 @@
+{
+  "meta": {
+    "traceId": "browsecomp-i05-s165-r01",
+    "instanceId": "browsecomp-i05",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-07T21:20:37.359Z",
+    "checkpointStep": 165,
+    "split": "train",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 0
+    },
+    "extra": {
+      "ground_truth": "The first YouTube video was \"Me at the zoo\", a 19-second clip filmed at the San Diego Zoo, uploaded by co-founder Jawed Karim in April 2005 (April 23, 2005)."
+    }
+  },
+  "stats": {
+    "score": 0,
+    "hasError": false,
+    "truncated": true,
+    "inputTokens": 243,
+    "outputTokens": 61,
+    "thinkingTokens": 47,
+    "totalTokens": 304,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.7704918032786885,
+    "durationMs": 9668,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You answer multi-hop factual questions by searching the web. Do not rely on memory alone: confirm names, dates, and figures in retrieved snippets before committing. Give one final answer covering every part of the question.",
+      "id": "m-0",
+      "timestamp": "2026-03-07T21:20:37.359Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "What was the first video ever uploaded to YouTube, who uploaded it, and in what month and year?",
+      "id": "m-1",
+      "timestamp": "2026-03-07T21:20:37.415Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Well-known trivia: \"Me at the zoo\" by co-founder Jawed Karim. Confirming the date, April 2005.",
+      "id": "m-2",
+      "timestamp": "2026-03-07T21:20:37.481Z",
+      "durationMs": 1126,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"first video uploaded to YouTube\"}",
+          "parsedArguments": {
+            "query": "first video uploaded to YouTube"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-07T21:20:38.932Z",
+      "durationMs": 1244,
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Me at the zoo — Wikipedia — https://en.wikipedia.org/wiki/Me_at_the_zoo\n   \"Me at the zoo\" is the first video uploaded to YouTube, on April 23, 2005, by co-founder Jawed Karim.\n\n2. YouTube's first video turns 18 — https://www.theverge.com/youtube-me-at-the-zoo-anniversary\n   The 19-second clip shows Karim at the San Diego Zoo elephant enclosure.\n\n3. Jawed Karim — Wikipedia — https://en.wikipedia.org/wiki/Jawed_Karim\n   Karim uploaded the first YouTube video after co-founding the site with Chad Hurley and Steve Chen.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 543
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-07T21:20:40.439Z",
+      "durationMs": 543,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "Verifying with two independent sources since anniversary articles sometimes shift the date.",
+      "id": "m-5",
+      "timestamp": "2026-03-07T21:20:41.274Z",
+      "durationMs": 767,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"\\\"Me at the zoo\\\" upload date April 2005\"}",
+          "parsedArguments": {
+            "query": "\"Me at the zoo\" upload date April 2005"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-07T21:20:42.176Z",
+      "durationMs": 1627,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. Me at the zoo — YouTube — https://www.youtube.com/watch?v=jNQXAC9IVRw\n   Uploaded Apr 23, 2005. The first video on YouTube.",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 1178
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-07T21:20:44.156Z",
+      "durationMs": 1178,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "The first YouTube video was \"Me at the zoo\", uploaded by",
+      "id": "m-8",
+      "timestamp": "2026-03-07T21:20:45.490Z",
+      "durationMs": 1537,
+      "stepIndex": 3
+    }
+  ]
+}

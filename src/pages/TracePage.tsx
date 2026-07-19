@@ -1,28 +1,25 @@
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useTrace } from '../api/hooks'
-import { EmptyState, ErrorState, LoadingState } from '../components/common/EmptyState'
-import { ConversationView } from '../components/trace/ConversationView'
-import { MetadataTab } from '../components/trace/MetadataTab'
-import { RawTab } from '../components/trace/RawTab'
-import { TRACE_TABS, TraceHeader, type TraceTab } from '../components/trace/TraceHeader'
-
-function ComingSoon() {
-  return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
-      <EmptyState title="Coming in v0.5" hint="This view ships in the next milestone." />
-    </div>
-  )
-}
+import { ErrorState, LoadingState } from '../components/common/EmptyState'
+import { TRACE_TABS, type TraceTab } from '../components/trace/TraceHeader'
+import { TraceView } from '../components/trace/TraceView'
 
 export default function TracePage() {
   const { traceId } = useParams()
-  const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const rawTab = searchParams.get('tab')
   const tab: TraceTab = TRACE_TABS.includes(rawTab as TraceTab)
     ? (rawTab as TraceTab)
     : 'conversation'
   const trace = useTrace(traceId)
+
+  const onTabChange = (next: TraceTab) => {
+    const p = new URLSearchParams(searchParams)
+    p.set('tab', next)
+    setSearchParams(p, { replace: true })
+  }
 
   if (trace.isLoading) {
     return (
@@ -47,21 +44,15 @@ export default function TracePage() {
     )
   }
 
-  const data = trace.data
   return (
-    <div className="flex h-screen flex-col">
-      <TraceHeader trace={data} activeTab={tab} />
-      <div className="min-h-0 flex-1">
-        {tab === 'conversation' && <ConversationView trace={data} />}
-        {tab === 'timeline' && <ComingSoon />}
-        {tab === 'metadata' && (
-          <div className="h-full overflow-y-auto">
-            <MetadataTab trace={data} />
-          </div>
-        )}
-        {tab === 'evolution' && <ComingSoon />}
-        {tab === 'raw' && <RawTab traceId={data.meta.traceId} active />}
-      </div>
+    <div className="h-screen">
+      <TraceView
+        trace={trace.data}
+        tab={tab}
+        onTabChange={onTabChange}
+        variant="page"
+        listSearch={location.search}
+      />
     </div>
   )
 }

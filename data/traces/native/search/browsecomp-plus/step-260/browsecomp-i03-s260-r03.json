@@ -1,0 +1,145 @@
+{
+  "meta": {
+    "traceId": "browsecomp-i03-s260-r03",
+    "instanceId": "browsecomp-i03",
+    "component": "search/browsecomp-plus",
+    "status": "completed",
+    "timestamp": "2026-03-11T20:20:19.227Z",
+    "checkpointStep": 260,
+    "split": "train",
+    "sourceFormat": "native",
+    "rewardDetails": {
+      "answer_match": 1
+    },
+    "extra": {
+      "ground_truth": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research."
+    }
+  },
+  "stats": {
+    "score": 1,
+    "hasError": false,
+    "truncated": false,
+    "inputTokens": 277,
+    "outputTokens": 109,
+    "thinkingTokens": 48,
+    "totalTokens": 386,
+    "turns": 3,
+    "toolUses": 2,
+    "sandboxExecutions": 0,
+    "thinkingPortion": 0.44036697247706424,
+    "durationMs": 11816,
+    "model": {
+      "name": "harmony-32b",
+      "contextWindow": 128000,
+      "temperature": 1,
+      "topP": 0.95
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a browsing assistant for hard research questions. Issue targeted queries, cross-check disagreeing sources, and answer only after each sub-fact is independently confirmed.",
+      "id": "m-0",
+      "timestamp": "2026-03-11T20:20:19.227Z",
+      "durationMs": 0
+    },
+    {
+      "role": "user",
+      "content": "The first woman to win a Nobel Prize won it jointly with her husband. In which year, in which category, and with whom did she share it besides her husband?",
+      "id": "m-1",
+      "timestamp": "2026-03-11T20:20:19.325Z",
+      "durationMs": 0
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "This is Marie Curie; the joint prize with Pierre was Physics. Need the year and the third laureate.",
+      "id": "m-2",
+      "timestamp": "2026-03-11T20:20:19.521Z",
+      "durationMs": 2022,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-1",
+          "name": "search",
+          "arguments": "{\"query\":\"first woman Nobel Prize year\"}",
+          "parsedArguments": {
+            "query": "first woman Nobel Prize year"
+          }
+        }
+      ],
+      "id": "m-3",
+      "timestamp": "2026-03-11T20:20:21.802Z",
+      "durationMs": 448,
+      "stepIndex": 1
+    },
+    {
+      "role": "tool",
+      "content": "1. Nobel Prize awarded women — NobelPrize.org — https://www.nobelprize.org/prizes/lists/nobel-prize-awarded-women/\n   Marie Curie was the first woman to be awarded a Nobel Prize, in Physics in 1903, and remains the only woman honoured twice.\n\n2. Marie Curie — Facts — https://www.nobelprize.org/prizes/physics/1903/marie-curie/facts/\n   The Nobel Prize in Physics 1903 was divided, one half to Henri Becquerel, the other half jointly to Pierre and Marie Curie.",
+      "toolResult": {
+        "toolCallId": "call-1",
+        "isError": false,
+        "durationMs": 1612
+      },
+      "id": "m-4",
+      "timestamp": "2026-03-11T20:20:22.433Z",
+      "durationMs": 1612,
+      "stepIndex": 1
+    },
+    {
+      "role": "assistant",
+      "channel": "analysis",
+      "content": "1903 Physics, shared with Henri Becquerel — verifying the split on the official Nobel page.",
+      "id": "m-5",
+      "timestamp": "2026-03-11T20:20:24.346Z",
+      "durationMs": 1684,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "commentary",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "call-2",
+          "name": "search",
+          "arguments": "{\"query\":\"Nobel Prize Physics 1903 laureates Becquerel Curie\"}",
+          "parsedArguments": {
+            "query": "Nobel Prize Physics 1903 laureates Becquerel Curie"
+          }
+        }
+      ],
+      "id": "m-6",
+      "timestamp": "2026-03-11T20:20:26.300Z",
+      "durationMs": 642,
+      "stepIndex": 2
+    },
+    {
+      "role": "tool",
+      "content": "1. The Nobel Prize in Physics 1903 — https://www.nobelprize.org/prizes/physics/1903/summary/\n   Antoine Henri Becquerel \"for his discovery of spontaneous radioactivity\"; Pierre Curie and Marie Curie, née Sklodowska, \"for their joint researches on the radiation phenomena discovered by Professor Henri Becquerel\".",
+      "toolResult": {
+        "toolCallId": "call-2",
+        "isError": false,
+        "durationMs": 1171
+      },
+      "id": "m-7",
+      "timestamp": "2026-03-11T20:20:26.976Z",
+      "durationMs": 1171,
+      "stepIndex": 2
+    },
+    {
+      "role": "assistant",
+      "channel": "final",
+      "content": "Marie Curie became the first female Nobel laureate in 1903, in Physics. The prize was split: one half to Henri Becquerel for discovering spontaneous radioactivity, the other half jointly to Marie and Pierre Curie for their radiation research.",
+      "id": "m-8",
+      "timestamp": "2026-03-11T20:20:28.279Z",
+      "durationMs": 2764,
+      "stepIndex": 3
+    }
+  ]
+}
