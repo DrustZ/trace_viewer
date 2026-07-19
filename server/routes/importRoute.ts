@@ -15,6 +15,15 @@ const EXT_BY_FORMAT: Record<string, string> = {
   harmony: '.txt',
 }
 
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p)
+    return true
+  } catch {
+    return false
+  }
+}
+
 class HttpError extends Error {
   constructor(
     public status: number,
@@ -154,12 +163,55 @@ export function importRoutes(ctx: RouteCtx): Router {
         return
       }
 
+      // Atomic commit: run every check first; nothing is written or upserted
+      // until the whole batch passes. Connector-level salvage (bad entries
+      // dropped with warnings) happens above in parseAny — atomicity applies
+      // to the commit of whatever the connector accepted.
+
+      // (a) duplicate traceIds within the batch itself.
+      const seen = new Set<string>()
+      const duplicates = new Set<string>()
+      for (const t of result.traces) {
+        if (seen.has(t.meta.traceId)) duplicates.add(t.meta.traceId)
+        else seen.add(t.meta.traceId)
+      }
+      if (duplicates.size > 0) {
+        res.status(409).json({
+          error: 'duplicate traceIds within the imported batch',
+          duplicates: [...duplicates],
+        })
+        return
+      }
+
+      // (b) traceIds already in the store — importing the same file twice must
+      // not silently re-upsert. body.overwrite === true skips this check.
+      const overwrite = body.overwrite === true
+      if (!overwrite) {
+        const conflicts = result.traces
+          .map((t) => t.meta.traceId)
+          .filter((id) => ctx.store.get(id) !== undefined)
+        if (conflicts.length > 0) {
+          res.status(409).json({
+            error: 'traceIds already exist in the store (pass overwrite: true to replace)',
+            conflicts,
+          })
+          return
+        }
+      }
+
+      // (c) filename collision — decided only after validation passes.
       const first = result.traces[0]
       const sourceFormat = first.meta.sourceFormat
       const ext = EXT_BY_FORMAT[sourceFormat] ?? '.json'
-      const fileName = `${first.meta.traceId.replace(/[^\w.-]+/g, '_')}${ext}`
-      const filePath = path.join(ctx.importDir, fileName)
+      const base = first.meta.traceId.replace(/[^\w.-]+/g, '_')
       await fs.mkdir(ctx.importDir, { recursive: true })
+      let fileName = `${base}${ext}`
+      for (let n = 2; await pathExists(path.join(ctx.importDir, fileName)); n++) {
+        fileName = `${base}-${n}${ext}`
+      }
+      const filePath = path.join(ctx.importDir, fileName)
+
+      // Commit point: write the raw file, then upsert the whole batch.
       await fs.writeFile(filePath, text, 'utf8')
       for (const parsed of result.traces) ctx.store.upsert(parsed, filePath)
 

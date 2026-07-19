@@ -300,6 +300,50 @@ describe('api', () => {
     expect(badType.status).toBe(400)
   })
 
+  it('POST /api/import rejects a batch with duplicate traceIds and leaves the store untouched', async () => {
+    const entry = JSON.parse(IMPORT_FIXTURE)
+    const res = await request(app)
+      .post('/api/import')
+      .send({ type: 'text', content: JSON.stringify([entry, entry]) })
+    expect(res.status).toBe(409)
+    expect(res.body.duplicates).toEqual(['imported-1'])
+    // Atomic: nothing from the batch landed.
+    const gone = await request(app).get('/api/traces/imported-1')
+    expect(gone.status).toBe(404)
+  })
+
+  it('POST /api/import reports conflicts on re-import; overwrite:true replaces', async () => {
+    const first = await request(app)
+      .post('/api/import')
+      .send({ type: 'text', content: IMPORT_FIXTURE })
+    expect(first.status).toBe(200)
+    const again = await request(app)
+      .post('/api/import')
+      .send({ type: 'text', content: IMPORT_FIXTURE })
+    expect(again.status).toBe(409)
+    expect(again.body.conflicts).toEqual(['imported-1'])
+    const forced = await request(app)
+      .post('/api/import')
+      .send({ type: 'text', content: IMPORT_FIXTURE, overwrite: true })
+    expect(forced.status).toBe(200)
+    expect(forced.body.traceIds).toEqual(['imported-1'])
+    const trace = await request(app).get('/api/traces/imported-1')
+    expect(trace.status).toBe(200)
+  })
+
+  it('POST /api/import mixed batch: connector salvages valid entries, then commits atomically', async () => {
+    const good = JSON.parse(IMPORT_FIXTURE)
+    const res = await request(app)
+      .post('/api/import')
+      .send({ type: 'text', content: JSON.stringify([good, { nonsense: true }]) })
+    // Connector-level salvage: the garbage entry becomes a warning, the valid one imports.
+    expect(res.status).toBe(200)
+    expect(res.body.traceIds).toEqual(['imported-1'])
+    expect(res.body.warnings.length).toBeGreaterThan(0)
+    const trace = await request(app).get('/api/traces/imported-1')
+    expect(trace.status).toBe(200)
+  })
+
   it('POST /api/ai-filter answers with rules-based filters', async () => {
     // Force the rules path even when the shell exports a real ANTHROPIC_API_KEY.
     vi.stubEnv('ANTHROPIC_API_KEY', '')

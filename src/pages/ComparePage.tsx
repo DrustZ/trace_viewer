@@ -9,6 +9,11 @@ import { ScoreBadge } from '../components/common/ScoreBadge'
 
 const RUNS = ['run-a', 'run-b'] as const
 
+const INSTANCE_SCAN_LIMIT = 5000
+const PER_RUN_LIMIT = 1000
+
+const PARTIAL_TOOLTIP = 'partial: computed on the loaded subset only'
+
 const INPUT_CLASS =
   'rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400'
 
@@ -45,6 +50,29 @@ export function buildStepRows(items: readonly TraceSummary[]): StepRow[] {
     })
 }
 
+// Alignment of one checkpoint step across the two runs. Dataset/revision
+// mismatch classes from the reference project don't apply here — our runs share
+// the generator schema, so 'matched' / 'A only' / 'B only' covers every case.
+type AlignState = 'matched' | 'A only' | 'B only'
+
+interface AlignedRow {
+  step: number
+  a: StepRow | undefined
+  b: StepRow | undefined
+  state: AlignState
+}
+
+export function alignStepRows(rowsA: StepRow[], rowsB: StepRow[]): AlignedRow[] {
+  const byStepA = new Map(rowsA.map((r) => [r.step, r]))
+  const byStepB = new Map(rowsB.map((r) => [r.step, r]))
+  const steps = [...new Set([...byStepA.keys(), ...byStepB.keys()])].sort((x, y) => x - y)
+  return steps.map((step) => {
+    const a = byStepA.get(step)
+    const b = byStepB.get(step)
+    return { step, a, b, state: a && b ? 'matched' : a ? 'A only' : 'B only' }
+  })
+}
+
 function finalAssistantMessage(trace: Trace): Message | undefined {
   for (let i = trace.messages.length - 1; i >= 0; i--) {
     const m = trace.messages[i]
@@ -74,6 +102,42 @@ function totalOf(data: unknown): number {
     : 0
 }
 
+/**
+ * A derived number (avg/best/delta). Under a partial load every value gets a
+ * '≈' prefix and a 'partial' tooltip — never a clean-looking number.
+ */
+function DerivedScore({
+  value,
+  partial,
+  signed = false,
+}: {
+  value: number | null
+  partial: boolean
+  signed?: boolean
+}) {
+  if (value === null) return <span className="text-slate-400">—</span>
+  const text = `${signed && value >= 0 ? '+' : ''}${formatScore(value)}`
+  return (
+    <span
+      className="font-mono tabular-nums text-slate-700"
+      title={partial ? PARTIAL_TOOLTIP : undefined}
+    >
+      {partial ? '≈' : ''}
+      {text}
+    </span>
+  )
+}
+
+/** '≈' marker for badge-like derived values (best rollout scores) under partial data. */
+function ApproxMark({ partial }: { partial: boolean }) {
+  if (!partial) return null
+  return (
+    <span className="text-slate-500" title={PARTIAL_TOOLTIP}>
+      ≈
+    </span>
+  )
+}
+
 /** Amber warning when the server holds more rollouts than the capped fetch returned. */
 function TruncationNote({ shown, total, label }: { shown: number; total: number; label?: string }) {
   if (!(total > shown)) return null
@@ -95,35 +159,102 @@ function Note({ children }: { children: React.ReactNode }) {
   )
 }
 
-function StepTable({ rows }: { rows: StepRow[] }) {
+function OnlyTag({ run }: { run: string }) {
+  return (
+    <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+      only in {run}
+    </span>
+  )
+}
+
+function BestCell({ row, partial }: { row: StepRow | undefined; partial: boolean }) {
+  if (!row) return <span className="text-slate-400">—</span>
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <ApproxMark partial={partial} />
+      <Link
+        to={`/trace/${encodeURIComponent(row.best.meta.traceId)}`}
+        className="text-blue-600 hover:underline"
+      >
+        <ScoreBadge score={row.best.stats.score} />
+      </Link>
+    </span>
+  )
+}
+
+/**
+ * One table over the union of checkpoint steps: matched steps show both sides
+ * plus Δ (B−A); one-sided steps get an 'only in run-X' tag instead of implying
+ * a zero on the missing side.
+ */
+function AlignedStepTable({
+  rows,
+  runA,
+  runB,
+  partial,
+}: {
+  rows: AlignedRow[]
+  runA: string
+  runB: string
+  partial: boolean
+}) {
+  const sideCells = (side: StepRow | undefined) => (
+    <>
+      <td className="py-1 pr-2 tabular-nums text-slate-600">
+        {side ? side.count : <span className="text-slate-400">—</span>}
+      </td>
+      <td className="py-1 pr-2">
+        {side ? (
+          <DerivedScore value={side.avgScore} partial={partial} />
+        ) : (
+          <span className="text-slate-400">—</span>
+        )}
+      </td>
+      <td className="py-1 pr-2">
+        <BestCell row={side} partial={partial} />
+      </td>
+    </>
+  )
   return (
     <table className="w-full border-collapse text-xs" data-testid="compare-step-table">
       <thead>
         <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-400">
           <th className="py-1 pr-2 font-medium">Step</th>
-          <th className="py-1 pr-2 font-medium">Rollouts</th>
-          <th className="py-1 pr-2 font-medium">Avg score</th>
-          <th className="py-1 font-medium">Best</th>
+          <th className="py-1 pr-2 font-medium">Match</th>
+          <th className="py-1 pr-2 font-medium">A rollouts</th>
+          <th className="py-1 pr-2 font-medium">A avg</th>
+          <th className="py-1 pr-2 font-medium">A best</th>
+          <th className="py-1 pr-2 font-medium">B rollouts</th>
+          <th className="py-1 pr-2 font-medium">B avg</th>
+          <th className="py-1 pr-2 font-medium">B best</th>
+          <th className="py-1 font-medium normal-case">Δ avg (B−A)</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map((r) => (
-          <tr key={r.step} className="border-b border-slate-100">
-            <td className="py-1 pr-2 font-mono tabular-nums text-slate-700">{r.step}</td>
-            <td className="py-1 pr-2 tabular-nums text-slate-600">{r.count}</td>
-            <td className="py-1 pr-2 font-mono tabular-nums text-slate-700">
-              {formatScore(r.avgScore)}
-            </td>
-            <td className="py-1">
-              <Link
-                to={`/trace/${encodeURIComponent(r.best.meta.traceId)}`}
-                className="text-blue-600 hover:underline"
-              >
-                <ScoreBadge score={r.best.stats.score} />
-              </Link>
-            </td>
-          </tr>
-        ))}
+        {rows.map((r) => {
+          // Δ is defined as B − A, only when both sides have a graded avg.
+          const delta =
+            r.state === 'matched' && r.a?.avgScore != null && r.b?.avgScore != null
+              ? r.b.avgScore - r.a.avgScore
+              : null
+          return (
+            <tr key={r.step} className="border-b border-slate-100" data-align={r.state}>
+              <td className="py-1 pr-2 font-mono tabular-nums text-slate-700">{r.step}</td>
+              <td className="py-1 pr-2">
+                {r.state === 'matched' ? (
+                  <span className="text-[10px] text-slate-400">matched</span>
+                ) : (
+                  <OnlyTag run={r.state === 'A only' ? runA : runB} />
+                )}
+              </td>
+              {sideCells(r.a)}
+              {sideCells(r.b)}
+              <td className="py-1">
+                <DerivedScore value={delta} partial={partial} signed />
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )
@@ -133,10 +264,12 @@ function FinalOutputCard({
   run,
   step,
   summary,
+  partial,
 }: {
   run: string
   step: number
   summary: TraceSummary | undefined
+  partial: boolean
 }) {
   const trace = useTrace(summary?.meta.traceId)
   if (!summary) return <Note>No rollout for {run} at this step.</Note>
@@ -149,6 +282,7 @@ function FinalOutputCard({
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <span className="font-semibold text-slate-700">{run}</span>
         <span>step {step}</span>
+        <ApproxMark partial={partial} />
         <ScoreBadge score={summary.stats.score} />
         <Link
           to={`/trace/${encodeURIComponent(summary.meta.traceId)}`}
@@ -194,28 +328,44 @@ export default function ComparePage() {
   }
 
   // Instance picker options: distinct instanceIds from a broad summaries query.
-  const allTraces = useTraces({ limit: 5000 })
+  const allTraces = useTraces({ limit: INSTANCE_SCAN_LIMIT })
   const instanceOptions = useMemo(
     () => [...new Set(itemsOf(allTraces.data).map((s) => s.meta.instanceId))].sort(),
     [allTraces.data],
   )
 
   const queryA = useTraces(
-    instance === '' ? { limit: 0 } : { filters: instanceRunFilters(instance, runA), limit: 1000 },
+    instance === ''
+      ? { limit: 0 }
+      : { filters: instanceRunFilters(instance, runA), limit: PER_RUN_LIMIT },
   )
   const queryB = useTraces(
-    instance === '' ? { limit: 0 } : { filters: instanceRunFilters(instance, runB), limit: 1000 },
+    instance === ''
+      ? { limit: 0 }
+      : { filters: instanceRunFilters(instance, runB), limit: PER_RUN_LIMIT },
   )
   const rowsA = useMemo(() => buildStepRows(itemsOf(queryA.data)), [queryA.data])
   const rowsB = useMemo(() => buildStepRows(itemsOf(queryB.data)), [queryB.data])
 
-  const stepsB = new Set(rowsB.map((r) => r.step))
-  const commonSteps = rowsA.map((r) => r.step).filter((s) => stepsB.has(s))
-  const lastCommonStep = commonSteps.length > 0 ? commonSteps[commonSteps.length - 1] : undefined
+  // Honest-partial bookkeeping: the fetches above are capped, so track what the
+  // server says exists (total) vs. what we actually loaded per side.
+  const loadedA = itemsOf(queryA.data).length
+  const loadedB = itemsOf(queryB.data).length
+  const totalA = totalOf(queryA.data)
+  const totalB = totalOf(queryB.data)
+  const completeA = loadedA >= totalA
+  const completeB = loadedB >= totalB
+  const partial = instance !== '' && (!completeA || !completeB)
+
+  const aligned = useMemo(() => alignStepRows(rowsA, rowsB), [rowsA, rowsB])
+
+  const matchedSteps = aligned.filter((r) => r.state === 'matched').map((r) => r.step)
+  const lastMatchedStep =
+    matchedSteps.length > 0 ? matchedSteps[matchedSteps.length - 1] : undefined
   // Runs sample different checkpoint grids, so a shared step may not exist —
   // fall back to each run's own latest step to keep the comparison useful.
-  const stepA = lastCommonStep ?? rowsA[rowsA.length - 1]?.step
-  const stepB = lastCommonStep ?? rowsB[rowsB.length - 1]?.step
+  const stepA = lastMatchedStep ?? rowsA[rowsA.length - 1]?.step
+  const stepB = lastMatchedStep ?? rowsB[rowsB.length - 1]?.step
   const bestA = rowsA.find((r) => r.step === stepA)?.best
   const bestB = rowsB.find((r) => r.step === stepB)?.best
 
@@ -242,22 +392,6 @@ export default function ComparePage() {
         ))}
       </select>
     </label>
-  )
-
-  const column = (run: string, rows: StepRow[], data: unknown, testId: string) => (
-    <section className="flex min-w-0 flex-col gap-2" data-testid={testId}>
-      <h2 className="text-sm font-semibold text-slate-700">{run}</h2>
-      {loading ? (
-        <p className="text-xs text-slate-400">Loading…</p>
-      ) : rows.length === 0 ? (
-        <Note>No traces for {run} on this instance.</Note>
-      ) : (
-        <>
-          <TruncationNote shown={itemsOf(data).length} total={totalOf(data)} />
-          <StepTable rows={rows} />
-        </>
-      )}
-    </section>
   )
 
   return (
@@ -299,6 +433,10 @@ export default function ComparePage() {
               <option key={id} value={id} />
             ))}
           </datalist>
+          <span className="font-normal normal-case tracking-normal text-slate-500">
+            {instanceOptions.length} instances discovered (first {INSTANCE_SCAN_LIMIT} scanned) ·
+            best rollout = highest score at the latest matched step
+          </span>
         </label>
 
         <TruncationNote
@@ -311,17 +449,38 @@ export default function ComparePage() {
           <Note>Pick an instance above to compare its rollouts across runs.</Note>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2">
-              {column(runA, rowsA, queryA.data, 'compare-col-a')}
-              {column(runB, rowsB, queryB.data, 'compare-col-b')}
-            </div>
+            {partial && !loading && (
+              <p
+                data-testid="partial-banner"
+                className="rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
+              >
+                Partial comparison — showing {loadedA} of {totalA} (A) / {loadedB} of {totalB} (B);
+                aggregates below are computed on the loaded subset only
+              </p>
+            )}
+
+            <section
+              className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3"
+              data-testid="compare-aligned"
+            >
+              <h2 className="text-sm font-semibold text-slate-700">
+                {runA} (A) vs {runB} (B) by checkpoint step
+              </h2>
+              {loading ? (
+                <p className="text-xs text-slate-400">Loading…</p>
+              ) : aligned.length === 0 ? (
+                <Note>No traces for either run on this instance.</Note>
+              ) : (
+                <AlignedStepTable rows={aligned} runA={runA} runB={runB} partial={partial} />
+              )}
+            </section>
 
             <section className="flex flex-col gap-2">
               <h2 className="text-sm font-semibold text-slate-700">
                 Final output — best rollout
-                {lastCommonStep !== undefined
-                  ? ` @ last common step ${lastCommonStep}`
-                  : " @ each run's latest step (no common checkpoint)"}
+                {lastMatchedStep !== undefined
+                  ? ` @ last matched step ${lastMatchedStep}`
+                  : " @ each run's latest step (no matched checkpoint)"}
               </h2>
               {loading ? (
                 <p className="text-xs text-slate-400">Loading…</p>
@@ -330,12 +489,12 @@ export default function ComparePage() {
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {stepA !== undefined ? (
-                    <FinalOutputCard run={runA} step={stepA} summary={bestA} />
+                    <FinalOutputCard run={runA} step={stepA} summary={bestA} partial={partial} />
                   ) : (
                     <Note>No rollouts for {runA}.</Note>
                   )}
                   {stepB !== undefined ? (
-                    <FinalOutputCard run={runB} step={stepB} summary={bestB} />
+                    <FinalOutputCard run={runB} step={stepB} summary={bestB} partial={partial} />
                   ) : (
                     <Note>No rollouts for {runB}.</Note>
                   )}
