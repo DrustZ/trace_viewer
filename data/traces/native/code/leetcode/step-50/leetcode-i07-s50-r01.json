@@ -10,6 +10,9 @@
     "sourceFormat": "native",
     "extra": {
       "ground_truth": "Returns the index of target in the sorted array or -1, in O(log n); must handle the lo == hi case (single-element array).",
+      "golden_response": "Reference approach (passes all 10 cases):\n\n```python\nclass Solution:\n    def search(self, nums: list[int], target: int) -> int:\n        lo, hi = 0, len(nums) - 1\n        while lo <= hi:\n            mid = (lo + hi) // 2\n            if nums[mid] == target:\n                return mid\n            if nums[mid] < target:\n                lo = mid + 1\n            else:\n                hi = mid - 1\n        return -1\n```",
+      "kl": 0.0204,
+      "trainer_batch": 2,
       "spans": [
         {
           "id": "sp-1",

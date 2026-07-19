@@ -88,7 +88,7 @@ export function GlobalSearchBox() {
         className="w-56 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
       />
       {showPanel && (
-        <div className="absolute right-0 top-full z-40 mt-1 max-h-96 w-[28rem] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1 max-h-96 w-[28rem] min-w-[360px] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
           {hits.length === 0 ? (
             <p className="px-3 py-2 text-xs text-slate-500">
               {search.isFetching ? 'Searching…' : 'No matches'}

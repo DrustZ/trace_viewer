@@ -14,6 +14,14 @@
     },
     "extra": {
       "ground_truth": "Returns max over pairs of (hi - lo) * min(height[lo], height[hi]); the two-pointer scan must always advance the shorter side.",
+      "golden_response": "Reference approach (passes all 10 cases):\n\n```python\nclass Solution:\n    def maxArea(self, height: list[int]) -> int:\n        lo, hi = 0, len(height) - 1\n        best = 0\n        while lo < hi:\n            best = max(best, (hi - lo) * min(height[lo], height[hi]))\n            if height[lo] < height[hi]:\n                lo += 1\n            else:\n                hi -= 1\n        return best\n```",
+      "kl": 0.0304,
+      "trainer_batch": 4,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",

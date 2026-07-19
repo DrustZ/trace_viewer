@@ -60,15 +60,87 @@ function sampleLogprob(rng: Rng, suspicious: boolean): number {
   return Math.min(-0.0001, Math.round(lp * 10000) / 10000)
 }
 
+/** Tokens at or above this logprob (p ≥ 0.9) are logged without top-k, like real inference. */
+export const TOPK_LOGPROB_CEILING = Math.log(0.9)
+
+/** Plausible-looking word fragments used as synthesized top-k alternatives. */
+const ALT_FRAGMENTS: readonly string[] = [
+  ' the',
+  ' a',
+  ' and',
+  ' to',
+  ' of',
+  ' is',
+  ' in',
+  ' that',
+  ' it',
+  ' we',
+  ' not',
+  ' also',
+  'ing',
+  'ed',
+  's',
+  'ly',
+  ',',
+  '.',
+  ' (',
+  ' =',
+]
+
+/**
+ * Synthesize an inference top-k list for the token at `index`: the chosen
+ * token first at its own logprob, then 2-3 rng-picked alternatives (neighbor
+ * tokens + word fragments) with strictly descending probabilities below the
+ * chosen one, keeping total mass under ~0.99.
+ */
+function buildTopk(tokens: TokenLogprob[], index: number, rng: Rng): TokenLogprob['topk'] {
+  const chosen = tokens[index]
+  const pChosen = Math.exp(chosen.logprob)
+  const pool: string[] = []
+  const prev = tokens[index - 1]
+  const next = tokens[index + 1]
+  if (prev !== undefined) pool.push(prev.token)
+  if (next !== undefined) pool.push(next.token)
+  pool.push(...ALT_FRAGMENTS)
+
+  const topk: NonNullable<TokenLogprob['topk']> = [
+    { token: chosen.token, logprob: chosen.logprob, id: chosen.id },
+  ]
+  const used = new Set([chosen.token])
+  let budget = Math.min(0.99 - pChosen, pChosen)
+  let ceiling = pChosen
+  const altCount = rng.int(2, 3)
+  for (let k = 0; k < altCount; k++) {
+    let alt: string | undefined
+    for (let tries = 0; tries < 8 && alt === undefined; tries++) {
+      const candidate = rng.pick(pool)
+      if (!used.has(candidate)) alt = candidate
+    }
+    if (alt === undefined) break
+    used.add(alt)
+    const cap = Math.min(ceiling * 0.9, budget)
+    if (cap <= 1e-9) break
+    const p = cap * (0.3 + 0.65 * rng.next())
+    budget -= p
+    ceiling = p
+    topk.push({ token: alt, logprob: Math.round(Math.log(p) * 10000) / 10000, id: tokenId(alt) })
+  }
+  return topk
+}
+
 export function buildTokens(
   text: string,
   rng: Rng,
   region?: { start: number; end: number },
 ): TokenLogprob[] {
-  return tokenize(text).map(({ token, start }) => {
+  const tokens: TokenLogprob[] = tokenize(text).map(({ token, start }) => {
     const suspicious = region ? start < region.end && start + token.length > region.start : false
     return { token, logprob: sampleLogprob(rng, suspicious), id: tokenId(token) }
   })
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].logprob < TOPK_LOGPROB_CEILING) tokens[i].topk = buildTopk(tokens, i, rng)
+  }
+  return tokens
 }
 
 /**

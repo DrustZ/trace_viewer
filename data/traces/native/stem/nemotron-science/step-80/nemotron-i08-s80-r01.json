@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "3 g",
+      "golden_response": "Correct answer: 3 g\n\n15 years is exactly 3 half-lives, so the remaining mass is 24 / 2^3. 24 -> 12 -> 6 -> 3, leaving 3 g.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"3 g\". The candidate response commits to \"6 g\". Where the response cites figures, I verified they match the reference values before scoring. The response contains no contradictory statements elsewhere that would override its committed answer. The response gives 6 g, which corresponds to only 2 half-lives; 15 years is 3 half-lives of 5 years, leaving 3 g. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.1078,
+      "trainer_batch": 3,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",

@@ -27,6 +27,31 @@ export const BUCKET_LABELS: readonly string[] = [
   'p < 15%',
 ]
 
+export type Confidence = 'high' | 'med' | 'low' | 'na'
+
+/** Chip confidence for the 'probs' view: p ≥ 0.7 high, p ≥ 0.3 med, else low. */
+export function confidenceOf(logprob: number): Confidence {
+  const p = Math.exp(logprob)
+  if (p >= 0.7) return 'high'
+  if (p >= 0.3) return 'med'
+  return 'low'
+}
+
+export const CONFIDENCE_LABELS: Record<Confidence, string> = {
+  high: 'High',
+  med: 'Med',
+  low: 'Low',
+  na: 'N/A',
+}
+
+/** Discrete chip styling per confidence level ('na' = whitespace/newline chips). */
+export const CONFIDENCE_CHIP_CLASSES: Record<Confidence, string> = {
+  high: 'bg-emerald-100 border-emerald-300 text-emerald-900',
+  med: 'bg-amber-100 border-amber-300 text-amber-900',
+  low: 'bg-rose-200 border-rose-400 text-rose-900',
+  na: 'bg-slate-100 border-slate-300 text-slate-500',
+}
+
 /**
  * Soft pastel backgrounds cycled by token index in the 'tokens' view, so
  * adjacent token blocks stay visually distinct without encoding confidence.

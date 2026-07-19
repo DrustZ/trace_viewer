@@ -14,7 +14,11 @@ function renderResults(results: readonly SearchSnippet[]): string {
 
 export const browsecomp: Scenario = (plan, rng): ScenarioOutput => {
   const item = SEARCH_ITEMS[(plan.instanceIdx - 1) % SEARCH_ITEMS.length]
-  const extra = { ground_truth: item.answer }
+  const source = item.rounds[0].results[0]
+  const extra = {
+    ground_truth: item.answer,
+    golden_response: `${item.answer}\n\nSource hint: ${source.title} — ${source.url}`,
+  }
   const b = new TraceBuilder(plan.startMs, rng)
   const regions: FailureRegion[] = []
   b.system(rng.pick(SEARCH_SYSTEM_PROMPTS))

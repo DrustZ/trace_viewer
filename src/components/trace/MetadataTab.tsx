@@ -8,6 +8,7 @@ import {
   formatTimestamp,
 } from '../common/format'
 import { JsonTree } from '../common/JsonTree'
+import { parseJudgeExtra, parseRewardBreakdown } from './TraceSummaryPanel'
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
@@ -73,6 +74,9 @@ function scoreTone(score: number | null): string {
 export function MetadataTab({ trace }: { trace: Trace }) {
   const { meta, stats } = trace
   const tokPerTurn = stats.turns > 0 ? Math.round(stats.totalTokens / stats.turns) : null
+  const breakdown = parseRewardBreakdown(meta.extra?.reward_breakdown)
+  const judge = parseJudgeExtra(meta.extra?.judge)
+  const hasRewardDetails = meta.rewardDetails && Object.keys(meta.rewardDetails).length > 0
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 px-4 py-4">
@@ -139,11 +143,55 @@ export function MetadataTab({ trace }: { trace: Trace }) {
         <KvRow label="Source Format" value={meta.sourceFormat} />
       </Card>
 
-      {meta.rewardDetails && Object.keys(meta.rewardDetails).length > 0 && (
+      {(hasRewardDetails || breakdown || judge) && (
         <Card title="Reward Details">
-          {Object.entries(meta.rewardDetails).map(([key, value]) => (
-            <KvRow key={key} label={key} value={<span className="font-mono">{value}</span>} />
-          ))}
+          {hasRewardDetails &&
+            Object.entries(meta.rewardDetails ?? {}).map(([key, value]) => (
+              <KvRow key={key} label={key} value={<span className="font-mono">{value}</span>} />
+            ))}
+          {breakdown && (
+            <>
+              <KvRow
+                label="correctness"
+                value={<span className="font-mono">{String(breakdown.correctness)}</span>}
+              />
+              <KvRow
+                label="length penalty"
+                value={
+                  <span
+                    className={`font-mono ${breakdown.length_penalty < 0 ? 'text-red-600' : ''}`}
+                  >
+                    {String(breakdown.length_penalty)}
+                  </span>
+                }
+              />
+              <KvRow
+                label="final reward"
+                value={<span className="font-mono">{String(breakdown.final_reward)}</span>}
+              />
+            </>
+          )}
+          {judge && (
+            <KvRow
+              label="judge verdict"
+              value={
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      judge.verdict === 1
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}
+                  >
+                    {judge.verdict === 1 ? 'PASS' : 'FAIL'}
+                  </span>
+                  {judge.model && (
+                    <span className="font-mono text-xs text-slate-500">{judge.model}</span>
+                  )}
+                </span>
+              }
+            />
+          )}
         </Card>
       )}
 

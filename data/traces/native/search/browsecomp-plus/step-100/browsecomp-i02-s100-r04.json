@@ -13,6 +13,14 @@
     },
     "extra": {
       "ground_truth": "Helium was discovered first — identified spectroscopically in sunlight in 1868 by Janssen and Lockyer — while argon was isolated in 1894 by Rayleigh and Ramsay. That places the discoveries 26 years apart.",
+      "golden_response": "Helium was discovered first — identified spectroscopically in sunlight in 1868 by Janssen and Lockyer — while argon was isolated in 1894 by Rayleigh and Ramsay. That places the discoveries 26 years apart.\n\nSource hint: Helium — Wikipedia — https://en.wikipedia.org/wiki/Helium",
+      "kl": 0.1905,
+      "trainer_batch": 4,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -301,7 +309,24 @@
         {
           "token": "\"",
           "logprob": -0.3238,
-          "id": 163278
+          "id": 163278,
+          "topk": [
+            {
+              "token": "\"",
+              "logprob": -0.3238,
+              "id": 163278
+            },
+            {
+              "token": "argon",
+              "logprob": -1.3994,
+              "id": 82535
+            },
+            {
+              "token": "s",
+              "logprob": -4.6187,
+              "id": 33127
+            }
+          ]
         },
         {
           "token": "argon",
@@ -311,7 +336,24 @@
         {
           "token": " discovery",
           "logprob": -0.8723,
-          "id": 23632
+          "id": 23632,
+          "topk": [
+            {
+              "token": " discovery",
+              "logprob": -0.8723,
+              "id": 23632
+            },
+            {
+              "token": " of",
+              "logprob": -1.1153,
+              "id": 28423
+            },
+            {
+              "token": " year",
+              "logprob": -3.5877,
+              "id": 105423
+            }
+          ]
         },
         {
           "token": " year",
@@ -326,7 +368,29 @@
         {
           "token": " Ramsay",
           "logprob": -1.142,
-          "id": 126789
+          "id": 126789,
+          "topk": [
+            {
+              "token": " Ramsay",
+              "logprob": -1.142,
+              "id": 126789
+            },
+            {
+              "token": "s",
+              "logprob": -2.0348,
+              "id": 33127
+            },
+            {
+              "token": "ed",
+              "logprob": -2.3903,
+              "id": 170985
+            },
+            {
+              "token": "ly",
+              "logprob": -3.2912,
+              "id": 31883
+            }
+          ]
         },
         {
           "token": "\"",
@@ -336,7 +400,29 @@
         {
           "token": "}",
           "logprob": -0.636,
-          "id": 127637
+          "id": 127637,
+          "topk": [
+            {
+              "token": "}",
+              "logprob": -0.636,
+              "id": 127637
+            },
+            {
+              "token": "\"",
+              "logprob": -1.1249,
+              "id": 163278
+            },
+            {
+              "token": " we",
+              "logprob": -2.9766,
+              "id": 148168
+            },
+            {
+              "token": " it",
+              "logprob": -3.6061,
+              "id": 151303
+            }
+          ]
         }
       ],
       "stepIndex": 2
@@ -364,178 +450,324 @@
       "tokens": [
         {
           "token": "Helium",
-          "logprob": -0.0465,
+          "logprob": -0.0014,
           "id": 171560
         },
         {
           "token": " was",
-          "logprob": -0.6168,
+          "logprob": -0.0432,
           "id": 191173
         },
         {
           "token": " discovered",
-          "logprob": -0.0347,
-          "id": 38022
+          "logprob": -0.3566,
+          "id": 38022,
+          "topk": [
+            {
+              "token": " discovered",
+              "logprob": -0.3566,
+              "id": 38022
+            },
+            {
+              "token": " was",
+              "logprob": -1.5382,
+              "id": 191173
+            },
+            {
+              "token": " not",
+              "logprob": -2.6767,
+              "id": 91101
+            },
+            {
+              "token": "s",
+              "logprob": -5.3159,
+              "id": 33127
+            }
+          ]
         },
         {
           "token": " first",
-          "logprob": -0.0069,
+          "logprob": -0.0077,
           "id": 128972
         },
         {
           "token": " —",
-          "logprob": -0.0495,
-          "id": 74858
+          "logprob": -0.8238,
+          "id": 74858,
+          "topk": [
+            {
+              "token": " —",
+              "logprob": -0.8238,
+              "id": 74858
+            },
+            {
+              "token": " that",
+              "logprob": -1.1728,
+              "id": 46435
+            },
+            {
+              "token": "ed",
+              "logprob": -2.2871,
+              "id": 170985
+            }
+          ]
         },
         {
           "token": " identified",
-          "logprob": -2.9288,
-          "id": 46979
+          "logprob": -1.1729,
+          "id": 46979,
+          "topk": [
+            {
+              "token": " identified",
+              "logprob": -1.1729,
+              "id": 46979
+            },
+            {
+              "token": " and",
+              "logprob": -2.0448,
+              "id": 178613
+            },
+            {
+              "token": "ed",
+              "logprob": -2.387,
+              "id": 170985
+            },
+            {
+              "token": "s",
+              "logprob": -2.794,
+              "id": 33127
+            }
+          ]
         },
         {
           "token": " spectroscopically",
-          "logprob": -0.016,
-          "id": 75713
+          "logprob": -3.263,
+          "id": 75713,
+          "topk": [
+            {
+              "token": " spectroscopically",
+              "logprob": -3.263,
+              "id": 75713
+            },
+            {
+              "token": " and",
+              "logprob": -4.5046,
+              "id": 178613
+            },
+            {
+              "token": ".",
+              "logprob": -5.0783,
+              "id": 86890
+            }
+          ]
         },
         {
           "token": " in",
-          "logprob": -0.0117,
+          "logprob": -0.0447,
           "id": 9249
         },
         {
           "token": " sunlight",
-          "logprob": -0.0189,
+          "logprob": -0.0023,
           "id": 110826
         },
         {
           "token": " in",
-          "logprob": -0.0195,
-          "id": 9249
+          "logprob": -0.5382,
+          "id": 9249,
+          "topk": [
+            {
+              "token": " in",
+              "logprob": -0.5382,
+              "id": 9249
+            },
+            {
+              "token": " to",
+              "logprob": -1.8342,
+              "id": 135647
+            },
+            {
+              "token": " =",
+              "logprob": -3.1251,
+              "id": 170427
+            }
+          ]
         },
         {
           "token": " 1868",
-          "logprob": -0.0443,
+          "logprob": -0.0469,
           "id": 117589
         },
         {
           "token": " by",
-          "logprob": -0.028,
+          "logprob": -0.0362,
           "id": 126847
         },
         {
           "token": " Janssen",
-          "logprob": -0.0014,
+          "logprob": -0.0313,
           "id": 176274
         },
         {
           "token": " and",
-          "logprob": -0.0432,
+          "logprob": -0.0366,
           "id": 178613
         },
         {
           "token": " Lockyer",
-          "logprob": -0.3566,
+          "logprob": -0.0013,
           "id": 191293
         },
         {
           "token": " —",
-          "logprob": -0.0077,
+          "logprob": -0.0466,
           "id": 74858
         },
         {
           "token": " while",
-          "logprob": -0.8238,
+          "logprob": -0.0486,
           "id": 17469
         },
         {
           "token": " argon",
-          "logprob": -1.1729,
+          "logprob": -0.0477,
           "id": 154053
         },
         {
           "token": " was",
-          "logprob": -3.263,
+          "logprob": -0.0053,
           "id": 191173
         },
         {
           "token": " isolated",
-          "logprob": -0.0447,
+          "logprob": -0.0046,
           "id": 196481
         },
         {
           "token": " in",
-          "logprob": -0.0023,
+          "logprob": -0.0226,
           "id": 9249
         },
         {
           "token": " 1894",
-          "logprob": -0.5382,
+          "logprob": -0.0031,
           "id": 101180
         },
         {
           "token": " by",
-          "logprob": -0.0469,
+          "logprob": -0.0349,
           "id": 126847
         },
         {
           "token": " Rayleigh",
-          "logprob": -0.0362,
-          "id": 135367
+          "logprob": -4.5387,
+          "id": 135367,
+          "topk": [
+            {
+              "token": " Rayleigh",
+              "logprob": -4.5387,
+              "id": 135367
+            },
+            {
+              "token": " of",
+              "logprob": -5.3278,
+              "id": 28423
+            },
+            {
+              "token": ",",
+              "logprob": -6.1467,
+              "id": 25084
+            }
+          ]
         },
         {
           "token": " and",
-          "logprob": -0.0313,
-          "id": 178613
+          "logprob": -5.8883,
+          "id": 178613,
+          "topk": [
+            {
+              "token": " and",
+              "logprob": -5.8883,
+              "id": 178613
+            },
+            {
+              "token": "ing",
+              "logprob": -6.4197,
+              "id": 96940
+            },
+            {
+              "token": " Ramsay",
+              "logprob": -7.2876,
+              "id": 126789
+            }
+          ]
         },
         {
           "token": " Ramsay",
-          "logprob": -0.0366,
+          "logprob": -0.0061,
           "id": 126789
         },
         {
           "token": ".",
-          "logprob": -0.0013,
+          "logprob": -0.0403,
           "id": 86890
         },
         {
           "token": " That",
-          "logprob": -0.0466,
+          "logprob": -0.0065,
           "id": 121155
         },
         {
           "token": " places",
-          "logprob": -0.0486,
+          "logprob": -0.0195,
           "id": 141192
         },
         {
           "token": " the",
-          "logprob": -0.0477,
+          "logprob": -0.0166,
           "id": 80255
         },
         {
           "token": " discoveries",
-          "logprob": -0.0053,
+          "logprob": -0.0323,
           "id": 85864
         },
         {
           "token": " 26",
-          "logprob": -0.0046,
+          "logprob": -0.0124,
           "id": 34148
         },
         {
           "token": " years",
-          "logprob": -0.0226,
+          "logprob": -0.0137,
           "id": 43372
         },
         {
           "token": " apart",
-          "logprob": -0.0031,
+          "logprob": -0.0406,
           "id": 109836
         },
         {
           "token": ".",
-          "logprob": -0.0349,
-          "id": 86890
+          "logprob": -0.7017,
+          "id": 86890,
+          "topk": [
+            {
+              "token": ".",
+              "logprob": -0.7017,
+              "id": 86890
+            },
+            {
+              "token": " the",
+              "logprob": -1.0657,
+              "id": 80255
+            },
+            {
+              "token": " to",
+              "logprob": -3.0498,
+              "id": 135647
+            }
+          ]
         }
       ],
       "stepIndex": 3

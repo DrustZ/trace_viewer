@@ -5,7 +5,10 @@ import type { FailureRegion, Scenario, ScenarioOutput } from '../types'
 
 export const deepscalerMath: Scenario = (plan, rng): ScenarioOutput => {
   const item = MATH_ITEMS[(plan.instanceIdx - 1) % MATH_ITEMS.length]
-  const extra = { ground_truth: item.answer }
+  const extra = {
+    ground_truth: item.answer,
+    golden_response: `${item.derivation.join('\n\n')}\n\nFinal answer: $\\boxed{${item.answer}}$`,
+  }
   const b = new TraceBuilder(plan.startMs, rng)
   b.system(rng.pick(MATH_SYSTEM_PROMPTS))
   b.user(item.problem)
@@ -21,7 +24,7 @@ export const deepscalerMath: Scenario = (plan, rng): ScenarioOutput => {
 
   const value = success ? item.answer : item.wrong
   const boxed = `\\boxed{${value}}`
-  const finalText = `Working through the ${success ? 'derivation' : 'computation'} above, the value comes out to $${boxed}$.`
+  const finalText = `Working through the ${success ? 'derivation' : 'computation'} above, the value comes out to $${boxed}$.\nFinal answer: ${value}.`
   const regions: FailureRegion[] = []
 
   if (plan.failure === 'truncation') {

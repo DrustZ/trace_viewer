@@ -14,6 +14,14 @@
     },
     "extra": {
       "ground_truth": "Returns max over pairs of (hi - lo) * min(height[lo], height[hi]); the two-pointer scan must always advance the shorter side.",
+      "golden_response": "Reference approach (passes all 10 cases):\n\n```python\nclass Solution:\n    def maxArea(self, height: list[int]) -> int:\n        lo, hi = 0, len(height) - 1\n        best = 0\n        while lo < hi:\n            best = max(best, (hi - lo) * min(height[lo], height[hi]))\n            if height[lo] < height[hi]:\n                lo += 1\n            else:\n                hi -= 1\n        return best\n```",
+      "kl": 0.2307,
+      "trainer_batch": 2,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0002,
+        "final_reward": -0.0002
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -258,7 +266,24 @@
         {
           "token": "\"",
           "logprob": -1.3665,
-          "id": 163278
+          "id": 163278,
+          "topk": [
+            {
+              "token": "\"",
+              "logprob": -1.3665,
+              "id": 163278
+            },
+            {
+              "token": " =",
+              "logprob": -1.9283,
+              "id": 170427
+            },
+            {
+              "token": " a",
+              "logprob": -2.3412,
+              "id": 191231
+            }
+          ]
         },
         {
           "token": "class",
@@ -293,7 +318,29 @@
         {
           "token": " maxArea",
           "logprob": -1.3777,
-          "id": 153775
+          "id": 153775,
+          "topk": [
+            {
+              "token": " maxArea",
+              "logprob": -1.3777,
+              "id": 153775
+            },
+            {
+              "token": " to",
+              "logprob": -2.0384,
+              "id": 135647
+            },
+            {
+              "token": "    def",
+              "logprob": -2.8605,
+              "id": 41113
+            },
+            {
+              "token": ".",
+              "logprob": -3.3839,
+              "id": 86890
+            }
+          ]
         },
         {
           "token": "(",
@@ -403,7 +450,24 @@
         {
           "token": ",",
           "logprob": -1.3841,
-          "id": 25084
+          "id": 25084,
+          "topk": [
+            {
+              "token": ",",
+              "logprob": -1.3841,
+              "id": 25084
+            },
+            {
+              "token": " len",
+              "logprob": -2.4431,
+              "id": 165619
+            },
+            {
+              "token": " we",
+              "logprob": -3.0863,
+              "id": 148168
+            }
+          ]
         },
         {
           "token": " len",
@@ -443,7 +507,29 @@
         {
           "token": "n",
           "logprob": -1.086,
-          "id": 9066
+          "id": 9066,
+          "topk": [
+            {
+              "token": "n",
+              "logprob": -1.086,
+              "id": 9066
+            },
+            {
+              "token": " we",
+              "logprob": -1.896,
+              "id": 148168
+            },
+            {
+              "token": ".",
+              "logprob": -2.5947,
+              "id": 86890
+            },
+            {
+              "token": " the",
+              "logprob": -3.4458,
+              "id": 80255
+            }
+          ]
         },
         {
           "token": "        best",
@@ -483,7 +569,29 @@
         {
           "token": " <",
           "logprob": -0.4882,
-          "id": 117522
+          "id": 117522,
+          "topk": [
+            {
+              "token": " <",
+              "logprob": -0.4882,
+              "id": 117522
+            },
+            {
+              "token": " (",
+              "logprob": -2.1117,
+              "id": 168926
+            },
+            {
+              "token": "ing",
+              "logprob": -2.2802,
+              "id": 96940
+            },
+            {
+              "token": " =",
+              "logprob": -2.4469,
+              "id": 170427
+            }
+          ]
         },
         {
           "token": " hi",
@@ -503,7 +611,29 @@
         {
           "token": "n",
           "logprob": -0.3527,
-          "id": 9066
+          "id": 9066,
+          "topk": [
+            {
+              "token": "n",
+              "logprob": -0.3527,
+              "id": 9066
+            },
+            {
+              "token": "s",
+              "logprob": -1.3267,
+              "id": 33127
+            },
+            {
+              "token": " to",
+              "logprob": -4.7218,
+              "id": 135647
+            },
+            {
+              "token": ".",
+              "logprob": -5.6409,
+              "id": 86890
+            }
+          ]
         },
         {
           "token": "            best",
@@ -538,7 +668,24 @@
         {
           "token": " (",
           "logprob": -0.4724,
-          "id": 168926
+          "id": 168926,
+          "topk": [
+            {
+              "token": " (",
+              "logprob": -0.4724,
+              "id": 168926
+            },
+            {
+              "token": " and",
+              "logprob": -1.6034,
+              "id": 178613
+            },
+            {
+              "token": " it",
+              "logprob": -2.4709,
+              "id": 151303
+            }
+          ]
         },
         {
           "token": "hi",
@@ -613,7 +760,29 @@
         {
           "token": "hi",
           "logprob": -1.3433,
-          "id": 81567
+          "id": 81567,
+          "topk": [
+            {
+              "token": "hi",
+              "logprob": -1.3433,
+              "id": 81567
+            },
+            {
+              "token": " it",
+              "logprob": -1.5209,
+              "id": 151303
+            },
+            {
+              "token": ".",
+              "logprob": -3.7036,
+              "id": 86890
+            },
+            {
+              "token": "ly",
+              "logprob": -4.1402,
+              "id": 31883
+            }
+          ]
         },
         {
           "token": "]",
@@ -633,7 +802,29 @@
         {
           "token": "\\",
           "logprob": -0.3187,
-          "id": 19468
+          "id": 19468,
+          "topk": [
+            {
+              "token": "\\",
+              "logprob": -0.3187,
+              "id": 19468
+            },
+            {
+              "token": " of",
+              "logprob": -2.2126,
+              "id": 28423
+            },
+            {
+              "token": ",",
+              "logprob": -3.4347,
+              "id": 25084
+            },
+            {
+              "token": ")",
+              "logprob": -3.691,
+              "id": 1601
+            }
+          ]
         },
         {
           "token": "n",
@@ -648,7 +839,29 @@
         {
           "token": " height",
           "logprob": -0.9124,
-          "id": 124141
+          "id": 124141,
+          "topk": [
+            {
+              "token": " height",
+              "logprob": -0.9124,
+              "id": 124141
+            },
+            {
+              "token": " a",
+              "logprob": -1.9521,
+              "id": 191231
+            },
+            {
+              "token": " in",
+              "logprob": -2.1154,
+              "id": 9249
+            },
+            {
+              "token": "[",
+              "logprob": -2.7122,
+              "id": 90495
+            }
+          ]
         },
         {
           "token": "[",
@@ -688,7 +901,29 @@
         {
           "token": "]",
           "logprob": -1.1448,
-          "id": 72373
+          "id": 72373,
+          "topk": [
+            {
+              "token": "]",
+              "logprob": -1.1448,
+              "id": 72373
+            },
+            {
+              "token": " (",
+              "logprob": -1.3051,
+              "id": 168926
+            },
+            {
+              "token": " of",
+              "logprob": -3.6171,
+              "id": 28423
+            },
+            {
+              "token": " in",
+              "logprob": -4.761,
+              "id": 9249
+            }
+          ]
         },
         {
           "token": ":",
@@ -758,7 +993,29 @@
         {
           "token": "                hi",
           "logprob": -0.3062,
-          "id": 185183
+          "id": 185183,
+          "topk": [
+            {
+              "token": "                hi",
+              "logprob": -0.3062,
+              "id": 185183
+            },
+            {
+              "token": "n",
+              "logprob": -2.1648,
+              "id": 9066
+            },
+            {
+              "token": " we",
+              "logprob": -2.3655,
+              "id": 148168
+            },
+            {
+              "token": " in",
+              "logprob": -3.7836,
+              "id": 9249
+            }
+          ]
         },
         {
           "token": " -",
@@ -831,197 +1088,548 @@
       "tokens": [
         {
           "token": "0",
-          "logprob": -0.0023,
+          "logprob": -0.0086,
           "id": 28944
         },
         {
           "token": "/",
-          "logprob": -0.0417,
+          "logprob": -0.0103,
           "id": 172179
         },
         {
           "token": "10",
-          "logprob": -0.4024,
+          "logprob": -0.0069,
           "id": 9537
         },
         {
           "token": " test",
-          "logprob": -0.0294,
+          "logprob": -0.0171,
           "id": 130012
         },
         {
           "token": " cases",
-          "logprob": -0.0358,
+          "logprob": -0.0208,
           "id": 42877
         },
         {
           "token": " pass",
-          "logprob": -0.8384,
+          "logprob": -0.0454,
           "id": 49127
         },
         {
           "token": ".",
-          "logprob": -0.0465,
+          "logprob": -0.0122,
           "id": 86890
         },
         {
           "token": " The",
-          "logprob": -0.0242,
+          "logprob": -0.037,
           "id": 125919
         },
         {
           "token": " failing",
-          "logprob": -0.0013,
-          "id": 44342
+          "logprob": -0.3887,
+          "id": 44342,
+          "topk": [
+            {
+              "token": " failing",
+              "logprob": -0.3887,
+              "id": 44342
+            },
+            {
+              "token": " cases",
+              "logprob": -1.6051,
+              "id": 42877
+            },
+            {
+              "token": " not",
+              "logprob": -3.2296,
+              "id": 91101
+            }
+          ]
         },
         {
           "token": " cases",
-          "logprob": -0.0354,
+          "logprob": -0.0013,
           "id": 42877
         },
         {
           "token": " hit",
-          "logprob": -1.0338,
+          "logprob": -0.042,
           "id": 177773
         },
         {
           "token": " the",
-          "logprob": -0.0369,
+          "logprob": -0.0264,
           "id": 80255
         },
         {
           "token": " known",
-          "logprob": -0.3998,
+          "logprob": -0.0432,
           "id": 106355
         },
         {
           "token": " weak",
-          "logprob": -0.0172,
+          "logprob": -0.0187,
           "id": 55788
         },
         {
           "token": " spot",
-          "logprob": -2.1683,
+          "logprob": -0.015,
           "id": 77032
         },
         {
           "token": ":",
-          "logprob": -3.8374,
+          "logprob": -0.0373,
           "id": 138294
         },
         {
           "token": " expected",
-          "logprob": -3.6054,
-          "id": 196160
+          "logprob": -4.0246,
+          "id": 196160,
+          "topk": [
+            {
+              "token": " expected",
+              "logprob": -4.0246,
+              "id": 196160
+            },
+            {
+              "token": " that",
+              "logprob": -4.2269,
+              "id": 46435
+            },
+            {
+              "token": " (",
+              "logprob": -5.7878,
+              "id": 168926
+            }
+          ]
         },
         {
           "token": " 49",
-          "logprob": -2.6808,
-          "id": 44069
+          "logprob": -6.3484,
+          "id": 44069,
+          "topk": [
+            {
+              "token": " 49",
+              "logprob": -6.3484,
+              "id": 44069
+            },
+            {
+              "token": " and",
+              "logprob": -6.9399,
+              "id": 178613
+            },
+            {
+              "token": " not",
+              "logprob": -8.1284,
+              "id": 91101
+            }
+          ]
         },
         {
           "token": ",",
-          "logprob": -5.8074,
-          "id": 25084
+          "logprob": -4.0425,
+          "id": 25084,
+          "topk": [
+            {
+              "token": ",",
+              "logprob": -4.0425,
+              "id": 25084
+            },
+            {
+              "token": " and",
+              "logprob": -4.4019,
+              "id": 178613
+            },
+            {
+              "token": ".",
+              "logprob": -6.4037,
+              "id": 86890
+            },
+            {
+              "token": " it",
+              "logprob": -7.065,
+              "id": 151303
+            }
+          ]
         },
         {
           "token": " got",
-          "logprob": -6.2589,
-          "id": 104724
+          "logprob": -4.6777,
+          "id": 104724,
+          "topk": [
+            {
+              "token": " got",
+              "logprob": -4.6777,
+              "id": 104724
+            },
+            {
+              "token": ",",
+              "logprob": -5.4696,
+              "id": 25084
+            },
+            {
+              "token": "ly",
+              "logprob": -6.101,
+              "id": 31883
+            }
+          ]
         },
         {
           "token": " 40",
-          "logprob": -2.9599,
-          "id": 111236
+          "logprob": -3.703,
+          "id": 111236,
+          "topk": [
+            {
+              "token": " 40",
+              "logprob": -3.703,
+              "id": 111236
+            },
+            {
+              "token": " that",
+              "logprob": -4.4109,
+              "id": 46435
+            },
+            {
+              "token": ",",
+              "logprob": -5.4352,
+              "id": 25084
+            }
+          ]
         },
         {
           "token": " (",
-          "logprob": -6.0085,
-          "id": 168926
+          "logprob": -6.6026,
+          "id": 168926,
+          "topk": [
+            {
+              "token": " (",
+              "logprob": -6.6026,
+              "id": 168926
+            },
+            {
+              "token": "ed",
+              "logprob": -7.4321,
+              "id": 170985
+            },
+            {
+              "token": " to",
+              "logprob": -7.6889,
+              "id": 135647
+            },
+            {
+              "token": " 40",
+              "logprob": -8.8323,
+              "id": 111236
+            }
+          ]
         },
         {
           "token": "pointer",
-          "logprob": -6.6727,
-          "id": 89647
+          "logprob": -6.006,
+          "id": 89647,
+          "topk": [
+            {
+              "token": "pointer",
+              "logprob": -6.006,
+              "id": 89647
+            },
+            {
+              "token": " (",
+              "logprob": -7.0439,
+              "id": 168926
+            },
+            {
+              "token": " the",
+              "logprob": -7.5371,
+              "id": 80255
+            },
+            {
+              "token": "ed",
+              "logprob": -7.7151,
+              "id": 170985
+            }
+          ]
         },
         {
           "token": " moved",
-          "logprob": -6.1237,
-          "id": 73675
+          "logprob": -6.8788,
+          "id": 73675,
+          "topk": [
+            {
+              "token": " moved",
+              "logprob": -6.8788,
+              "id": 73675
+            },
+            {
+              "token": " and",
+              "logprob": -7.2571,
+              "id": 178613
+            },
+            {
+              "token": "ed",
+              "logprob": -8.5213,
+              "id": 170985
+            },
+            {
+              "token": " it",
+              "logprob": -9.7724,
+              "id": 151303
+            }
+          ]
         },
         {
           "token": " on",
-          "logprob": -5.2761,
-          "id": 108351
+          "logprob": -4.4557,
+          "id": 108351,
+          "topk": [
+            {
+              "token": " on",
+              "logprob": -4.4557,
+              "id": 108351
+            },
+            {
+              "token": ".",
+              "logprob": -5.2589,
+              "id": 86890
+            },
+            {
+              "token": " =",
+              "logprob": -5.8081,
+              "id": 170427
+            },
+            {
+              "token": " is",
+              "logprob": -6.5184,
+              "id": 80276
+            }
+          ]
         },
         {
           "token": " the",
-          "logprob": -2.7349,
-          "id": 80255
+          "logprob": -6.2454,
+          "id": 80255,
+          "topk": [
+            {
+              "token": " the",
+              "logprob": -6.2454,
+              "id": 80255
+            },
+            {
+              "token": " that",
+              "logprob": -6.6216,
+              "id": 46435
+            },
+            {
+              "token": "s",
+              "logprob": -7.7115,
+              "id": 33127
+            }
+          ]
         },
         {
           "token": " taller",
-          "logprob": -4.7912,
-          "id": 65824
+          "logprob": -3.7421,
+          "id": 65824,
+          "topk": [
+            {
+              "token": " taller",
+              "logprob": -3.7421,
+              "id": 65824
+            },
+            {
+              "token": " that",
+              "logprob": -4.7471,
+              "id": 46435
+            },
+            {
+              "token": " and",
+              "logprob": -5.6919,
+              "id": 178613
+            },
+            {
+              "token": " a",
+              "logprob": -6.8138,
+              "id": 191231
+            }
+          ]
         },
         {
           "token": " side",
-          "logprob": -5.5372,
-          "id": 163233
+          "logprob": -3.186,
+          "id": 163233,
+          "topk": [
+            {
+              "token": " side",
+              "logprob": -3.186,
+              "id": 163233
+            },
+            {
+              "token": " a",
+              "logprob": -3.8047,
+              "id": 191231
+            },
+            {
+              "token": " is",
+              "logprob": -4.7918,
+              "id": 80276
+            }
+          ]
         },
         {
           "token": ",",
-          "logprob": -3.1871,
-          "id": 25084
+          "logprob": -6.983,
+          "id": 25084,
+          "topk": [
+            {
+              "token": ",",
+              "logprob": -6.983,
+              "id": 25084
+            },
+            {
+              "token": " we",
+              "logprob": -7.7186,
+              "id": 148168
+            },
+            {
+              "token": " of",
+              "logprob": -8.3936,
+              "id": 28423
+            },
+            {
+              "token": " side",
+              "logprob": -8.8389,
+              "id": 163233
+            }
+          ]
         },
         {
           "token": " skipping",
-          "logprob": -4.8614,
-          "id": 165625
+          "logprob": -6.8478,
+          "id": 165625,
+          "topk": [
+            {
+              "token": " skipping",
+              "logprob": -6.8478,
+              "id": 165625
+            },
+            {
+              "token": " that",
+              "logprob": -8.0514,
+              "id": 46435
+            },
+            {
+              "token": " =",
+              "logprob": -8.2527,
+              "id": 170427
+            }
+          ]
         },
         {
           "token": " the",
-          "logprob": -2.6362,
-          "id": 80255
+          "logprob": -3.5317,
+          "id": 80255,
+          "topk": [
+            {
+              "token": " the",
+              "logprob": -3.5317,
+              "id": 80255
+            },
+            {
+              "token": " is",
+              "logprob": -4.2975,
+              "id": 80276
+            },
+            {
+              "token": "ed",
+              "logprob": -4.7882,
+              "id": 170985
+            },
+            {
+              "token": " not",
+              "logprob": -5.5463,
+              "id": 91101
+            }
+          ]
         },
         {
           "token": " optimum",
-          "logprob": -3.0996,
-          "id": 195177
+          "logprob": -2.701,
+          "id": 195177,
+          "topk": [
+            {
+              "token": " optimum",
+              "logprob": -2.701,
+              "id": 195177
+            },
+            {
+              "token": " not",
+              "logprob": -3.1162,
+              "id": 91101
+            },
+            {
+              "token": "ing",
+              "logprob": -4.7383,
+              "id": 96940
+            },
+            {
+              "token": " the",
+              "logprob": -5.4267,
+              "id": 80255
+            }
+          ]
         },
         {
           "token": ")",
-          "logprob": -5.0606,
-          "id": 1601
+          "logprob": -6.809,
+          "id": 1601,
+          "topk": [
+            {
+              "token": ")",
+              "logprob": -6.809,
+              "id": 1601
+            },
+            {
+              "token": " is",
+              "logprob": -7.3246,
+              "id": 80276
+            },
+            {
+              "token": " in",
+              "logprob": -8.0718,
+              "id": 9249
+            }
+          ]
         },
         {
           "token": ".",
-          "logprob": -0.0053,
+          "logprob": -0.0113,
           "id": 86890
         },
         {
           "token": " A",
-          "logprob": -0.0354,
+          "logprob": -0.0289,
           "id": 46495
         },
         {
           "token": " revised",
-          "logprob": -0.0095,
+          "logprob": -0.0287,
           "id": 48802
         },
         {
           "token": " submission",
-          "logprob": -0.0482,
+          "logprob": -0.0224,
           "id": 129108
         },
         {
           "token": " would",
-          "logprob": -0.4045,
+          "logprob": -0.0456,
           "id": 183053
         },
         {
           "token": " need",
-          "logprob": -0.043,
+          "logprob": -0.0057,
           "id": 4596
         },
         {
@@ -1031,22 +1639,39 @@
         },
         {
           "token": " fix",
-          "logprob": -0.0265,
+          "logprob": -0.0193,
           "id": 134991
         },
         {
           "token": " that",
-          "logprob": -0.0049,
-          "id": 46435
+          "logprob": -1.411,
+          "id": 46435,
+          "topk": [
+            {
+              "token": " that",
+              "logprob": -1.411,
+              "id": 46435
+            },
+            {
+              "token": "ly",
+              "logprob": -2.216,
+              "id": 31883
+            },
+            {
+              "token": " (",
+              "logprob": -3.2769,
+              "id": 168926
+            }
+          ]
         },
         {
           "token": " branch",
-          "logprob": -4.7279,
+          "logprob": -0.0118,
           "id": 111280
         },
         {
           "token": ".",
-          "logprob": -0.0032,
+          "logprob": -0.0289,
           "id": 86890
         }
       ],

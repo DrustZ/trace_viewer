@@ -14,6 +14,14 @@
     },
     "extra": {
       "ground_truth": "Returns the length of the longest substring without repeated characters; the sliding-window start must never move backwards on a stale duplicate.",
+      "golden_response": "Reference approach (passes all 10 cases):\n\n```python\nclass Solution:\n    def lengthOfLongestSubstring(self, s: str) -> int:\n        last = {}\n        best = left = 0\n        for i, ch in enumerate(s):\n            if ch in last and last[ch] >= left:\n                left = last[ch] + 1\n            last[ch] = i\n            best = max(best, i - left + 1)\n        return best\n```",
+      "kl": 0.0427,
+      "trainer_batch": 5,
+      "reward_breakdown": {
+        "correctness": 0.2,
+        "length_penalty": -0.0001,
+        "final_reward": 0.1999
+      },
       "spans": [
         {
           "id": "sp-1",

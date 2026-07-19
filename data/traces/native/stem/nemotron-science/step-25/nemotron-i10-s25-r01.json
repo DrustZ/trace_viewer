@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "Higher, due to the Doppler effect compressing wavefronts ahead of the source",
+      "golden_response": "Correct answer: Higher, due to the Doppler effect compressing wavefronts ahead of the source\n\nA source moving toward the observer shortens the effective wavelength: successive wavefronts are emitted from closer positions. Shorter wavelength at fixed wave speed means higher observed frequency; the drop to lower pitch happens only after the source passes.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"Higher, due to the Doppler effect compressing wavefronts ahead of the source\". The candidate response commits to \"Lower, because the waves stretch out as the source moves\". Where the response cites figures, I verified they match the reference values before scoring. The response contains no contradictory statements elsewhere that would override its committed answer. The response claims a lower frequency on approach, inverting the Doppler effect; compression ahead of the source raises the observed frequency. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.1745,
+      "trainer_batch": 1,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0002,
+        "final_reward": -0.0002
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -187,12 +200,51 @@
         {
           "token": " the",
           "logprob": -0.6177,
-          "id": 80255
+          "id": 80255,
+          "topk": [
+            {
+              "token": " the",
+              "logprob": -0.6177,
+              "id": 80255
+            },
+            {
+              "token": " we",
+              "logprob": -1.3183,
+              "id": 148168
+            },
+            {
+              "token": " a",
+              "logprob": -2.3103,
+              "id": 191231
+            },
+            {
+              "token": " =",
+              "logprob": -2.5983,
+              "id": 170427
+            }
+          ]
         },
         {
           "token": " waves",
           "logprob": -0.8238,
-          "id": 175072
+          "id": 175072,
+          "topk": [
+            {
+              "token": " waves",
+              "logprob": -0.8238,
+              "id": 175072
+            },
+            {
+              "token": ".",
+              "logprob": -1.5394,
+              "id": 86890
+            },
+            {
+              "token": " not",
+              "logprob": -1.7585,
+              "id": 91101
+            }
+          ]
         },
         {
           "token": " stretch",

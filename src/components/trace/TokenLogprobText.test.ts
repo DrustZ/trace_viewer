@@ -1,5 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { probsTitle, TOKEN_RENDER_CAP, tokensTitle, visualizeWhitespace } from './TokenLogprobText'
+import {
+  chipParts,
+  probsTitle,
+  TOKEN_RENDER_CAP,
+  tokensTitle,
+  visualizeWhitespace,
+} from './TokenLogprobText'
+
+describe('chipParts', () => {
+  it('trims leading spaces but keeps interior spaces as-is', () => {
+    expect(chipParts(' given')).toEqual({ body: 'given', newlines: 0 })
+    expect(chipParts('  a b')).toEqual({ body: 'a b', newlines: 0 })
+  })
+
+  it('splits trailing newlines into a separate na chip count', () => {
+    expect(chipParts(':\n')).toEqual({ body: ':', newlines: 1 })
+    expect(chipParts('end\n\n')).toEqual({ body: 'end', newlines: 2 })
+  })
+
+  it('renders a pure-newline token as only the ↵ chip', () => {
+    expect(chipParts('\n')).toEqual({ body: '', newlines: 1 })
+  })
+
+  it('visualizes tabs as arrows', () => {
+    expect(chipParts('\tfoo')).toEqual({ body: '→foo', newlines: 0 })
+  })
+
+  it('falls back to visible middots for space-only tokens', () => {
+    expect(chipParts('  ')).toEqual({ body: '··', newlines: 0 })
+  })
+})
 
 describe('visualizeWhitespace', () => {
   it('maps spaces, newlines and tabs to visible glyphs', () => {

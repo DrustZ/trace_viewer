@@ -13,6 +13,14 @@
     },
     "extra": {
       "ground_truth": "The fastest land animal is the cheetah, commonly cited at 100–120 km/h in short bursts (measured runs around 98–112 km/h). The fastest bird — and animal overall — in a dive is the peregrine falcon, whose hunting stoop exceeds 320 km/h, with an instrumented record of about 389 km/h.",
+      "golden_response": "The fastest land animal is the cheetah, commonly cited at 100–120 km/h in short bursts (measured runs around 98–112 km/h). The fastest bird — and animal overall — in a dive is the peregrine falcon, whose hunting stoop exceeds 320 km/h, with an instrumented record of about 389 km/h.\n\nSource hint: Cheetah — Wikipedia — https://en.wikipedia.org/wiki/Cheetah",
+      "kl": 0.1366,
+      "trainer_batch": 4,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -321,7 +329,29 @@
         {
           "token": " speed",
           "logprob": -4.5393,
-          "id": 68063
+          "id": 68063,
+          "topk": [
+            {
+              "token": " speed",
+              "logprob": -4.5393,
+              "id": 68063
+            },
+            {
+              "token": " we",
+              "logprob": -5.8084,
+              "id": 148168
+            },
+            {
+              "token": " record",
+              "logprob": -6.8368,
+              "id": 49643
+            },
+            {
+              "token": " that",
+              "logprob": -7.0647,
+              "id": 46435
+            }
+          ]
         },
         {
           "token": " record",
@@ -341,7 +371,29 @@
         {
           "token": "}",
           "logprob": -0.7186,
-          "id": 127637
+          "id": 127637,
+          "topk": [
+            {
+              "token": "}",
+              "logprob": -0.7186,
+              "id": 127637
+            },
+            {
+              "token": " and",
+              "logprob": -1.1369,
+              "id": 178613
+            },
+            {
+              "token": ",",
+              "logprob": -2.659,
+              "id": 25084
+            },
+            {
+              "token": "\"",
+              "logprob": -3.0996,
+              "id": 163278
+            }
+          ]
         }
       ],
       "stepIndex": 2
@@ -369,147 +421,230 @@
       "tokens": [
         {
           "token": "The",
-          "logprob": -3.8592,
+          "logprob": -0.0208,
           "id": 141785
         },
         {
           "token": " fastest",
-          "logprob": -0.047,
+          "logprob": -0.0244,
           "id": 117124
         },
         {
           "token": " land",
-          "logprob": -0.0296,
+          "logprob": -0.0173,
           "id": 182135
         },
         {
           "token": " animal",
-          "logprob": -0.5333,
+          "logprob": -0.0216,
           "id": 171548
         },
         {
           "token": " is",
-          "logprob": -0.0175,
+          "logprob": -0.0411,
           "id": 80276
         },
         {
           "token": " the",
-          "logprob": -0.0409,
+          "logprob": -0.0156,
           "id": 80255
         },
         {
           "token": " pronghorn",
-          "logprob": -0.0187,
+          "logprob": -0.0352,
           "id": 121525
         },
         {
           "token": " at",
-          "logprob": -0.0208,
+          "logprob": -0.0255,
           "id": 172111
         },
         {
           "token": " about",
-          "logprob": -0.0244,
+          "logprob": -0.0418,
           "id": 9641
         },
         {
           "token": " 150",
-          "logprob": -0.0173,
-          "id": 147112
+          "logprob": -0.7307,
+          "id": 147112,
+          "topk": [
+            {
+              "token": " 150",
+              "logprob": -0.7307,
+              "id": 147112
+            },
+            {
+              "token": " we",
+              "logprob": -1.4782,
+              "id": 148168
+            },
+            {
+              "token": " km",
+              "logprob": -2.5001,
+              "id": 35924
+            }
+          ]
         },
         {
           "token": " km",
-          "logprob": -0.0216,
-          "id": 35924
+          "logprob": -1.356,
+          "id": 35924,
+          "topk": [
+            {
+              "token": " km",
+              "logprob": -1.356,
+              "id": 35924
+            },
+            {
+              "token": " we",
+              "logprob": -2.3044,
+              "id": 148168
+            },
+            {
+              "token": " the",
+              "logprob": -3.5201,
+              "id": 80255
+            },
+            {
+              "token": "s",
+              "logprob": -3.7609,
+              "id": 33127
+            }
+          ]
         },
         {
           "token": "/",
-          "logprob": -0.0411,
+          "logprob": -0.0218,
           "id": 172179
         },
         {
           "token": "h",
-          "logprob": -0.0156,
+          "logprob": -0.021,
           "id": 70872
         },
         {
           "token": ",",
-          "logprob": -0.0352,
+          "logprob": -0.0334,
           "id": 25084
         },
         {
           "token": " while",
-          "logprob": -0.0255,
+          "logprob": -0.0097,
           "id": 17469
         },
         {
           "token": " the",
-          "logprob": -0.0418,
+          "logprob": -0.0404,
           "id": 80255
         },
         {
           "token": " golden",
-          "logprob": -0.7307,
+          "logprob": -0.0161,
           "id": 189463
         },
         {
           "token": " eagle",
-          "logprob": -1.356,
-          "id": 101042
+          "logprob": -0.7973,
+          "id": 101042,
+          "topk": [
+            {
+              "token": " eagle",
+              "logprob": -0.7973,
+              "id": 101042
+            },
+            {
+              "token": "ing",
+              "logprob": -1.8874,
+              "id": 96940
+            },
+            {
+              "token": " to",
+              "logprob": -2.3025,
+              "id": 135647
+            },
+            {
+              "token": " is",
+              "logprob": -2.7294,
+              "id": 80276
+            }
+          ]
         },
         {
           "token": " holds",
-          "logprob": -0.0218,
+          "logprob": -0.0333,
           "id": 124784
         },
         {
           "token": " the",
-          "logprob": -0.021,
+          "logprob": -0.0402,
           "id": 80255
         },
         {
           "token": " diving",
-          "logprob": -0.0334,
+          "logprob": -0.0483,
           "id": 59851
         },
         {
           "token": " record",
-          "logprob": -0.0097,
-          "id": 49643
+          "logprob": -0.5092,
+          "id": 49643,
+          "topk": [
+            {
+              "token": " record",
+              "logprob": -0.5092,
+              "id": 49643
+            },
+            {
+              "token": " not",
+              "logprob": -1.1683,
+              "id": 91101
+            },
+            {
+              "token": " it",
+              "logprob": -2.6014,
+              "id": 151303
+            },
+            {
+              "token": " that",
+              "logprob": -6.6538,
+              "id": 46435
+            }
+          ]
         },
         {
           "token": " at",
-          "logprob": -0.0404,
+          "logprob": -0.0069,
           "id": 172111
         },
         {
           "token": " around",
-          "logprob": -0.0161,
+          "logprob": -0.0158,
           "id": 70255
         },
         {
           "token": " 240",
-          "logprob": -0.7973,
+          "logprob": -0.0354,
           "id": 153628
         },
         {
           "token": " km",
-          "logprob": -0.0333,
+          "logprob": -0.0241,
           "id": 35924
         },
         {
           "token": "/",
-          "logprob": -0.0402,
+          "logprob": -0.011,
           "id": 172179
         },
         {
           "token": "h",
-          "logprob": -0.0483,
+          "logprob": -0.0466,
           "id": 70872
         },
         {
           "token": ".",
-          "logprob": -0.5092,
+          "logprob": -0.0015,
           "id": 86890
         }
       ],

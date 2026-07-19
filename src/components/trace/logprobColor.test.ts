@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { BUCKET_CLASSES, BUCKET_LABELS, logprobToBucket, TOKEN_CYCLE_CLASSES } from './logprobColor'
+import {
+  BUCKET_CLASSES,
+  BUCKET_LABELS,
+  CONFIDENCE_CHIP_CLASSES,
+  CONFIDENCE_LABELS,
+  confidenceOf,
+  logprobToBucket,
+  TOKEN_CYCLE_CLASSES,
+} from './logprobColor'
 
 describe('logprobToBucket', () => {
   it('maps logprob 0 (p = 1) to bucket 0', () => {
@@ -39,6 +47,35 @@ describe('bucket constants', () => {
     expect(BUCKET_CLASSES).toHaveLength(5)
     expect(BUCKET_LABELS).toHaveLength(5)
     expect(BUCKET_CLASSES[0]).toBe('')
+  })
+})
+
+describe('confidenceOf', () => {
+  it('maps p ≥ 0.7 to high, including the boundary', () => {
+    expect(confidenceOf(0)).toBe('high')
+    expect(confidenceOf(Math.log(0.9))).toBe('high')
+    expect(confidenceOf(Math.log(0.7))).toBe('high')
+  })
+
+  it('maps 0.3 ≤ p < 0.7 to med', () => {
+    expect(confidenceOf(Math.log(0.69))).toBe('med')
+    expect(confidenceOf(Math.log(0.31))).toBe('med')
+  })
+
+  it('maps p < 0.3 to low', () => {
+    expect(confidenceOf(Math.log(0.29))).toBe('low')
+    expect(confidenceOf(-10)).toBe('low')
+  })
+})
+
+describe('confidence chip constants', () => {
+  it('styles and labels all four levels', () => {
+    expect(Object.keys(CONFIDENCE_CHIP_CLASSES).sort()).toEqual(['high', 'low', 'med', 'na'])
+    expect(CONFIDENCE_CHIP_CLASSES.high).toBe('bg-emerald-100 border-emerald-300 text-emerald-900')
+    expect(CONFIDENCE_CHIP_CLASSES.med).toBe('bg-amber-100 border-amber-300 text-amber-900')
+    expect(CONFIDENCE_CHIP_CLASSES.low).toBe('bg-rose-200 border-rose-400 text-rose-900')
+    expect(CONFIDENCE_CHIP_CLASSES.na).toBe('bg-slate-100 border-slate-300 text-slate-500')
+    expect(CONFIDENCE_LABELS).toEqual({ high: 'High', med: 'Med', low: 'Low', na: 'N/A' })
   })
 })
 

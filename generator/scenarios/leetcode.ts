@@ -16,7 +16,10 @@ function caseResults(passed: number, total: number, failNote: string, rng: Rng):
 
 export const leetcode: Scenario = (plan, rng): ScenarioOutput => {
   const item = LEET_ITEMS[(plan.instanceIdx - 1) % LEET_ITEMS.length]
-  const extra = { ground_truth: item.groundTruth }
+  const extra = {
+    ground_truth: item.groundTruth,
+    golden_response: `Reference approach (passes all ${item.casesTotal} cases):\n\n\`\`\`python\n${item.solution}\n\`\`\``,
+  }
   const b = new TraceBuilder(plan.startMs, rng)
   const regions: FailureRegion[] = []
   b.system(rng.pick(LEET_SYSTEM_PROMPTS))

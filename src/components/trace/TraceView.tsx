@@ -4,6 +4,7 @@ import { EvolutionTab } from './EvolutionTab'
 import { MetadataTab } from './MetadataTab'
 import { RawTab } from './RawTab'
 import { TimelineTab } from './TimelineTab'
+import { TraceChat } from './TraceChat'
 import { TraceHeader, type TraceTab } from './TraceHeader'
 
 /** Shared trace renderer: header strip + tab bar + tab content. Fills its parent's height. */
@@ -25,7 +26,7 @@ export function TraceView({
   onClose?: () => void
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       <TraceHeader
         trace={trace}
         activeTab={tab}
@@ -54,6 +55,7 @@ export function TraceView({
         )}
         {tab === 'raw' && <RawTab traceId={trace.meta.traceId} active />}
       </div>
+      <TraceChat traceId={trace.meta.traceId} />
     </div>
   )
 }

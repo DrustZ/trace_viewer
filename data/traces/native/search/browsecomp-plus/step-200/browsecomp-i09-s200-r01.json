@@ -13,6 +13,14 @@
     },
     "extra": {
       "ground_truth": "France is the only country bordering both Germany and Spain. Its border with Germany runs about 450 km, largely along the Rhine, while its Pyrenean border with Spain is roughly 620–650 km (Wikipedia cites 623 km; the CIA Factbook 646 km).",
+      "golden_response": "France is the only country bordering both Germany and Spain. Its border with Germany runs about 450 km, largely along the Rhine, while its Pyrenean border with Spain is roughly 620–650 km (Wikipedia cites 623 km; the CIA Factbook 646 km).\n\nSource hint: Geography of France — Wikipedia — https://en.wikipedia.org/wiki/Geography_of_France",
+      "kl": 0.1986,
+      "trainer_batch": 8,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -250,7 +258,29 @@
         {
           "token": "\"",
           "logprob": -1.4969,
-          "id": 163278
+          "id": 163278,
+          "topk": [
+            {
+              "token": "\"",
+              "logprob": -1.4969,
+              "id": 163278
+            },
+            {
+              "token": " to",
+              "logprob": -2.3325,
+              "id": 135647
+            },
+            {
+              "token": ".",
+              "logprob": -2.9465,
+              "id": 86890
+            },
+            {
+              "token": " is",
+              "logprob": -3.8994,
+              "id": 80276
+            }
+          ]
         },
         {
           "token": ":",
@@ -290,7 +320,24 @@
         {
           "token": " Spain",
           "logprob": -0.923,
-          "id": 115817
+          "id": 115817,
+          "topk": [
+            {
+              "token": " Spain",
+              "logprob": -0.923,
+              "id": 115817
+            },
+            {
+              "token": " a",
+              "logprob": -1.3484,
+              "id": 191231
+            },
+            {
+              "token": " in",
+              "logprob": -2.2811,
+              "id": 9249
+            }
+          ]
         },
         {
           "token": "\"",
@@ -369,238 +416,298 @@
       "tokens": [
         {
           "token": "France",
-          "logprob": -1.2104,
+          "logprob": -0.0063,
           "id": 115583
         },
         {
           "token": " is",
-          "logprob": -0.0058,
+          "logprob": -0.0233,
           "id": 80276
         },
         {
           "token": " the",
-          "logprob": -0.0323,
+          "logprob": -0.0206,
           "id": 80255
         },
         {
           "token": " only",
-          "logprob": -0.0296,
+          "logprob": -0.013,
           "id": 161466
         },
         {
           "token": " country",
-          "logprob": -0.0179,
+          "logprob": -0.0341,
           "id": 197920
         },
         {
           "token": " bordering",
-          "logprob": -0.0167,
+          "logprob": -0.0135,
           "id": 114344
         },
         {
           "token": " both",
-          "logprob": -0.0063,
-          "id": 86081
+          "logprob": -0.7555,
+          "id": 86081,
+          "topk": [
+            {
+              "token": " both",
+              "logprob": -0.7555,
+              "id": 86081
+            },
+            {
+              "token": " is",
+              "logprob": -0.9703,
+              "id": 80276
+            },
+            {
+              "token": " to",
+              "logprob": -2.969,
+              "id": 135647
+            }
+          ]
         },
         {
           "token": " Germany",
-          "logprob": -0.0233,
+          "logprob": -0.0135,
           "id": 122325
         },
         {
           "token": " and",
-          "logprob": -0.0206,
+          "logprob": -0.0348,
           "id": 178613
         },
         {
           "token": " Spain",
-          "logprob": -0.013,
+          "logprob": -0.0487,
           "id": 115817
         },
         {
           "token": ".",
-          "logprob": -0.0341,
+          "logprob": -0.0424,
           "id": 86890
         },
         {
           "token": " Its",
-          "logprob": -0.0135,
-          "id": 198836
+          "logprob": -0.3624,
+          "id": 198836,
+          "topk": [
+            {
+              "token": " Its",
+              "logprob": -0.3624,
+              "id": 198836
+            },
+            {
+              "token": " also",
+              "logprob": -1.4341,
+              "id": 62785
+            },
+            {
+              "token": " border",
+              "logprob": -3.0404,
+              "id": 154514
+            }
+          ]
         },
         {
           "token": " border",
-          "logprob": -0.7555,
+          "logprob": -0.0352,
           "id": 154514
         },
         {
           "token": " with",
-          "logprob": -0.0135,
+          "logprob": -0.0162,
           "id": 3176
         },
         {
           "token": " Germany",
-          "logprob": -0.0348,
+          "logprob": -0.0345,
           "id": 122325
         },
         {
           "token": " runs",
-          "logprob": -0.0487,
+          "logprob": -0.0152,
           "id": 134826
         },
         {
           "token": " about",
-          "logprob": -0.0424,
+          "logprob": -0.0342,
           "id": 9641
         },
         {
           "token": " 450",
-          "logprob": -0.3624,
+          "logprob": -0.0301,
           "id": 147537
         },
         {
           "token": " km",
-          "logprob": -0.0352,
+          "logprob": -0.0251,
           "id": 35924
         },
         {
           "token": ",",
-          "logprob": -0.0162,
+          "logprob": -0.0285,
           "id": 25084
         },
         {
           "token": " largely",
-          "logprob": -0.0345,
+          "logprob": -0.0177,
           "id": 149178
         },
         {
           "token": " along",
-          "logprob": -0.0152,
+          "logprob": -0.026,
           "id": 25777
         },
         {
           "token": " the",
-          "logprob": -0.0342,
+          "logprob": -0.023,
           "id": 80255
         },
         {
           "token": " Rhine",
-          "logprob": -0.0301,
-          "id": 164722
+          "logprob": -0.6767,
+          "id": 164722,
+          "topk": [
+            {
+              "token": " Rhine",
+              "logprob": -0.6767,
+              "id": 164722
+            },
+            {
+              "token": " and",
+              "logprob": -1.9763,
+              "id": 178613
+            },
+            {
+              "token": "ed",
+              "logprob": -2.5183,
+              "id": 170985
+            }
+          ]
         },
         {
           "token": ",",
-          "logprob": -0.0251,
+          "logprob": -0.0248,
           "id": 25084
         },
         {
           "token": " while",
-          "logprob": -0.0285,
+          "logprob": -0.0355,
           "id": 17469
         },
         {
           "token": " its",
-          "logprob": -0.0177,
+          "logprob": -0.0101,
           "id": 153172
         },
         {
           "token": " Pyrenean",
-          "logprob": -0.026,
-          "id": 49444
+          "logprob": -1.1046,
+          "id": 49444,
+          "topk": [
+            {
+              "token": " Pyrenean",
+              "logprob": -1.1046,
+              "id": 49444
+            },
+            {
+              "token": " it",
+              "logprob": -1.8211,
+              "id": 151303
+            },
+            {
+              "token": " that",
+              "logprob": -1.9819,
+              "id": 46435
+            },
+            {
+              "token": "s",
+              "logprob": -4.2075,
+              "id": 33127
+            }
+          ]
         },
         {
           "token": " border",
-          "logprob": -0.023,
+          "logprob": -0.0252,
           "id": 154514
         },
         {
           "token": " with",
-          "logprob": -0.6767,
+          "logprob": -0.0486,
           "id": 3176
         },
         {
           "token": " Spain",
-          "logprob": -0.0248,
-          "id": 115817
+          "logprob": -0.4716,
+          "id": 115817,
+          "topk": [
+            {
+              "token": " Spain",
+              "logprob": -0.4716,
+              "id": 115817
+            },
+            {
+              "token": "ed",
+              "logprob": -1.313,
+              "id": 170985
+            },
+            {
+              "token": " we",
+              "logprob": -2.4019,
+              "id": 148168
+            }
+          ]
         },
         {
           "token": " is",
-          "logprob": -0.0355,
+          "logprob": -0.0233,
           "id": 80276
         },
         {
           "token": " roughly",
-          "logprob": -0.0101,
+          "logprob": -0.0111,
           "id": 192672
         },
         {
           "token": " 620",
-          "logprob": -1.1046,
+          "logprob": -0.0478,
           "id": 44330
         },
         {
           "token": "–",
-          "logprob": -0.0252,
+          "logprob": -0.0286,
           "id": 175623
         },
         {
           "token": "650",
-          "logprob": -0.0486,
+          "logprob": -0.0371,
           "id": 156137
         },
         {
           "token": " km",
-          "logprob": -0.4716,
+          "logprob": -0.0012,
           "id": 35924
         },
         {
           "token": " (",
-          "logprob": -0.0233,
+          "logprob": -0.0315,
           "id": 168926
         },
         {
           "token": "Wikipedia",
-          "logprob": -0.0111,
+          "logprob": -0.0223,
           "id": 184605
         },
         {
           "token": " cites",
-          "logprob": -0.0478,
+          "logprob": -0.0086,
           "id": 190462
         },
         {
           "token": " 623",
-          "logprob": -0.0286,
-          "id": 67813
-        },
-        {
-          "token": " km",
-          "logprob": -0.0371,
-          "id": 35924
-        },
-        {
-          "token": ";",
-          "logprob": -0.0012,
-          "id": 23583
-        },
-        {
-          "token": " the",
-          "logprob": -0.0315,
-          "id": 80255
-        },
-        {
-          "token": " CIA",
-          "logprob": -0.0223,
-          "id": 89623
-        },
-        {
-          "token": " Factbook",
-          "logprob": -0.0086,
-          "id": 10873
-        },
-        {
-          "token": " 646",
           "logprob": -0.043,
-          "id": 62298
+          "id": 67813
         },
         {
           "token": " km",
@@ -608,13 +715,104 @@
           "id": 35924
         },
         {
-          "token": ")",
+          "token": ";",
           "logprob": -0.004,
-          "id": 1601
+          "id": 23583
+        },
+        {
+          "token": " the",
+          "logprob": -0.8732,
+          "id": 80255,
+          "topk": [
+            {
+              "token": " the",
+              "logprob": -0.8732,
+              "id": 80255
+            },
+            {
+              "token": ".",
+              "logprob": -1.0842,
+              "id": 86890
+            },
+            {
+              "token": " not",
+              "logprob": -2.8987,
+              "id": 91101
+            },
+            {
+              "token": "ly",
+              "logprob": -4.3882,
+              "id": 31883
+            }
+          ]
+        },
+        {
+          "token": " CIA",
+          "logprob": -1.3857,
+          "id": 89623,
+          "topk": [
+            {
+              "token": " CIA",
+              "logprob": -1.3857,
+              "id": 89623
+            },
+            {
+              "token": " it",
+              "logprob": -1.6876,
+              "id": 151303
+            },
+            {
+              "token": "ly",
+              "logprob": -3.078,
+              "id": 31883
+            },
+            {
+              "token": " also",
+              "logprob": -4.4066,
+              "id": 62785
+            }
+          ]
+        },
+        {
+          "token": " Factbook",
+          "logprob": -0.0014,
+          "id": 10873
+        },
+        {
+          "token": " 646",
+          "logprob": -0.013,
+          "id": 62298
+        },
+        {
+          "token": " km",
+          "logprob": -0.0132,
+          "id": 35924
+        },
+        {
+          "token": ")",
+          "logprob": -5.7647,
+          "id": 1601,
+          "topk": [
+            {
+              "token": ")",
+              "logprob": -5.7647,
+              "id": 1601
+            },
+            {
+              "token": " the",
+              "logprob": -6.648,
+              "id": 80255
+            },
+            {
+              "token": " km",
+              "logprob": -7.759,
+              "id": 35924
+            }
+          ]
         },
         {
           "token": ".",
-          "logprob": -0.8732,
+          "logprob": -0.0202,
           "id": 86890
         }
       ],

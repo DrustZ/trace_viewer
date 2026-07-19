@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "Red blood cells (erythrocytes)",
+      "golden_response": "Correct answer: Red blood cells (erythrocytes)\n\nErythrocytes are packed with hemoglobin, whose iron centers bind O2 in the lungs and release it in tissues. Leukocytes serve immune defense and platelets serve clotting; neither carries meaningful oxygen.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"Red blood cells (erythrocytes)\". The candidate response commits to \"White blood cells (leukocytes)\". I compared the stated justification against the reference reasoning point by point rather than keyword-matching. The response names leukocytes, which are immune cells; oxygen transport is done by hemoglobin in erythrocytes. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.2552,
+      "trainer_batch": 1,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0002,
+        "final_reward": -0.0002
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -163,7 +176,29 @@
         {
           "token": "Answer",
           "logprob": -1.3438,
-          "id": 98784
+          "id": 98784,
+          "topk": [
+            {
+              "token": "Answer",
+              "logprob": -1.3438,
+              "id": 98784
+            },
+            {
+              "token": " and",
+              "logprob": -2.0247,
+              "id": 178613
+            },
+            {
+              "token": " the",
+              "logprob": -2.3911,
+              "id": 80255
+            },
+            {
+              "token": "s",
+              "logprob": -3.7117,
+              "id": 33127
+            }
+          ]
         },
         {
           "token": ":",
@@ -198,7 +233,29 @@
         {
           "token": ")",
           "logprob": -0.9604,
-          "id": 1601
+          "id": 1601,
+          "topk": [
+            {
+              "token": ")",
+              "logprob": -0.9604,
+              "id": 1601
+            },
+            {
+              "token": ".",
+              "logprob": -1.3965,
+              "id": 86890
+            },
+            {
+              "token": " that",
+              "logprob": -2.0986,
+              "id": 46435
+            },
+            {
+              "token": "ing",
+              "logprob": -5.0858,
+              "id": 96940
+            }
+          ]
         },
         {
           "token": ".",

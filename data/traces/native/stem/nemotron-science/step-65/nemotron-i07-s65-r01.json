@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "Red blood cells (erythrocytes)",
+      "golden_response": "Correct answer: Red blood cells (erythrocytes)\n\nErythrocytes are packed with hemoglobin, whose iron centers bind O2 in the lungs and release it in tissues. Leukocytes serve immune defense and platelets serve clotting; neither carries meaningful oxygen.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"Red blood cells (erythrocytes)\". The candidate response commits to \"White blood cells (leukocytes)\". Formatting differences alone (casing, option letters, extra qualifiers) were not held against the response. The response names leukocytes, which are immune cells; oxygen transport is done by hemoglobin in erythrocytes. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.2295,
+      "trainer_batch": 2,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",

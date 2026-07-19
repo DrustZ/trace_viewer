@@ -1,6 +1,11 @@
 import type { TokenLogprob } from '@shared/schema/types'
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BUCKET_CLASSES, BUCKET_LABELS, logprobToBucket, TOKEN_CYCLE_CLASSES } from './logprobColor'
+import {
+  CONFIDENCE_CHIP_CLASSES,
+  CONFIDENCE_LABELS,
+  confidenceOf,
+  TOKEN_CYCLE_CLASSES,
+} from './logprobColor'
 
 /** Past this many tokens the remainder renders as plain text (a span per token gets slow). */
 export const TOKEN_RENDER_CAP = 1500
@@ -8,6 +13,25 @@ export const TOKEN_RENDER_CAP = 1500
 /** Make whitespace visible in the popover's quoted token: space → ·, newline → ⏎, tab → →. */
 export function visualizeWhitespace(s: string): string {
   return s.replace(/ /g, '·').replace(/\n/g, '⏎').replace(/\t/g, '→')
+}
+
+/**
+ * Split a token for chip display: leading spaces are trimmed, tabs become →,
+ * and trailing newlines split off into a separate 'na' chip rendered as ↵.
+ * A token of only spaces falls back to visible middots so it stays clickable.
+ */
+export function chipParts(token: string): { body: string; newlines: number } {
+  const m = /\n+$/.exec(token)
+  const newlines = m ? m[0].length : 0
+  const body = token
+    .slice(0, token.length - newlines)
+    .replace(/^ +/, '')
+    .replace(/\t/g, '→')
+    .replace(/\n/g, '↵')
+  if (body === '' && newlines === 0 && token.length > 0) {
+    return { body: visualizeWhitespace(token), newlines: 0 }
+  }
+  return { body, newlines }
 }
 
 /** Hover tooltip in 'probs' mode: quoted token, logprob, probability. */
@@ -27,9 +51,13 @@ interface PopoverState {
   /** Position relative to the component's relative wrapper. */
   top: number
   left: number
+  /** Render above the token (translateY(-100%)) when the viewport bottom is too close. */
+  flip: boolean
 }
 
 const POPOVER_WIDTH = 232
+/** Rough max popover height used to decide whether to flip above the token. */
+const POPOVER_EST_HEIGHT = 240
 
 function PopoverRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
@@ -70,13 +98,15 @@ export function TokenLogprobText({
     if (wrap === null || Number.isNaN(index)) return
     const rect = el.getBoundingClientRect()
     const wrapRect = wrap.getBoundingClientRect()
+    const flip = rect.bottom + POPOVER_EST_HEIGHT > window.innerHeight && rect.top > POPOVER_EST_HEIGHT
     setPopover((prev) =>
       prev?.index === index
         ? null
         : {
             index,
-            top: rect.bottom - wrapRect.top + 4,
+            top: flip ? rect.top - wrapRect.top - 4 : rect.bottom - wrapRect.top + 4,
             left: Math.max(0, Math.min(rect.left - wrapRect.left, wrapRect.width - POPOVER_WIDTH)),
+            flip,
           },
     )
   }, [])
@@ -116,24 +146,37 @@ export function TokenLogprobText({
           </span>,
         )
       } else {
-        out.push(
-          <button
-            key={offset}
-            type="button"
-            data-ti={i}
-            data-testid="lp-token"
-            onClick={onTokenClick}
-            title={probsTitle(t)}
-            className={`cursor-pointer whitespace-pre-wrap rounded-[2px] text-left align-baseline hover:ring-1 hover:ring-slate-300 ${
-              BUCKET_CLASSES[logprobToBucket(t.logprob)]
-            }`}
-          >
-            {t.token}
-            {t.id !== undefined && (
-              <sup className="align-super text-[8px] text-slate-500">{t.id}</sup>
-            )}
-          </button>,
-        )
+        const { body, newlines } = chipParts(t.token)
+        if (body.length > 0) {
+          out.push(
+            <button
+              key={offset}
+              type="button"
+              data-ti={i}
+              data-testid="lp-token"
+              onClick={onTokenClick}
+              title={probsTitle(t)}
+              className={`inline-flex cursor-pointer items-start whitespace-pre rounded border px-1 text-left font-mono text-xs hover:ring-1 hover:ring-slate-400 ${
+                CONFIDENCE_CHIP_CLASSES[confidenceOf(t.logprob)]
+              }`}
+            >
+              {body}
+              {t.id !== undefined && (
+                <span className="-mt-1 text-[8px] text-slate-500">{t.id}</span>
+              )}
+            </button>,
+          )
+        }
+        if (newlines > 0) {
+          out.push(
+            <span
+              key={`${offset}-nl`}
+              className={`inline-flex rounded border px-1 font-mono text-xs ${CONFIDENCE_CHIP_CLASSES.na}`}
+            >
+              {'↵'.repeat(newlines)}
+            </span>,
+          )
+        }
       }
       offset += t.token.length
     })
@@ -148,44 +191,77 @@ export function TokenLogprobText({
   }, [tokens, mode, onTokenClick])
 
   const active = popover === null ? undefined : tokens[popover.index]
+  const totalChars = useMemo(() => tokens.reduce((n, t) => n + t.token.length, 0), [tokens])
 
   return (
     <div ref={wrapRef} className={`relative ${className ?? ''}`}>
+      {mode === 'probs' && (
+        <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+          <span className="tabular-nums">
+            {tokens.length} tokens · {totalChars} chars
+          </span>
+          <span className="flex items-center gap-1">
+            {(['high', 'med', 'low', 'na'] as const).map((c) => (
+              <span
+                key={c}
+                className={`rounded border px-1 text-[10px] ${CONFIDENCE_CHIP_CLASSES[c]}`}
+              >
+                {CONFIDENCE_LABELS[c]}
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
       <div
-        className="whitespace-pre-wrap break-words font-mono text-xs leading-5 text-slate-800"
+        className={
+          mode === 'probs'
+            ? 'flex flex-wrap gap-[3px] font-mono text-xs leading-5 text-slate-800'
+            : 'whitespace-pre-wrap break-words font-mono text-xs leading-5 text-slate-800'
+        }
         data-testid="token-logprob-text"
       >
         {spans}
         {overflowCount > 0 && (
           <>
-            <span>{overflowText}</span>
+            <span className="whitespace-pre-wrap break-words">{overflowText}</span>
             <span className="ml-1 text-[10px] text-slate-400">+{overflowCount} more tokens</span>
           </>
         )}
       </div>
-      {mode === 'probs' && (
-        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-400">
-          {BUCKET_CLASSES.map((cls, i) => (
-            <span
-              key={BUCKET_LABELS[i]}
-              className={`h-2.5 w-2.5 rounded-sm border border-slate-200 ${cls}`}
-              title={BUCKET_LABELS[i]}
-            />
-          ))}
-          <span className="ml-1">high → low confidence</span>
-        </div>
-      )}
       {popover !== null && active !== undefined && (
         <div
           data-testid="token-popover"
-          className="absolute z-20 space-y-0.5 rounded-md border border-slate-200 bg-white p-2 text-[11px] shadow-lg"
+          className={`absolute z-20 space-y-0.5 rounded-md border border-slate-200 bg-white p-2 text-[11px] shadow-lg ${
+            popover.flip ? '-translate-y-full' : ''
+          }`}
           style={{ top: popover.top, left: popover.left, width: POPOVER_WIDTH }}
         >
           <PopoverRow label="token" value={`"${visualizeWhitespace(active.token)}"`} mono />
           <PopoverRow label="id" value={active.id === undefined ? '—' : String(active.id)} />
           <PopoverRow label="logprob" value={active.logprob.toFixed(4)} />
           <PopoverRow label="p" value={`${(Math.exp(active.logprob) * 100).toFixed(2)}%`} />
-          <PopoverRow label="bucket" value={BUCKET_LABELS[logprobToBucket(active.logprob)]} />
+          <PopoverRow label="confidence" value={CONFIDENCE_LABELS[confidenceOf(active.logprob)]} />
+          {active.topk !== undefined && active.topk.length > 0 && (
+            <div data-testid="topk-list" className="mt-1.5 border-t border-slate-100 pt-1">
+              <div className="mb-0.5 text-slate-400">Inference top-k</div>
+              {active.topk.map((alt) => {
+                const chosen = alt.token === active.token && alt.logprob === active.logprob
+                return (
+                  <div
+                    key={`${alt.token}:${alt.logprob}`}
+                    className={`flex items-baseline justify-between gap-3 rounded px-1 ${
+                      chosen ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-slate-700'
+                    }`}
+                  >
+                    <span className="break-all font-mono">{visualizeWhitespace(alt.token)}</span>
+                    <span className="tabular-nums">
+                      {(Math.exp(alt.logprob) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -14,6 +14,13 @@
     },
     "extra": {
       "success_criteria": "all 7 pytest tests in numpy/lib/tests/test_arraysetops.py pass",
+      "kl": 0.2213,
+      "trainer_batch": 8,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0002,
+        "final_reward": 0.9998
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -519,7 +526,29 @@
         {
           "token": "rn",
           "logprob": -0.995,
-          "id": 18074
+          "id": 18074,
+          "topk": [
+            {
+              "token": "rn",
+              "logprob": -0.995,
+              "id": 18074
+            },
+            {
+              "token": " not",
+              "logprob": -2.0661,
+              "id": 91101
+            },
+            {
+              "token": " in",
+              "logprob": -2.7673,
+              "id": 9249
+            },
+            {
+              "token": " it",
+              "logprob": -3.8484,
+              "id": 151303
+            }
+          ]
         },
         {
           "token": " '",
@@ -861,157 +890,225 @@
       "tokens": [
         {
           "token": "Pinned",
-          "logprob": -0.0232,
+          "logprob": -0.0248,
           "id": 184400
         },
         {
           "token": " the",
-          "logprob": -0.0305,
+          "logprob": -0.0478,
           "id": 80255
         },
         {
           "token": " return_inverse",
-          "logprob": -0.0267,
+          "logprob": -0.0334,
           "id": 64907
         },
         {
           "token": " index",
-          "logprob": -0.0155,
+          "logprob": -0.0137,
           "id": 142958
         },
         {
           "token": " dtype",
-          "logprob": -0.0233,
+          "logprob": -0.0265,
           "id": 155234
         },
         {
           "token": " to",
-          "logprob": -0.0122,
+          "logprob": -0.02,
           "id": 135647
         },
         {
           "token": " np",
-          "logprob": -0.0095,
+          "logprob": -0.0023,
           "id": 169378
-        },
-        {
-          "token": ".",
-          "logprob": -0.0357,
-          "id": 86890
-        },
-        {
-          "token": "intp",
-          "logprob": -0.0254,
-          "id": 174191
-        },
-        {
-          "token": " in",
-          "logprob": -0.0162,
-          "id": 9249
-        },
-        {
-          "token": " np",
-          "logprob": -3.1424,
-          "id": 169378
-        },
-        {
-          "token": ".",
-          "logprob": -0.0257,
-          "id": 86890
-        },
-        {
-          "token": "unique",
-          "logprob": -0.0041,
-          "id": 175931
-        },
-        {
-          "token": ",",
-          "logprob": -0.0239,
-          "id": 25084
-        },
-        {
-          "token": " fixing",
-          "logprob": -0.0348,
-          "id": 16587
-        },
-        {
-          "token": " the",
-          "logprob": -0.034,
-          "id": 80255
-        },
-        {
-          "token": " float64",
-          "logprob": -0.9852,
-          "id": 78338
-        },
-        {
-          "token": " escape",
-          "logprob": -0.0068,
-          "id": 81037
-        },
-        {
-          "token": " on",
-          "logprob": -0.0336,
-          "id": 108351
-        },
-        {
-          "token": " empty",
-          "logprob": -0.0458,
-          "id": 78649
-        },
-        {
-          "token": " structured",
-          "logprob": -0.0014,
-          "id": 30077
-        },
-        {
-          "token": " arrays",
-          "logprob": -0.0123,
-          "id": 44262
-        },
-        {
-          "token": ".",
-          "logprob": -1.489,
-          "id": 86890
-        },
-        {
-          "token": " Fancy",
-          "logprob": -0.0111,
-          "id": 21357
-        },
-        {
-          "token": " indexing",
-          "logprob": -0.0425,
-          "id": 43692
-        },
-        {
-          "token": " with",
-          "logprob": -0.0204,
-          "id": 3176
-        },
-        {
-          "token": " the",
-          "logprob": -0.0182,
-          "id": 80255
-        },
-        {
-          "token": " inverse",
-          "logprob": -0.0203,
-          "id": 120226
-        },
-        {
-          "token": " now",
-          "logprob": -0.0079,
-          "id": 100322
-        },
-        {
-          "token": " works",
-          "logprob": -0.0439,
-          "id": 76396
         },
         {
           "token": ".",
           "logprob": -0.0191,
+          "id": 86890
+        },
+        {
+          "token": "intp",
+          "logprob": -0.04,
+          "id": 174191
+        },
+        {
+          "token": " in",
+          "logprob": -0.5515,
+          "id": 9249,
+          "topk": [
+            {
+              "token": " in",
+              "logprob": -0.5515,
+              "id": 9249
+            },
+            {
+              "token": "intp",
+              "logprob": -1.1752,
+              "id": 174191
+            },
+            {
+              "token": " we",
+              "logprob": -2.8886,
+              "id": 148168
+            }
+          ]
+        },
+        {
+          "token": " np",
+          "logprob": -0.036,
+          "id": 169378
+        },
+        {
+          "token": ".",
+          "logprob": -0.0171,
+          "id": 86890
+        },
+        {
+          "token": "unique",
+          "logprob": -0.007,
+          "id": 175931
+        },
+        {
+          "token": ",",
+          "logprob": -0.0099,
+          "id": 25084
+        },
+        {
+          "token": " fixing",
+          "logprob": -1.2377,
+          "id": 16587,
+          "topk": [
+            {
+              "token": " fixing",
+              "logprob": -1.2377,
+              "id": 16587
+            },
+            {
+              "token": " a",
+              "logprob": -2.3066,
+              "id": 191231
+            },
+            {
+              "token": "ing",
+              "logprob": -2.5795,
+              "id": 96940
+            }
+          ]
+        },
+        {
+          "token": " the",
+          "logprob": -0.0314,
+          "id": 80255
+        },
+        {
+          "token": " float64",
+          "logprob": -0.0251,
+          "id": 78338
+        },
+        {
+          "token": " escape",
+          "logprob": -3.1509,
+          "id": 81037,
+          "topk": [
+            {
+              "token": " escape",
+              "logprob": -3.1509,
+              "id": 81037
+            },
+            {
+              "token": "ly",
+              "logprob": -3.6603,
+              "id": 31883
+            },
+            {
+              "token": "ed",
+              "logprob": -4.838,
+              "id": 170985
+            }
+          ]
+        },
+        {
+          "token": " on",
+          "logprob": -0.0068,
+          "id": 108351
+        },
+        {
+          "token": " empty",
+          "logprob": -0.0408,
+          "id": 78649
+        },
+        {
+          "token": " structured",
+          "logprob": -0.0387,
+          "id": 30077
+        },
+        {
+          "token": " arrays",
+          "logprob": -0.0359,
+          "id": 44262
+        },
+        {
+          "token": ".",
+          "logprob": -0.0379,
+          "id": 86890
+        },
+        {
+          "token": " Fancy",
+          "logprob": -0.0274,
+          "id": 21357
+        },
+        {
+          "token": " indexing",
+          "logprob": -0.0247,
+          "id": 43692
+        },
+        {
+          "token": " with",
+          "logprob": -1.4184,
+          "id": 3176,
+          "topk": [
+            {
+              "token": " with",
+              "logprob": -1.4184,
+              "id": 3176
+            },
+            {
+              "token": " the",
+              "logprob": -1.7456,
+              "id": 80255
+            },
+            {
+              "token": "ing",
+              "logprob": -3.0736,
+              "id": 96940
+            }
+          ]
+        },
+        {
+          "token": " the",
+          "logprob": -0.0243,
+          "id": 80255
+        },
+        {
+          "token": " inverse",
+          "logprob": -0.0078,
+          "id": 120226
+        },
+        {
+          "token": " now",
+          "logprob": -0.0132,
+          "id": 100322
+        },
+        {
+          "token": " works",
+          "logprob": -0.0115,
+          "id": 76396
+        },
+        {
+          "token": ".",
+          "logprob": -0.046,
           "id": 86890
         }
       ],

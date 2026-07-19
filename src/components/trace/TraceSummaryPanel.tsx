@@ -1,5 +1,6 @@
 import type { Trace } from '@shared/schema/types'
 import { useMemo, useState } from 'react'
+import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import {
   MarkdownContent,
   RichRawToggle,
@@ -9,9 +10,57 @@ import {
 import { ScoreBadge } from '../common/ScoreBadge'
 
 const JUDGE_CLAMP = 400
+const GOLDEN_FOLD_THRESHOLD = 400
+
+const GOLDEN_TONE: FoldTone = {
+  label: 'text-slate-500',
+  chevron: 'text-slate-400',
+  hover: 'hover:bg-slate-50',
+}
 
 function formatRewardValue(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2)
+}
+
+interface JudgeExtra {
+  verdict: number
+  reasoning: string
+  model?: string
+}
+
+/** meta.extra.judge → typed record, or undefined when absent/malformed. */
+export function parseJudgeExtra(value: unknown): JudgeExtra | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const o = value as Record<string, unknown>
+  if (typeof o.verdict !== 'number' || typeof o.reasoning !== 'string') return undefined
+  return {
+    verdict: o.verdict,
+    reasoning: o.reasoning,
+    model: typeof o.model === 'string' ? o.model : undefined,
+  }
+}
+
+interface RewardBreakdown {
+  correctness: number
+  length_penalty: number
+  final_reward: number
+}
+
+/** meta.extra.reward_breakdown → typed record, or undefined when absent/malformed. */
+export function parseRewardBreakdown(value: unknown): RewardBreakdown | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const o = value as Record<string, unknown>
+  if (
+    typeof o.correctness !== 'number' ||
+    typeof o.length_penalty !== 'number' ||
+    typeof o.final_reward !== 'number'
+  )
+    return undefined
+  return {
+    correctness: o.correctness,
+    length_penalty: o.length_penalty,
+    final_reward: o.final_reward,
+  }
 }
 
 /** { tests_passed: 3, tests_total: 4, judge: 1 } → ['tests 3/4', 'judge 1'] */
@@ -90,18 +139,24 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
   const groundTruth = typeof extra.ground_truth === 'string' ? extra.ground_truth : undefined
   const successCriteria =
     typeof extra.success_criteria === 'string' ? extra.success_criteria : undefined
+  const goldenResponse =
+    typeof extra.golden_response === 'string' ? extra.golden_response : undefined
   const endReason = typeof extra.end_reason === 'string' ? extra.end_reason : undefined
+  const judgeExtra = parseJudgeExtra(extra.judge)
+  const breakdown = parseRewardBreakdown(extra.reward_breakdown)
 
-  const judge = useMemo(() => {
+  const judgeText = useMemo(() => {
     for (let i = trace.messages.length - 1; i >= 0; i--) {
       const out = trace.messages[i].judgeOutput
       if (out) return out
     }
     return undefined
   }, [trace.messages])
+  // Structured judge record wins; plain judgeOutput text is the fallback.
+  const judge = judgeExtra?.reasoning ?? judgeText
 
   const chips = meta.rewardDetails ? rewardChips(meta.rewardDetails) : []
-  const hasScore = stats.score !== null || chips.length > 0
+  const hasScore = stats.score !== null || chips.length > 0 || breakdown !== undefined
 
   const badges: Array<{ key: string; label: string; cls: string }> = []
   if (endReason)
@@ -127,8 +182,12 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
     badges.length > 0 ||
     groundTruth !== undefined ||
     successCriteria !== undefined ||
+    goldenResponse !== undefined ||
     judge !== undefined ||
     warnings.length > 0
+  const refCount = [groundTruth, successCriteria, goldenResponse].filter(
+    (v) => v !== undefined,
+  ).length
 
   return (
     <section
@@ -163,6 +222,28 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
                   <span className="[&>span]:rounded-md [&>span]:px-2 [&>span]:py-0.5 [&>span]:text-lg">
                     <ScoreBadge score={stats.score} />
                   </span>
+                  {breakdown && (
+                    <span
+                      data-testid="reward-breakdown"
+                      className="flex flex-wrap items-center gap-2"
+                    >
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
+                        correctness {String(breakdown.correctness)}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
+                          breakdown.length_penalty < 0
+                            ? 'bg-red-50 text-red-600'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        length penalty {String(breakdown.length_penalty)}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
+                        final reward {String(breakdown.final_reward)}
+                      </span>
+                    </span>
+                  )}
                   {chips.map((chip) => (
                     <span
                       key={chip}
@@ -188,14 +269,14 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
                 </div>
               </Item>
             )}
-            {(groundTruth !== undefined || successCriteria !== undefined) && (
+            {refCount > 0 && (
               <Item label="Reference">
                 <div className="space-y-3">
                   {groundTruth !== undefined && (
                     <ReferenceBlock
                       id={`${meta.traceId}:ground-truth`}
                       text={groundTruth}
-                      sublabel={successCriteria !== undefined ? 'ground truth' : undefined}
+                      sublabel={refCount > 1 ? 'ground truth' : undefined}
                       testId="reference-ground-truth"
                     />
                   )}
@@ -203,20 +284,70 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
                     <ReferenceBlock
                       id={`${meta.traceId}:success-criteria`}
                       text={successCriteria}
-                      sublabel={groundTruth !== undefined ? 'success criteria' : undefined}
+                      sublabel={refCount > 1 ? 'success criteria' : undefined}
                       testId="reference-success-criteria"
                     />
                   )}
+                  {goldenResponse !== undefined &&
+                    (goldenResponse.length > GOLDEN_FOLD_THRESHOLD ? (
+                      <div data-testid="reference-golden-response">
+                        <FoldSection
+                          label="golden response"
+                          text={goldenResponse}
+                          tone={GOLDEN_TONE}
+                          blockPreview
+                          testId="golden-response-toggle"
+                          renderText={(t) => (
+                            <MarkdownContent
+                              text={wrapBareLatex(t)}
+                              className="mt-1 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-700"
+                            />
+                          )}
+                        />
+                      </div>
+                    ) : (
+                      <div data-testid="reference-golden-response">
+                        <span className="text-[10px] text-slate-400">golden response</span>
+                        <MarkdownContent
+                          text={wrapBareLatex(goldenResponse)}
+                          className="mt-1 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-700"
+                        />
+                      </div>
+                    ))}
                 </div>
               </Item>
             )}
             {judge !== undefined && (
               <div className="sm:col-span-2">
-                <Item label="Judge output">
-                  <blockquote className="whitespace-pre-wrap break-words rounded-r border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    {judge.length > JUDGE_CLAMP && !judgeFull
-                      ? `${judge.slice(0, JUDGE_CLAMP)}…`
-                      : judge}
+                <Item label="Judge">
+                  {judgeExtra && (
+                    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                      <span
+                        data-testid="judge-verdict"
+                        className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                          judgeExtra.verdict === 1
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {judgeExtra.verdict === 1 ? 'PASS' : 'FAIL'}
+                      </span>
+                      {judgeExtra.model && (
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+                          {judgeExtra.model}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <blockquote className="rounded-r border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-amber-900">
+                    <MarkdownContent
+                      text={
+                        judge.length > JUDGE_CLAMP && !judgeFull
+                          ? `${judge.slice(0, JUDGE_CLAMP)}…`
+                          : judge
+                      }
+                      className="text-sm"
+                    />
                   </blockquote>
                   {judge.length > JUDGE_CLAMP && (
                     <button

@@ -13,6 +13,14 @@
     },
     "extra": {
       "ground_truth": "France is the only country bordering both Germany and Spain. Its border with Germany runs about 450 km, largely along the Rhine, while its Pyrenean border with Spain is roughly 620–650 km (Wikipedia cites 623 km; the CIA Factbook 646 km).",
+      "golden_response": "France is the only country bordering both Germany and Spain. Its border with Germany runs about 450 km, largely along the Rhine, while its Pyrenean border with Spain is roughly 620–650 km (Wikipedia cites 623 km; the CIA Factbook 646 km).\n\nSource hint: Geography of France — Wikipedia — https://en.wikipedia.org/wiki/Geography_of_France",
+      "kl": 0.1756,
+      "trainer_batch": 3,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -311,7 +319,24 @@
         {
           "token": " Germany",
           "logprob": -1.1697,
-          "id": 122325
+          "id": 122325,
+          "topk": [
+            {
+              "token": " Germany",
+              "logprob": -1.1697,
+              "id": 122325
+            },
+            {
+              "token": " (",
+              "logprob": -1.7059,
+              "id": 168926
+            },
+            {
+              "token": " is",
+              "logprob": -2.997,
+              "id": 80276
+            }
+          ]
         },
         {
           "token": " border",
@@ -384,92 +409,131 @@
       "tokens": [
         {
           "token": "Switzerland",
-          "logprob": -0.0046,
+          "logprob": -0.0278,
           "id": 142791
         },
         {
           "token": " is",
-          "logprob": -0.0333,
+          "logprob": -0.0016,
           "id": 80276
         },
         {
           "token": " the",
-          "logprob": -0.0172,
+          "logprob": -0.0268,
           "id": 80255
         },
         {
           "token": " only",
-          "logprob": -0.036,
-          "id": 161466
+          "logprob": -1.05,
+          "id": 161466,
+          "topk": [
+            {
+              "token": " only",
+              "logprob": -1.05,
+              "id": 161466
+            },
+            {
+              "token": "ing",
+              "logprob": -1.2779,
+              "id": 96940
+            },
+            {
+              "token": " that",
+              "logprob": -3.3855,
+              "id": 46435
+            },
+            {
+              "token": "ly",
+              "logprob": -3.9165,
+              "id": 31883
+            }
+          ]
         },
         {
           "token": " country",
-          "logprob": -4.2808,
+          "logprob": -0.0136,
           "id": 197920
         },
         {
           "token": " bordering",
-          "logprob": -0.0048,
+          "logprob": -0.024,
           "id": 114344
         },
         {
           "token": " both",
-          "logprob": -0.0224,
+          "logprob": -0.0396,
           "id": 86081
         },
         {
           "token": " Germany",
-          "logprob": -0.0233,
+          "logprob": -0.01,
           "id": 122325
         },
         {
           "token": " and",
-          "logprob": -0.0386,
+          "logprob": -0.0172,
           "id": 178613
         },
         {
           "token": " Spain",
-          "logprob": -0.046,
+          "logprob": -0.0096,
           "id": 115817
         },
         {
           "token": ",",
-          "logprob": -0.0217,
+          "logprob": -0.0199,
           "id": 25084
         },
         {
           "token": " with",
-          "logprob": -0.0289,
+          "logprob": -0.0138,
           "id": 3176
         },
         {
           "token": " roughly",
-          "logprob": -0.0127,
+          "logprob": -0.0086,
           "id": 192672
         },
         {
           "token": " 350",
-          "logprob": -0.035,
+          "logprob": -0.0403,
           "id": 98658
         },
         {
           "token": " km",
-          "logprob": -0.034,
+          "logprob": -0.0261,
           "id": 35924
         },
         {
           "token": " against",
-          "logprob": -0.0166,
+          "logprob": -0.0042,
           "id": 187551
         },
         {
           "token": " each",
-          "logprob": -0.0167,
-          "id": 116939
+          "logprob": -2.2775,
+          "id": 116939,
+          "topk": [
+            {
+              "token": " each",
+              "logprob": -2.2775,
+              "id": 116939
+            },
+            {
+              "token": "ly",
+              "logprob": -2.7269,
+              "id": 31883
+            },
+            {
+              "token": " and",
+              "logprob": -3.5788,
+              "id": 178613
+            }
+          ]
         },
         {
           "token": ".",
-          "logprob": -0.0227,
+          "logprob": -0.0173,
           "id": 86890
         }
       ],

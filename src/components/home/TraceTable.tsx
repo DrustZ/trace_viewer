@@ -145,9 +145,13 @@ function GroupRow({
   const avgThinkTok = avgOf(items.map((t) => t.stats.thinkingTokens))
   const avgDuration = avgOf(items.map((t) => t.stats.durationMs))
   const steps = new Set(items.map((t) => t.meta.checkpointStep))
+  const minStep = Math.min(...steps)
+  const maxStep = Math.max(...steps)
   const splits = new Set(items.map((t) => t.meta.split))
   const statuses = new Set(items.map((t) => t.meta.status))
   const first = items[0]
+  const stepChip =
+    'shrink-0 rounded border border-slate-300 bg-white px-1 py-px text-[10px] font-medium text-slate-600'
 
   return (
     <button
@@ -169,7 +173,17 @@ function GroupRow({
         <span className="truncate font-mono text-slate-700">{group.instanceId}</span>
         <span className="shrink-0 font-normal text-slate-400">({group.count})</span>
       </span>
-      <span />
+      <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+        <span className={stepChip}>S{minStep}</span>
+        <span className="shrink-0 text-slate-400">→</span>
+        <span className={stepChip}>S{maxStep}</span>
+        <span
+          title={`${steps.size} checkpoint${steps.size === 1 ? '' : 's'}`}
+          className="truncate whitespace-nowrap font-normal text-[10px] text-slate-400"
+        >
+          {steps.size} checkpoint{steps.size === 1 ? '' : 's'}
+        </span>
+      </span>
       <span className="min-w-0">
         <ComponentBadge component={group.component} />
       </span>

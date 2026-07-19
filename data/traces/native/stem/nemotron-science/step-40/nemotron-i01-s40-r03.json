@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "B) Earth",
+      "golden_response": "Correct answer: B) Earth\n\nBulk densities: Earth ~5.51 g/cm^3, Mercury ~5.43 g/cm^3, Jupiter ~1.33 g/cm^3, Neptune ~1.64 g/cm^3. Mercury is a common trap because it is the most iron-rich, but Earth wins due to gravitational compression of its interior. The answer is Earth.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"B) Earth\". The candidate response is cut off mid-sentence and never commits to a complete final answer. Where the response cites figures, I verified they match the reference values before scoring. With no complete answer to compare against the reference, the response cannot be credited. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.0727,
+      "trainer_batch": 1,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0002,
+        "final_reward": -0.0002
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -172,7 +185,29 @@
         {
           "token": " C",
           "logprob": -0.9678,
-          "id": 184689
+          "id": 184689,
+          "topk": [
+            {
+              "token": " C",
+              "logprob": -0.9678,
+              "id": 184689
+            },
+            {
+              "token": " (",
+              "logprob": -1.2337,
+              "id": 168926
+            },
+            {
+              "token": " not",
+              "logprob": -2.7602,
+              "id": 91101
+            },
+            {
+              "token": "ing",
+              "logprob": -4.3429,
+              "id": 96940
+            }
+          ]
         },
         {
           "token": ")",
@@ -227,7 +262,24 @@
         {
           "token": ":",
           "logprob": -0.7394,
-          "id": 138294
+          "id": 138294,
+          "topk": [
+            {
+              "token": ":",
+              "logprob": -0.7394,
+              "id": 138294
+            },
+            {
+              "token": "s",
+              "logprob": -1.2478,
+              "id": 33127
+            },
+            {
+              "token": " also",
+              "logprob": -1.7271,
+              "id": 62785
+            }
+          ]
         },
         {
           "token": " Bulk",

@@ -10,6 +10,9 @@
     "sourceFormat": "native",
     "extra": {
       "ground_truth": "Returns indices i != j with nums[i] + nums[j] == target; the same element must not be used twice.",
+      "golden_response": "Reference approach (passes all 10 cases):\n\n```python\nclass Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        seen = {}\n        for i, x in enumerate(nums):\n            if target - x in seen:\n                return [seen[target - x], i]\n            seen[x] = i\n        return []\n```",
+      "kl": 0.208,
+      "trainer_batch": 8,
       "spans": [
         {
           "id": "sp-1",

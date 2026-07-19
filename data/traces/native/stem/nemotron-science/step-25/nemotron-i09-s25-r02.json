@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "3",
+      "golden_response": "Correct answer: 3\n\nFull dissociation gives [H+] = 10^-3 M. pH = -log10[H+] = 3. A pH of 11 would correspond to a base, not an acid.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"3\". The candidate response commits to \"11\". Where the response cites figures, I verified they match the reference values before scoring. The response answers pH 11, which is basic; a 0.001 M strong acid has [H+] = 10^-3 and pH 3. The sign of the logarithm was mishandled. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.2897,
+      "trainer_batch": 1,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",

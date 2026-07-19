@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "The entropy of an isolated system never decreases over time",
+      "golden_response": "Correct answer: The entropy of an isolated system never decreases over time\n\nThe first law is energy conservation; the second law is directional: spontaneous processes increase total entropy. For an isolated system, dS >= 0 with equality only for reversible processes.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"The entropy of an isolated system never decreases over time\". The candidate response commits to \"Energy is conserved in an isolated system\". Where the response cites figures, I verified they match the reference values before scoring. I compared the stated justification against the reference reasoning point by point rather than keyword-matching. Formatting differences alone (casing, option letters, extra qualifiers) were not held against the response. The response states energy conservation, which is the first law of thermodynamics. The reference answer concerns entropy never decreasing. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.0815,
+      "trainer_batch": 0,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0002,
+        "final_reward": -0.0002
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -172,7 +185,29 @@
         {
           "token": " Energy",
           "logprob": -0.6226,
-          "id": 47804
+          "id": 47804,
+          "topk": [
+            {
+              "token": " Energy",
+              "logprob": -0.6226,
+              "id": 47804
+            },
+            {
+              "token": " of",
+              "logprob": -1.3198,
+              "id": 28423
+            },
+            {
+              "token": "ed",
+              "logprob": -1.8736,
+              "id": 170985
+            },
+            {
+              "token": " and",
+              "logprob": -4.1243,
+              "id": 178613
+            }
+          ]
         },
         {
           "token": " is",

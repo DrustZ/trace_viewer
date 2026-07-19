@@ -14,6 +14,14 @@
     },
     "extra": {
       "ground_truth": "answer[i] equals the product of all elements except nums[i], in O(n) without division; the prefix pass must exclude the current element.",
+      "golden_response": "Reference approach (passes all 9 cases):\n\n```python\nclass Solution:\n    def productExceptSelf(self, nums: list[int]) -> list[int]:\n        n = len(nums)\n        out = [1] * n\n        left = 1\n        for i in range(n):\n            out[i] = left\n            left *= nums[i]\n        right = 1\n        for i in range(n - 1, -1, -1):\n            out[i] *= right\n            right *= nums[i]\n        return out\n```",
+      "kl": 0.2575,
+      "trainer_batch": 5,
+      "reward_breakdown": {
+        "correctness": 0.1111,
+        "length_penalty": -0.0001,
+        "final_reward": 0.111
+      },
       "spans": [
         {
           "id": "sp-1",

@@ -10,6 +10,9 @@
     "sourceFormat": "native",
     "extra": {
       "ground_truth": "Returns non-overlapping intervals covering the input; overlapping and touching intervals (shared endpoint) merge.",
+      "golden_response": "Reference approach (passes all 9 cases):\n\n```python\nclass Solution:\n    def merge(self, intervals: list[list[int]]) -> list[list[int]]:\n        intervals.sort()\n        out = [intervals[0][:]]\n        for s, e in intervals[1:]:\n            if s <= out[-1][1]:\n                out[-1][1] = max(out[-1][1], e)\n            else:\n                out.append([s, e])\n        return out\n```",
+      "kl": 0.0521,
+      "trainer_batch": 9,
       "spans": [
         {
           "id": "sp-1",

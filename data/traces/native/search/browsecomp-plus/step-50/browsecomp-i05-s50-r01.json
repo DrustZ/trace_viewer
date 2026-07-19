@@ -13,6 +13,14 @@
     },
     "extra": {
       "ground_truth": "The first YouTube video was \"Me at the zoo\", a 19-second clip filmed at the San Diego Zoo, uploaded by co-founder Jawed Karim in April 2005 (April 23, 2005).",
+      "golden_response": "The first YouTube video was \"Me at the zoo\", a 19-second clip filmed at the San Diego Zoo, uploaded by co-founder Jawed Karim in April 2005 (April 23, 2005).\n\nSource hint: Me at the zoo — Wikipedia — https://en.wikipedia.org/wiki/Me_at_the_zoo",
+      "kl": 0.279,
+      "trainer_batch": 2,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -435,7 +443,24 @@
         {
           "token": " at",
           "logprob": -0.7922,
-          "id": 172111
+          "id": 172111,
+          "topk": [
+            {
+              "token": " at",
+              "logprob": -0.7922,
+              "id": 172111
+            },
+            {
+              "token": " that",
+              "logprob": -1.1395,
+              "id": 46435
+            },
+            {
+              "token": ".",
+              "logprob": -2.1573,
+              "id": 86890
+            }
+          ]
         },
         {
           "token": " the",
@@ -450,7 +475,29 @@
         {
           "token": "\"",
           "logprob": -3.2612,
-          "id": 163278
+          "id": 163278,
+          "topk": [
+            {
+              "token": "\"",
+              "logprob": -3.2612,
+              "id": 163278
+            },
+            {
+              "token": "ed",
+              "logprob": -4.1952,
+              "id": 170985
+            },
+            {
+              "token": " the",
+              "logprob": -5.2721,
+              "id": 80255
+            },
+            {
+              "token": " =",
+              "logprob": -6.1902,
+              "id": 170427
+            }
+          ]
         },
         {
           "token": ",",

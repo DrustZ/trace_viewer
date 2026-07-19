@@ -13,6 +13,14 @@
     },
     "extra": {
       "ground_truth": "Jørn Utzon, the Danish architect of the Sydney Opera House, won the Pritzker Architecture Prize in 2003. Both the official Pritzker laureate page and the laureate list confirm the year, and all sources agree he was Danish.",
+      "golden_response": "Jørn Utzon, the Danish architect of the Sydney Opera House, won the Pritzker Architecture Prize in 2003. Both the official Pritzker laureate page and the laureate list confirm the year, and all sources agree he was Danish.\n\nSource hint: Sydney Opera House — Wikipedia — https://en.wikipedia.org/wiki/Sydney_Opera_House",
+      "kl": 0.118,
+      "trainer_batch": 9,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -315,7 +323,29 @@
         {
           "token": " Opera",
           "logprob": -1.4855,
-          "id": 4007
+          "id": 4007,
+          "topk": [
+            {
+              "token": " Opera",
+              "logprob": -1.4855,
+              "id": 4007
+            },
+            {
+              "token": " (",
+              "logprob": -2.0962,
+              "id": 168926
+            },
+            {
+              "token": " a",
+              "logprob": -2.7854,
+              "id": 191231
+            },
+            {
+              "token": " also",
+              "logprob": -3.2873,
+              "id": 62785
+            }
+          ]
         },
         {
           "token": " House",
@@ -445,222 +475,278 @@
       "tokens": [
         {
           "token": "J",
-          "logprob": -0.0032,
+          "logprob": -0.0049,
           "id": 77414
         },
         {
           "token": "ø",
-          "logprob": -0.0412,
+          "logprob": -0.0065,
           "id": 177608
         },
         {
           "token": "rn",
-          "logprob": -0.02,
+          "logprob": -0.037,
           "id": 18074
         },
         {
           "token": " Utzon",
-          "logprob": -0.5411,
+          "logprob": -0.0393,
           "id": 19678
         },
         {
           "token": ",",
-          "logprob": -0.5579,
+          "logprob": -0.0112,
           "id": 25084
         },
         {
           "token": " the",
-          "logprob": -1.46,
+          "logprob": -0.0018,
           "id": 80255
         },
         {
           "token": " Danish",
-          "logprob": -0.0485,
+          "logprob": -0.0274,
           "id": 194887
         },
         {
           "token": " architect",
-          "logprob": -0.0124,
+          "logprob": -0.0465,
           "id": 13779
         },
         {
           "token": " of",
-          "logprob": -0.0087,
+          "logprob": -0.0127,
           "id": 28423
         },
         {
           "token": " the",
-          "logprob": -5.1844,
+          "logprob": -0.0224,
           "id": 80255
         },
         {
           "token": " Sydney",
-          "logprob": -0.0391,
+          "logprob": -0.0159,
           "id": 185084
         },
         {
           "token": " Opera",
-          "logprob": -0.0169,
+          "logprob": -0.0155,
           "id": 4007
         },
         {
           "token": " House",
-          "logprob": -0.0432,
+          "logprob": -0.0216,
           "id": 69282
         },
         {
           "token": ",",
-          "logprob": -0.013,
+          "logprob": -0.0161,
           "id": 25084
         },
         {
           "token": " won",
-          "logprob": -0.0464,
+          "logprob": -0.0223,
           "id": 172570
         },
         {
           "token": " the",
-          "logprob": -0.0268,
+          "logprob": -0.0236,
           "id": 80255
         },
         {
           "token": " Pritzker",
-          "logprob": -0.0088,
+          "logprob": -0.046,
           "id": 65865
         },
         {
           "token": " Architecture",
-          "logprob": -0.0309,
+          "logprob": -0.0367,
           "id": 14001
         },
         {
           "token": " Prize",
-          "logprob": -0.0281,
-          "id": 2558
+          "logprob": -4.1932,
+          "id": 2558,
+          "topk": [
+            {
+              "token": " Prize",
+              "logprob": -4.1932,
+              "id": 2558
+            },
+            {
+              "token": " =",
+              "logprob": -4.5369,
+              "id": 170427
+            },
+            {
+              "token": " and",
+              "logprob": -5.5035,
+              "id": 178613
+            },
+            {
+              "token": " is",
+              "logprob": -8.3269,
+              "id": 80276
+            }
+          ]
         },
         {
           "token": " in",
-          "logprob": -0.042,
+          "logprob": -0.0103,
           "id": 9249
         },
         {
           "token": " 2003",
-          "logprob": -0.0324,
+          "logprob": -0.0122,
           "id": 76049
         },
         {
           "token": ".",
-          "logprob": -0.0017,
-          "id": 86890
+          "logprob": -1.186,
+          "id": 86890,
+          "topk": [
+            {
+              "token": ".",
+              "logprob": -1.186,
+              "id": 86890
+            },
+            {
+              "token": " in",
+              "logprob": -1.7315,
+              "id": 9249
+            },
+            {
+              "token": " the",
+              "logprob": -2.224,
+              "id": 80255
+            }
+          ]
         },
         {
           "token": " Both",
-          "logprob": -0.0318,
+          "logprob": -0.0228,
           "id": 160801
         },
         {
           "token": " the",
-          "logprob": -0.0129,
+          "logprob": -0.0221,
           "id": 80255
         },
         {
           "token": " official",
-          "logprob": -0.0041,
-          "id": 191903
+          "logprob": -3.3917,
+          "id": 191903,
+          "topk": [
+            {
+              "token": " official",
+              "logprob": -3.3917,
+              "id": 191903
+            },
+            {
+              "token": " not",
+              "logprob": -3.6475,
+              "id": 91101
+            },
+            {
+              "token": " that",
+              "logprob": -4.941,
+              "id": 46435
+            }
+          ]
         },
         {
           "token": " Pritzker",
-          "logprob": -0.0344,
+          "logprob": -0.0486,
           "id": 65865
         },
         {
           "token": " laureate",
-          "logprob": -0.0291,
+          "logprob": -0.0225,
           "id": 7407
         },
         {
           "token": " page",
-          "logprob": -0.0023,
+          "logprob": -0.0215,
           "id": 175393
         },
         {
           "token": " and",
-          "logprob": -0.0416,
+          "logprob": -0.0462,
           "id": 178613
         },
         {
           "token": " the",
-          "logprob": -0.0376,
+          "logprob": -0.03,
           "id": 80255
         },
         {
           "token": " laureate",
-          "logprob": -0.0211,
+          "logprob": -0.0029,
           "id": 7407
         },
         {
           "token": " list",
-          "logprob": -0.0147,
+          "logprob": -0.0467,
           "id": 9416
         },
         {
           "token": " confirm",
-          "logprob": -0.0412,
+          "logprob": -0.0411,
           "id": 148258
         },
         {
           "token": " the",
-          "logprob": -0.0366,
+          "logprob": -0.0352,
           "id": 80255
         },
         {
           "token": " year",
-          "logprob": -0.9428,
+          "logprob": -0.0234,
           "id": 105423
         },
         {
           "token": ",",
-          "logprob": -0.0095,
+          "logprob": -0.0373,
           "id": 25084
         },
         {
           "token": " and",
-          "logprob": -0.0279,
+          "logprob": -0.0213,
           "id": 178613
         },
         {
           "token": " all",
-          "logprob": -0.0084,
+          "logprob": -0.0363,
           "id": 104207
         },
         {
           "token": " sources",
-          "logprob": -0.019,
+          "logprob": -0.0028,
           "id": 13052
         },
         {
           "token": " agree",
-          "logprob": -0.0302,
+          "logprob": -0.004,
           "id": 81306
         },
         {
           "token": " he",
-          "logprob": -0.0392,
+          "logprob": -0.0378,
           "id": 138301
         },
         {
           "token": " was",
-          "logprob": -0.0369,
+          "logprob": -0.0446,
           "id": 191173
         },
         {
           "token": " Danish",
-          "logprob": -0.5263,
+          "logprob": -0.0154,
           "id": 194887
         },
         {
           "token": ".",
-          "logprob": -1.4228,
+          "logprob": -0.0393,
           "id": 86890
         }
       ],

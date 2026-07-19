@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
 import { connectors, parseAny } from '../../shared/connectors/registry'
 import type { ParsedTrace } from '../../shared/connectors/types'
@@ -25,6 +26,22 @@ export interface ScanResult {
   traces: number
   warnings: number
   ms: number
+}
+
+/** Files parsed per event-loop yield during a progressive scan. */
+const SCAN_BATCH_SIZE = 50
+
+export interface ScanProgress {
+  scanning: boolean
+  scannedFiles: number
+  totalFiles: number
+}
+
+const progress: ScanProgress = { scanning: false, scannedFiles: 0, totalFiles: 0 }
+
+/** Snapshot of the current (or last finished) scanAll run; surfaced via GET /api/meta. */
+export function getScanProgress(): ScanProgress {
+  return { ...progress }
 }
 
 function errorMessage(e: unknown): string {
@@ -115,24 +132,46 @@ async function walk(root: string): Promise<string[]> {
   }
 }
 
+/**
+ * Progressive scan: enumerates sources up front (fast walk), then parses in batches of
+ * SCAN_BATCH_SIZE, yielding to the event loop between batches so requests interleave.
+ * Each upsert bumps store.dataVersion, so clients see the corpus stream in.
+ */
 export async function scanAll(
   store: TraceStore,
   roots: string[] = DEFAULT_ROOTS,
 ): Promise<ScanResult> {
   const startedAt = performance.now()
-  let files = 0
-  let traces = 0
-  let warnings = 0
+  const sources: string[] = []
   for (const root of roots) {
     for (const filePath of await walk(root)) {
-      if (!isTraceSource(filePath)) continue
-      files += 1
-      const r = await scanFile(store, filePath)
-      traces += r.traces
-      warnings += r.warnings
+      if (isTraceSource(filePath)) sources.push(filePath)
     }
   }
-  return { files, traces, warnings, ms: Math.round(performance.now() - startedAt) }
+  progress.scanning = true
+  progress.scannedFiles = 0
+  progress.totalFiles = sources.length
+  let traces = 0
+  let warnings = 0
+  try {
+    for (let i = 0; i < sources.length; i += SCAN_BATCH_SIZE) {
+      for (const filePath of sources.slice(i, i + SCAN_BATCH_SIZE)) {
+        const r = await scanFile(store, filePath)
+        traces += r.traces
+        warnings += r.warnings
+        progress.scannedFiles += 1
+      }
+      await yieldToEventLoop()
+    }
+  } finally {
+    progress.scanning = false
+  }
+  return {
+    files: sources.length,
+    traces,
+    warnings,
+    ms: Math.round(performance.now() - startedAt),
+  }
 }
 
 /** Watches the roots and keeps the store in sync (300ms debounce per path). */

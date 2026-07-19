@@ -7,10 +7,16 @@ const port = Number(process.env.PORT ?? 8787)
 const store = new TraceStore()
 const app = createApp({ store })
 
-const boot = await scanAll(store)
-console.log(
-  `[api] ${boot.traces} traces from ${boot.files} files (${boot.warnings} warnings) in ${boot.ms}ms`,
-)
+// Progressive boot: listen immediately; the corpus streams in behind /api/meta progress.
+scanAll(store)
+  .then((boot) => {
+    console.log(
+      `[api] ${boot.traces} traces from ${boot.files} files (${boot.warnings} warnings) in ${boot.ms}ms`,
+    )
+  })
+  .catch((e: unknown) => {
+    console.error(`[api] boot scan failed: ${e instanceof Error ? e.message : String(e)}`)
+  })
 watch(store)
 
 app.listen(port, () => {

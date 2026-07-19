@@ -13,6 +13,13 @@
     },
     "extra": {
       "success_criteria": "checker `awk '{print $6}' /etc/cron.d/backup | tail -1` prints \"root\"",
+      "kl": 0.041,
+      "trainer_batch": 11,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -331,7 +338,24 @@
         {
           "token": "\"",
           "logprob": -1.1456,
-          "id": 163278
+          "id": 163278,
+          "topk": [
+            {
+              "token": "\"",
+              "logprob": -1.1456,
+              "id": 163278
+            },
+            {
+              "token": "ly",
+              "logprob": -1.3326,
+              "id": 31883
+            },
+            {
+              "token": " a",
+              "logprob": -3.126,
+              "id": 191231
+            }
+          ]
         },
         {
           "token": ":",
@@ -371,17 +395,73 @@
         {
           "token": ".",
           "logprob": -0.7899,
-          "id": 86890
+          "id": 86890,
+          "topk": [
+            {
+              "token": ".",
+              "logprob": -0.7899,
+              "id": 86890
+            },
+            {
+              "token": " is",
+              "logprob": -1.0166,
+              "id": 80276
+            },
+            {
+              "token": " in",
+              "logprob": -3.3871,
+              "id": 9249
+            }
+          ]
         },
         {
           "token": "d",
           "logprob": -1.4864,
-          "id": 67012
+          "id": 67012,
+          "topk": [
+            {
+              "token": "d",
+              "logprob": -1.4864,
+              "id": 67012
+            },
+            {
+              "token": "\"",
+              "logprob": -2.1499,
+              "id": 163278
+            },
+            {
+              "token": "ing",
+              "logprob": -2.4496,
+              "id": 96940
+            }
+          ]
         },
         {
           "token": "\"",
           "logprob": -1.2827,
-          "id": 163278
+          "id": 163278,
+          "topk": [
+            {
+              "token": "\"",
+              "logprob": -1.2827,
+              "id": 163278
+            },
+            {
+              "token": " in",
+              "logprob": -1.749,
+              "id": 9249
+            },
+            {
+              "token": ",",
+              "logprob": -2.3535,
+              "id": 25084
+            },
+            {
+              "token": "s",
+              "logprob": -5.2935,
+              "id": 33127
+            }
+          ]
         },
         {
           "token": "}",
@@ -519,158 +599,147 @@
       "tokens": [
         {
           "token": "The",
-          "logprob": -0.0117,
+          "logprob": -0.0306,
           "id": 141785
         },
         {
           "token": " /",
-          "logprob": -1.3199,
+          "logprob": -0.0208,
           "id": 36093
         },
         {
           "token": "etc",
-          "logprob": -0.04,
+          "logprob": -0.0269,
           "id": 33814
         },
         {
           "token": "/",
-          "logprob": -0.0058,
+          "logprob": -0.0463,
           "id": 172179
         },
         {
           "token": "cron",
-          "logprob": -0.0449,
-          "id": 172514
+          "logprob": -1.0455,
+          "id": 172514,
+          "topk": [
+            {
+              "token": "cron",
+              "logprob": -1.0455,
+              "id": 172514
+            },
+            {
+              "token": " is",
+              "logprob": -1.7294,
+              "id": 80276
+            },
+            {
+              "token": " a",
+              "logprob": -1.9817,
+              "id": 191231
+            },
+            {
+              "token": " we",
+              "logprob": -3.6704,
+              "id": 148168
+            }
+          ]
         },
         {
           "token": ".",
-          "logprob": -0.046,
+          "logprob": -0.0182,
           "id": 86890
         },
         {
           "token": "d",
-          "logprob": -0.0182,
+          "logprob": -0.0384,
           "id": 67012
         },
         {
           "token": "/",
-          "logprob": -0.0064,
+          "logprob": -0.0358,
           "id": 172179
         },
         {
           "token": "backup",
-          "logprob": -0.0201,
+          "logprob": -0.0487,
           "id": 73856
         },
         {
           "token": " entry",
-          "logprob": -0.0033,
+          "logprob": -0.012,
           "id": 23618
         },
         {
           "token": " was",
-          "logprob": -0.027,
+          "logprob": -0.0144,
           "id": 191173
         },
         {
           "token": " missing",
-          "logprob": -0.0306,
+          "logprob": -0.0168,
           "id": 161846
         },
         {
           "token": " the",
-          "logprob": -0.0208,
+          "logprob": -0.014,
           "id": 80255
         },
         {
           "token": " mandatory",
-          "logprob": -0.0269,
+          "logprob": -0.0277,
           "id": 170479
         },
         {
           "token": " user",
-          "logprob": -0.0463,
+          "logprob": -0.0363,
           "id": 174217
         },
         {
           "token": " field",
-          "logprob": -1.0455,
+          "logprob": -0.0419,
           "id": 147546
         },
         {
           "token": ",",
-          "logprob": -0.0182,
+          "logprob": -0.031,
           "id": 25084
         },
         {
           "token": " so",
-          "logprob": -0.0384,
+          "logprob": -0.0117,
           "id": 149130
         },
         {
           "token": " cron",
-          "logprob": -0.0358,
-          "id": 185276
+          "logprob": -0.5797,
+          "id": 185276,
+          "topk": [
+            {
+              "token": " cron",
+              "logprob": -0.5797,
+              "id": 185276
+            },
+            {
+              "token": ",",
+              "logprob": -1.2011,
+              "id": 25084
+            },
+            {
+              "token": " that",
+              "logprob": -2.1064,
+              "id": 46435
+            },
+            {
+              "token": ".",
+              "logprob": -5.0428,
+              "id": 86890
+            }
+          ]
         },
         {
           "token": " rejected",
-          "logprob": -0.0487,
-          "id": 31094
-        },
-        {
-          "token": " the",
-          "logprob": -0.012,
-          "id": 80255
-        },
-        {
-          "token": " whole",
-          "logprob": -0.0144,
-          "id": 116455
-        },
-        {
-          "token": " file",
-          "logprob": -0.0168,
-          "id": 41802
-        },
-        {
-          "token": ".",
-          "logprob": -0.014,
-          "id": 86890
-        },
-        {
-          "token": " Re",
-          "logprob": -0.0277,
-          "id": 37131
-        },
-        {
-          "token": "-",
-          "logprob": -0.0363,
-          "id": 110373
-        },
-        {
-          "token": "inserted",
-          "logprob": -0.0419,
-          "id": 152642
-        },
-        {
-          "token": " \"",
-          "logprob": -0.031,
-          "id": 154664
-        },
-        {
-          "token": "root",
-          "logprob": -0.0117,
-          "id": 93230
-        },
-        {
-          "token": "\"",
-          "logprob": -0.5797,
-          "id": 163278
-        },
-        {
-          "token": " after",
           "logprob": -0.033,
-          "id": 120408
+          "id": 31094
         },
         {
           "token": " the",
@@ -678,59 +747,197 @@
           "id": 80255
         },
         {
-          "token": " schedule",
+          "token": " whole",
           "logprob": -1.2751,
+          "id": 116455,
+          "topk": [
+            {
+              "token": " whole",
+              "logprob": -1.2751,
+              "id": 116455
+            },
+            {
+              "token": " and",
+              "logprob": -1.8897,
+              "id": 178613
+            },
+            {
+              "token": " to",
+              "logprob": -2.5815,
+              "id": 135647
+            },
+            {
+              "token": ".",
+              "logprob": -3.1046,
+              "id": 86890
+            }
+          ]
+        },
+        {
+          "token": " file",
+          "logprob": -0.0167,
+          "id": 41802
+        },
+        {
+          "token": ".",
+          "logprob": -0.0183,
+          "id": 86890
+        },
+        {
+          "token": " Re",
+          "logprob": -0.034,
+          "id": 37131
+        },
+        {
+          "token": "-",
+          "logprob": -0.0477,
+          "id": 110373
+        },
+        {
+          "token": "inserted",
+          "logprob": -0.001,
+          "id": 152642
+        },
+        {
+          "token": " \"",
+          "logprob": -0.0133,
+          "id": 154664
+        },
+        {
+          "token": "root",
+          "logprob": -0.0418,
+          "id": 93230
+        },
+        {
+          "token": "\"",
+          "logprob": -0.0312,
+          "id": 163278
+        },
+        {
+          "token": " after",
+          "logprob": -0.0437,
+          "id": 120408
+        },
+        {
+          "token": " the",
+          "logprob": -0.0232,
+          "id": 80255
+        },
+        {
+          "token": " schedule",
+          "logprob": -0.0307,
           "id": 135091
         },
         {
           "token": ",",
-          "logprob": -0.0167,
-          "id": 25084
+          "logprob": -4.123,
+          "id": 25084,
+          "topk": [
+            {
+              "token": ",",
+              "logprob": -4.123,
+              "id": 25084
+            },
+            {
+              "token": " schedule",
+              "logprob": -4.2964,
+              "id": 135091
+            },
+            {
+              "token": " reloaded",
+              "logprob": -6.4173,
+              "id": 52472
+            },
+            {
+              "token": " the",
+              "logprob": -7.3935,
+              "id": 80255
+            }
+          ]
         },
         {
           "token": " reloaded",
-          "logprob": -0.0183,
+          "logprob": -0.0227,
           "id": 52472
         },
         {
           "token": " cron",
-          "logprob": -0.034,
+          "logprob": -0.0156,
           "id": 185276
         },
         {
           "token": ",",
-          "logprob": -0.0477,
+          "logprob": -0.0161,
           "id": 25084
         },
         {
           "token": " and",
-          "logprob": -0.001,
-          "id": 178613
+          "logprob": -1.2613,
+          "id": 178613,
+          "topk": [
+            {
+              "token": " and",
+              "logprob": -1.2613,
+              "id": 178613
+            },
+            {
+              "token": "ing",
+              "logprob": -1.7295,
+              "id": 96940
+            },
+            {
+              "token": " to",
+              "logprob": -2.6728,
+              "id": 135647
+            }
+          ]
         },
         {
           "token": " the",
-          "logprob": -0.0133,
+          "logprob": -0.0177,
           "id": 80255
         },
         {
           "token": " file",
-          "logprob": -0.0418,
+          "logprob": -0.0458,
           "id": 41802
         },
         {
           "token": " now",
-          "logprob": -0.0312,
+          "logprob": -0.009,
           "id": 100322
         },
         {
           "token": " parses",
-          "logprob": -0.0437,
+          "logprob": -0.0374,
           "id": 140660
         },
         {
           "token": ".",
-          "logprob": -0.0232,
-          "id": 86890
+          "logprob": -0.6464,
+          "id": 86890,
+          "topk": [
+            {
+              "token": ".",
+              "logprob": -0.6464,
+              "id": 86890
+            },
+            {
+              "token": " a",
+              "logprob": -1.0772,
+              "id": 191231
+            },
+            {
+              "token": " is",
+              "logprob": -2.2568,
+              "id": 80276
+            },
+            {
+              "token": " also",
+              "logprob": -4.401,
+              "id": 62785
+            }
+          ]
         }
       ],
       "stepIndex": 5

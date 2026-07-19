@@ -241,10 +241,34 @@ export function runGenerate(opts: GenerateOptions): GenerateSummary {
       },
     }
     const trace = finalizeTrace(meta, output.messages, overrides)
+    // RL bookkeeping: deterministic KL divergence (mostly 0.01-0.3, ~3%
+    // outliers in 1-4) and the trainer batch this checkpoint belongs to.
+    const rlRng = mulberry32(hashSeed(seed, plan.traceId, 'rl'))
+    const kl = rlRng.bernoulli(0.03)
+      ? Math.round((1 + rlRng.next() * 3) * 10000) / 10000
+      : Math.round((0.01 + rlRng.next() * 0.29) * 10000) / 10000
+    // Reward decomposition on every scored trace: stats.score stays the raw
+    // grader outcome (correctness); the length penalty and final reward live
+    // only in the breakdown.
+    const score = trace.stats.score
+    const contextWindow = trace.stats.model?.contextWindow ?? 128000
+    const lengthPenalty =
+      -Math.round((trace.stats.outputTokens / contextWindow) * 0.1 * 10000) / 10000
     // Observability profile: built after finalize so spans see annotated
     // messages (ids + stepIndex) and the computed stats.
     trace.meta.extra = {
       ...trace.meta.extra,
+      kl,
+      trainer_batch: Math.floor(plan.step / 25),
+      ...(score !== null
+        ? {
+            reward_breakdown: {
+              correctness: score,
+              length_penalty: lengthPenalty,
+              final_reward: Math.round((score + lengthPenalty) * 10000) / 10000,
+            },
+          }
+        : {}),
       spans: buildProfSpans(
         trace.messages,
         trace.meta,

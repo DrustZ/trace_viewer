@@ -14,6 +14,14 @@
     },
     "extra": {
       "ground_truth": "Returns true iff every bracket closes the matching type in order, rejecting any close on an empty stack.",
+      "golden_response": "Reference approach (passes all 8 cases):\n\n```python\nclass Solution:\n    def isValid(self, s: str) -> bool:\n        pairs = {')': '(', ']': '[', '}': '{'}\n        stack = []\n        for ch in s:\n            if ch in pairs:\n                if not stack or stack.pop() != pairs[ch]:\n                    return False\n            else:\n                stack.append(ch)\n        return not stack\n```",
+      "kl": 0.0279,
+      "trainer_batch": 10,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",

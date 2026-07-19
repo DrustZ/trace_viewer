@@ -135,6 +135,10 @@ describe('api', () => {
     expect(res.body.traceCount).toBe(5)
     expect(res.body.dataVersion).toBeGreaterThan(0)
     expect(res.body.filterKeys.map((k: { id: string }) => k.id)).toContain('score')
+    // Progressive-scan progress fields (additive to MetaResponse); no scan runs here.
+    expect(res.body.scanning).toBe(false)
+    expect(typeof res.body.scannedFiles).toBe('number')
+    expect(typeof res.body.totalFiles).toBe('number')
   })
 
   it('GET /api/traces sorts by time desc by default, total before limit/offset', async () => {

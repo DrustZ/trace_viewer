@@ -14,6 +14,14 @@
     },
     "extra": {
       "ground_truth": "Groups strings that are exact anagrams (identical character multisets); non-anagrams with colliding character sums like 'ac' and 'bb' stay separate.",
+      "golden_response": "Reference approach (passes all 9 cases):\n\n```python\nclass Solution:\n    def groupAnagrams(self, strs: list[str]) -> list[list[str]]:\n        groups: dict[str, list[str]] = {}\n        for s in strs:\n            key = ''.join(sorted(s))\n            groups.setdefault(key, []).append(s)\n        return list(groups.values())\n```",
+      "kl": 0.0816,
+      "trainer_batch": 7,
+      "reward_breakdown": {
+        "correctness": 0.1111,
+        "length_penalty": -0.0001,
+        "final_reward": 0.111
+      },
       "spans": [
         {
           "id": "sp-1",

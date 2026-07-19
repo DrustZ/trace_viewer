@@ -2,6 +2,7 @@ import path from 'node:path'
 import express, { type ErrorRequestHandler, type Express } from 'express'
 import { aggregatesRoutes } from './routes/aggregates'
 import { aiFilterRoutes } from './routes/aiFilter'
+import { chatRoutes } from './routes/chat'
 import { isRecord, type RouteCtx } from './routes/context'
 import { evolutionRoutes } from './routes/evolution'
 import { importRoutes } from './routes/importRoute'
@@ -54,6 +55,7 @@ export function createApp(deps: AppDeps = {}): Express {
 
   app.use(metaRoutes(ctx))
   app.use(tracesRoutes(ctx))
+  app.use(chatRoutes(ctx))
   app.use(aggregatesRoutes(ctx))
   app.use(evolutionRoutes(ctx))
   app.use(searchRoutes(ctx))

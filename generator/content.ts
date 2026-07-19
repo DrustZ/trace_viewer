@@ -359,6 +359,44 @@ export const SCIENCE_ITEMS: readonly ScienceItem[] = [
   },
 ]
 
+/** Model tag stamped on every meta.extra.judge record. */
+export const JUDGE_MODEL = 'judge-llm-v2'
+
+/** Rubric/check sentences mixed into the judge chain-of-thought (1-3 per verdict). */
+export const JUDGE_CHECKS: readonly string[] = [
+  'I compared the stated justification against the reference reasoning point by point rather than keyword-matching.',
+  'Formatting differences alone (casing, option letters, extra qualifiers) were not held against the response.',
+  'No partial credit applies on this item: the rubric is a binary match against the reference.',
+  'The response contains no contradictory statements elsewhere that would override its committed answer.',
+  'Where the response cites figures, I verified they match the reference values before scoring.',
+]
+
+/**
+ * Deterministic 4-8 sentence judge chain-of-thought referencing the candidate
+ * answer against the golden reference. `outcome` 'truncated' covers responses
+ * cut off before committing to an answer.
+ */
+export function judgeReasoning(
+  item: ScienceItem,
+  rng: Rng,
+  outcome: 'pass' | 'fail' | 'truncated',
+  answerText: string,
+): string {
+  const opener = `The reference (golden) answer for this question is "${item.answer}".`
+  const commit =
+    outcome === 'truncated'
+      ? 'The candidate response is cut off mid-sentence and never commits to a complete final answer.'
+      : `The candidate response commits to "${answerText}".`
+  const checks = rng.shuffle(JUDGE_CHECKS).slice(0, rng.int(1, 3))
+  const closing =
+    outcome === 'truncated'
+      ? 'With no complete answer to compare against the reference, the response cannot be credited. Verdict: incorrect.'
+      : outcome === 'pass'
+        ? item.judgePass
+        : item.judgeFail
+  return [opener, commit, ...checks, closing].join(' ')
+}
+
 // ---------------------------------------------------------------------------
 // swe/swebench-verified-mini
 // ---------------------------------------------------------------------------

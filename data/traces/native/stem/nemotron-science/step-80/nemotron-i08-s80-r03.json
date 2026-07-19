@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "3 g",
+      "golden_response": "Correct answer: 3 g\n\n15 years is exactly 3 half-lives, so the remaining mass is 24 / 2^3. 24 -> 12 -> 6 -> 3, leaving 3 g.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"3 g\". The candidate response commits to \"6 g\". Where the response cites figures, I verified they match the reference values before scoring. The response gives 6 g, which corresponds to only 2 half-lives; 15 years is 3 half-lives of 5 years, leaving 3 g. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.0918,
+      "trainer_batch": 3,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -172,12 +185,46 @@
         {
           "token": " 6",
           "logprob": -5.3713,
-          "id": 103260
+          "id": 103260,
+          "topk": [
+            {
+              "token": " 6",
+              "logprob": -5.3713,
+              "id": 103260
+            },
+            {
+              "token": " in",
+              "logprob": -5.9085,
+              "id": 9249
+            },
+            {
+              "token": " also",
+              "logprob": -6.9031,
+              "id": 62785
+            }
+          ]
         },
         {
           "token": " g",
           "logprob": -3.4157,
-          "id": 173109
+          "id": 173109,
+          "topk": [
+            {
+              "token": " g",
+              "logprob": -3.4157,
+              "id": 173109
+            },
+            {
+              "token": ",",
+              "logprob": -4.5752,
+              "id": 25084
+            },
+            {
+              "token": ".",
+              "logprob": -5.5012,
+              "id": 86890
+            }
+          ]
         },
         {
           "token": ".",

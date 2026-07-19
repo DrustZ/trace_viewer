@@ -14,6 +14,14 @@
     },
     "extra": {
       "ground_truth": "Returns the number of distinct 1-or-2-step compositions of n (Fibonacci sequence with climbStairs(1) = 1, climbStairs(2) = 2).",
+      "golden_response": "Reference approach (passes all 8 cases):\n\n```python\nclass Solution:\n    def climbStairs(self, n: int) -> int:\n        a, b = 1, 1\n        for _ in range(n - 1):\n            a, b = b, a + b\n        return b\n```",
+      "kl": 0.0781,
+      "trainer_batch": 10,
+      "reward_breakdown": {
+        "correctness": 1,
+        "length_penalty": -0.0001,
+        "final_reward": 0.9999
+      },
       "spans": [
         {
           "id": "sp-1",

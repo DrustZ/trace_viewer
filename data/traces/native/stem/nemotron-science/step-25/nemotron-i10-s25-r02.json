@@ -13,6 +13,19 @@
     },
     "extra": {
       "ground_truth": "Higher, due to the Doppler effect compressing wavefronts ahead of the source",
+      "golden_response": "Correct answer: Higher, due to the Doppler effect compressing wavefronts ahead of the source\n\nA source moving toward the observer shortens the effective wavelength: successive wavefronts are emitted from closer positions. Shorter wavelength at fixed wave speed means higher observed frequency; the drop to lower pitch happens only after the source passes.",
+      "judge": {
+        "verdict": 0,
+        "reasoning": "The reference (golden) answer for this question is \"Higher, due to the Doppler effect compressing wavefronts ahead of the source\". The candidate response commits to \"Lower, because the waves stretch out as the source moves\". Formatting differences alone (casing, option letters, extra qualifiers) were not held against the response. I compared the stated justification against the reference reasoning point by point rather than keyword-matching. Where the response cites figures, I verified they match the reference values before scoring. The response claims a lower frequency on approach, inverting the Doppler effect; compression ahead of the source raises the observed frequency. Verdict: incorrect.",
+        "model": "judge-llm-v2"
+      },
+      "kl": 0.2529,
+      "trainer_batch": 1,
+      "reward_breakdown": {
+        "correctness": 0,
+        "length_penalty": -0.0001,
+        "final_reward": -0.0001
+      },
       "spans": [
         {
           "id": "sp-1",
@@ -202,7 +215,29 @@
         {
           "token": " out",
           "logprob": -5.8973,
-          "id": 40810
+          "id": 40810,
+          "topk": [
+            {
+              "token": " out",
+              "logprob": -5.8973,
+              "id": 40810
+            },
+            {
+              "token": " as",
+              "logprob": -6.0653,
+              "id": 101084
+            },
+            {
+              "token": " =",
+              "logprob": -8.1895,
+              "id": 170427
+            },
+            {
+              "token": " to",
+              "logprob": -9.0327,
+              "id": 135647
+            }
+          ]
         },
         {
           "token": " as",
