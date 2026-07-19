@@ -77,7 +77,18 @@ function mapMessage(
   const trailing: Message[] = []
   for (const block of raw.content) {
     if (!isRecord(block)) continue
-    if (block.type === 'text') {
+    if (block.type === 'thinking' || block.type === 'redacted_thinking') {
+      // Extended thinking → the reasoning (analysis) channel, before the answer.
+      const thinking =
+        typeof block.thinking === 'string'
+          ? block.thinking
+          : block.type === 'redacted_thinking'
+            ? '[redacted thinking]'
+            : ''
+      if (thinking !== '') {
+        out.push({ id: '', role: 'assistant', channel: 'analysis', content: thinking })
+      }
+    } else if (block.type === 'text') {
       if (typeof block.text === 'string') text += block.text
     } else if (block.type === 'tool_use') {
       ctr.seq += 1

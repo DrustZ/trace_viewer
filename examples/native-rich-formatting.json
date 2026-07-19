@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "traceId": "example-rich-formatting-001",
+    "instanceId": "ml-tutor-ridge",
+    "component": "stem/nemotron-science",
+    "status": "completed",
+    "timestamp": "2024-06-06T10:30:00Z",
+    "checkpointStep": 300,
+    "split": "test",
+    "sourceFormat": "native",
+    "extra": {
+      "run": "imported",
+      "ground_truth": "Ridge (L2) shrinks coefficients; Lasso (L1) drives some to zero (feature selection). Tune λ by cross-validation on a log-spaced grid after standardizing."
+    }
+  },
+  "stats": {
+    "score": 1,
+    "model": {
+      "name": "claude-opus-4"
+    }
+  },
+  "messages": [
+    {
+      "id": "m0",
+      "role": "system",
+      "content": "You are a machine-learning tutor. Answer with precise, well-formatted explanations: use tables, fenced code, and LaTeX where it helps."
+    },
+    {
+      "id": "m1",
+      "role": "user",
+      "content": "Explain the bias–variance tradeoff and how it shows up when tuning the regularization strength λ in ridge regression."
+    },
+    {
+      "id": "m2",
+      "role": "assistant",
+      "channel": "final",
+      "content": "The **bias–variance tradeoff** decomposes expected test error into three parts:\n\n$$\\mathbb{E}\\big[(y-\\hat f(x))^2\\big] = \\underbrace{(\\text{Bias}[\\hat f])^2}_{\\text{underfit}} + \\underbrace{\\text{Var}[\\hat f]}_{\\text{overfit}} + \\underbrace{\\sigma^2}_{\\text{irreducible}}$$\n\nFor **ridge regression** you minimize\n\n$$\\hat\\beta_\\lambda = \\arg\\min_\\beta \\; \\lVert y - X\\beta \\rVert_2^2 + \\lambda \\lVert \\beta \\rVert_2^2.$$\n\nAs $\\lambda$ grows, coefficients shrink toward zero:\n\n| λ | Bias² | Variance | Test error |\n|---:|---:|---:|---:|\n| 0 (OLS) | low | **high** | high |\n| moderate | small | moderate | **minimum** |\n| ∞ | **high** | ~0 | high |\n\n- Small λ → flexible fit → **low bias, high variance**.\n- Large λ → stiff fit → **high bias, low variance**.\n- The sweet spot is the λ that minimizes *validation* error.\n\n> Rule of thumb: pick λ by k-fold CV on a log-spaced grid, then refit on all data."
+    },
+    {
+      "id": "m3",
+      "role": "user",
+      "content": "Show me the scikit-learn code to pick λ by cross-validation."
+    },
+    {
+      "id": "m4",
+      "role": "assistant",
+      "channel": "final",
+      "content": "Use `RidgeCV`, which does efficient leave-one-out CV over a grid:\n\n```python\nimport numpy as np\nfrom sklearn.linear_model import RidgeCV\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\n\nalphas = np.logspace(-3, 3, 25)          # the λ grid (log-spaced)\nmodel = make_pipeline(\n    StandardScaler(),                     # ridge is not scale-invariant\n    RidgeCV(alphas=alphas, store_cv_values=True),\n)\nmodel.fit(X_train, y_train)\nprint('best alpha:', model[-1].alpha_)\n```\n\nTwo gotchas:\n\n1. **Always standardize** first — the $\\lambda\\lVert\\beta\\rVert^2$ penalty is not scale-invariant.\n2. Grid in **log space**; linear grids waste points."
+    },
+    {
+      "id": "m5",
+      "role": "user",
+      "content": "How is this different from Lasso?"
+    },
+    {
+      "id": "m6",
+      "role": "assistant",
+      "channel": "final",
+      "content": "Different penalty → different behavior:\n\n| | Ridge (L2) | Lasso (L1) |\n|---|---|---|\n| Penalty | $\\lambda\\lVert\\beta\\rVert_2^2$ | $\\lambda\\lVert\\beta\\rVert_1$ |\n| Coefficients | shrink, stay nonzero | some become **exactly 0** |\n| Use when | many small effects | few strong effects (sparsity) |\n| Solution | closed-form | needs coordinate descent |\n\nIn short: **Ridge shrinks, Lasso selects.** If you want automatic feature selection, use Lasso (or Elastic Net to get both)."
+    },
+    {
+      "id": "m7",
+      "role": "user",
+      "content": "Give me a quick diff to switch my snippet from RidgeCV to LassoCV."
+    },
+    {
+      "id": "m8",
+      "role": "assistant",
+      "channel": "final",
+      "content": "```diff\n-from sklearn.linear_model import RidgeCV\n+from sklearn.linear_model import LassoCV\n\n-    RidgeCV(alphas=alphas, store_cv_values=True),\n+    LassoCV(alphas=alphas, cv=5, max_iter=10000),\n```\n\nNote `LassoCV` uses k-fold `cv` (not LOO) and may need a higher `max_iter` to converge."
+    },
+    {
+      "id": "m9",
+      "role": "user",
+      "content": "Thanks — summarize when to reach for each in one line."
+    },
+    {
+      "id": "m10",
+      "role": "assistant",
+      "channel": "final",
+      "content": "**Ridge** when you believe *many* features each contribute a little; **Lasso** (or **Elastic Net**) when you expect *few* relevant features and want a sparse, interpretable model."
+    }
+  ]
+}
