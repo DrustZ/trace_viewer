@@ -124,7 +124,7 @@ export function RunColumn({
   const trace = useTrace(selectedTraceId || undefined)
 
   return (
-    <section className="flex min-w-0 flex-col gap-2" data-testid={`run-column-${run}`}>
+    <section className="flex h-full min-w-0 flex-col gap-2" data-testid={`run-column-${run}`}>
       <button
         type="button"
         onClick={() => setShowRollouts((v) => !v)}
@@ -156,7 +156,9 @@ export function RunColumn({
           // Once a trace is open it's the focus below; cap the list into a
           // scrollable strip so it doesn't split the column in half.
           <ul
-            className={`flex flex-col gap-1.5 ${selectedTraceId ? 'max-h-56 overflow-y-auto' : ''}`}
+            className={`flex flex-col gap-1.5 overflow-y-auto ${
+              selectedTraceId ? 'max-h-56 shrink-0' : 'min-h-0 flex-1'
+            }`}
           >
             {groups.map((g) => {
               const isOpen = open.has(g.step)
@@ -202,7 +204,7 @@ export function RunColumn({
       {selectedTraceId && (
         <div
           data-testid={`trace-view-${run}`}
-          className="h-[72vh] overflow-hidden rounded-lg border border-slate-200 bg-white"
+          className="min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white"
         >
           {trace.isLoading ? (
             <div className="p-4">

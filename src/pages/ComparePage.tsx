@@ -96,8 +96,8 @@ export default function ComparePage() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4">
+    <div className="h-screen overflow-hidden bg-slate-50">
+      <div className="mx-auto flex h-full max-w-7xl flex-col gap-4 px-5 py-4">
         <header className="flex flex-wrap items-center gap-3">
           <Link to="/" className="text-xs text-blue-600 hover:underline">
             ← Traces
@@ -148,10 +148,12 @@ export default function ComparePage() {
           />
         ) : (
           <>
-            <CollapsibleSection id="compare-curves" title="Reward curves — A vs B" defaultOpen>
-              <DualEvolutionChart instanceId={instance} runA={runA} runB={runB} />
-            </CollapsibleSection>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="shrink-0">
+              <CollapsibleSection id="compare-curves" title="Reward curves — A vs B" defaultOpen>
+                <DualEvolutionChart instanceId={instance} runA={runA} runB={runB} />
+              </CollapsibleSection>
+            </div>
+            <div className="grid min-h-0 flex-1 grid-cols-2 gap-4">
               <RunColumn
                 run={runA}
                 instanceId={instance}
