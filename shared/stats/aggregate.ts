@@ -4,6 +4,7 @@
  * traces are skipped by score averages but still counted everywhere else.
  */
 
+import { recordedCheckpoint } from '../schema/provenance'
 import type {
   ComponentAggregate,
   RewardCurvePoint,
@@ -40,6 +41,7 @@ export function statTiles(items: TraceSummary[]): StatTiles {
     completed: countStatus(items, 'completed'),
     failed: countStatus(items, 'failed'),
     executing: countStatus(items, 'executing'),
+    unknown: countStatus(items, 'unknown'),
     avgScore: mean(definedScores(items)),
     avgTurns: meanOf(items, (t) => t.stats.turns),
     avgDurationMs: meanDurationMs(items),
@@ -53,9 +55,11 @@ export function statTiles(items: TraceSummary[]): StatTiles {
 function stepPoints(items: TraceSummary[]): RewardCurvePoint[] {
   const byStep = new Map<number, TraceSummary[]>()
   for (const t of items) {
-    const at = byStep.get(t.meta.checkpointStep)
+    const step = recordedCheckpoint(t.meta)
+    if (step === null) continue
+    const at = byStep.get(step)
     if (at) at.push(t)
-    else byStep.set(t.meta.checkpointStep, [t])
+    else byStep.set(step, [t])
   }
   const points: RewardCurvePoint[] = []
   for (const [step, at] of byStep) {
@@ -65,7 +69,7 @@ function stepPoints(items: TraceSummary[]): RewardCurvePoint[] {
   return points.sort((a, b) => a.step - b.step)
 }
 
-const SPLIT_ORDER: Record<Split, number> = { train: 0, test: 1 }
+const SPLIT_ORDER: Record<Split, number> = { train: 0, test: 1, unknown: 2 }
 
 export function componentAggregates(items: TraceSummary[]): ComponentAggregate[] {
   const groups = new Map<string, { component: string; split: Split; items: TraceSummary[] }>()
@@ -93,6 +97,7 @@ export function componentAggregates(items: TraceSummary[]): ComponentAggregate[]
         completed: countStatus(group, 'completed'),
         failed: countStatus(group, 'failed'),
         executing: countStatus(group, 'executing'),
+        unknown: countStatus(group, 'unknown'),
         avgScore: mean(scored),
         successRate: scored.length > 0 ? scored.filter((s) => s > 0).length / scored.length : null,
         truncatedRate: group.filter((t) => t.stats.truncated).length / group.length,

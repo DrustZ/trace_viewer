@@ -1,3 +1,4 @@
+import { recordedCheckpoint } from '@shared/schema/provenance'
 import type { Trace } from '@shared/schema/types'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
@@ -73,6 +74,7 @@ function scoreTone(score: number | null): string {
 
 export function MetadataTab({ trace }: { trace: Trace }) {
   const { meta, stats } = trace
+  const checkpoint = recordedCheckpoint(meta)
   const tokPerTurn = stats.turns > 0 ? Math.round(stats.totalTokens / stats.turns) : null
   const breakdown = parseRewardBreakdown(meta.extra?.reward_breakdown)
   const judge = parseJudgeExtra(meta.extra?.judge)
@@ -137,7 +139,7 @@ export function MetadataTab({ trace }: { trace: Trace }) {
         />
         <KvRow label="Component" value={meta.component} />
         <KvRow label="Status" value={meta.status} />
-        <KvRow label="Checkpoint Step" value={meta.checkpointStep} />
+        <KvRow label="Checkpoint Step" value={checkpoint ?? 'Unavailable'} />
         <KvRow label="Split" value={meta.split} />
         <KvRow label="Timestamp" value={formatTimestamp(meta.timestamp)} />
         <KvRow label="Source Format" value={meta.sourceFormat} />

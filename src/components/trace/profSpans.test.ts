@@ -170,6 +170,35 @@ describe('buildSpanTree · derivation from messages', () => {
     expect(final?.startMs).toBe(1000)
     expect(final?.durationMs).toBe(1000)
   })
+
+  it('keeps source order and zero unknown gaps when timestamps move backwards', () => {
+    const messages = [
+      msg({ role: 'user', timestamp: iso(100) }),
+      msg({ role: 'user', timestamp: iso(50) }),
+      msg({ role: 'user', timestamp: iso(150) }),
+    ]
+    const { spans } = buildSpanTree(mkTrace(messages))
+    const leaves = flattenVisible(spans, new Set())
+      .map((row) => row.span)
+      .filter((candidate) => candidate.messageId !== undefined)
+    expect(leaves.map((leaf) => leaf.messageId)).toEqual(messages.map((message) => message.id))
+    expect(leaves.map((leaf) => leaf.startMs)).toEqual([100, 100, 150])
+    expect(leaves.map((leaf) => leaf.durationMs)).toEqual([0, 50, 0])
+    expect(leaves.every((leaf) => leaf.durationMs >= 0)).toBe(true)
+  })
+
+  it('uses a source-carried tool name when no assistant call can be linked', () => {
+    const { spans } = buildSpanTree(
+      mkTrace([
+        msg({
+          role: 'tool',
+          toolResult: { toolCallId: 'missing-call', isError: false },
+          metadata: { toolName: 'bash', toolCallMatch: 'unmatched' },
+        }),
+      ]),
+    )
+    expect(spans.find((candidate) => candidate.name === 'bash.exec')?.kind).toBe('sandbox')
+  })
 })
 
 describe('buildSpanTree · meta.extra.spans validation', () => {

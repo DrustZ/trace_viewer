@@ -1,3 +1,4 @@
+import { withDefaultCheckpointProvenance } from '../schema/provenance'
 import type { Message, TraceMeta } from '../schema/types'
 import type { Connector, ParseContext, ParseResult } from './types'
 
@@ -171,6 +172,7 @@ function parseHarmony(text: string, ctx: ParseContext): ParseResult {
     split: 'train',
     sourceFormat: 'harmony',
     dataLocation: ctx.sourcePath,
+    extra: withDefaultCheckpointProvenance(),
   }
   return { traces: [{ meta, messages, warnings }], warnings: [] }
 }

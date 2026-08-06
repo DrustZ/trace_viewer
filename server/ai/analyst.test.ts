@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import type { ParsedTrace } from '../../shared/connectors/types'
+import type { Split, TraceStatus } from '../../shared/schema/types'
 import type { RouteCtx } from '../routes/context'
 import { SearchIndex } from '../search/searchIndex'
 import { TraceStore } from '../store/traceStore'
@@ -14,7 +15,8 @@ function fakeClient(create: CreateMock): AnalystClient {
 function parsedTrace(opts: {
   traceId: string
   instanceId?: string
-  status?: 'completed' | 'failed'
+  status?: TraceStatus
+  split?: Split
   step?: number
   score?: number
   content?: string
@@ -28,7 +30,7 @@ function parsedTrace(opts: {
       status: opts.status ?? 'completed',
       timestamp: '2026-03-01T00:00:00.000Z',
       checkpointStep: opts.step ?? 100,
-      split: 'train',
+      split: opts.split ?? 'train',
       sourceFormat: 'native',
       ...(opts.extra ? { extra: opts.extra } : {}),
     },
@@ -98,6 +100,52 @@ describe('executeTool', () => {
     }
     expect(out.total).toBe(60)
     expect(out.items).toHaveLength(50)
+  })
+
+  it('list_traces can select an explicitly unknown split', () => {
+    const ctx = makeCtx([
+      parsedTrace({ traceId: 'known', split: 'train' }),
+      parsedTrace({ traceId: 'unknown', split: 'unknown' }),
+    ])
+    const out = executeTool(ctx, 'list_traces', { split: 'unknown' }) as {
+      total: number
+      items: Array<Record<string, unknown>>
+    }
+    expect(out.total).toBe(1)
+    expect(out.items[0]).toMatchObject({ traceId: 'unknown', split: 'unknown' })
+  })
+
+  it('reports executing and unknown status counts in aggregate rows', () => {
+    const ctx = makeCtx([
+      parsedTrace({ traceId: 'running', status: 'executing' }),
+      parsedTrace({ traceId: 'indeterminate', status: 'unknown' }),
+    ])
+    const out = executeTool(ctx, 'aggregate', { groupBy: 'component' }) as {
+      rows: Array<Record<string, unknown>>
+    }
+    expect(out.rows[0]).toMatchObject({ count: 2, executing: 1, unknown: 1 })
+  })
+
+  it('serializes a connector default checkpoint as unavailable, not step zero', () => {
+    const ctx = makeCtx([
+      parsedTrace({
+        traceId: 'no-checkpoint',
+        step: 0,
+        extra: { normalization: { checkpointStep: 'default' } },
+      }),
+    ])
+    const listed = executeTool(ctx, 'list_traces', {}) as {
+      items: Array<Record<string, unknown>>
+    }
+    expect(listed.items[0]).toMatchObject({ step: null, checkpointRecorded: false })
+
+    const grouped = executeTool(ctx, 'aggregate', { groupBy: 'step' }) as {
+      rows: Array<Record<string, unknown>>
+    }
+    expect(grouped.rows[0]).toMatchObject({ step: 'unknown', count: 1 })
+
+    const atZero = executeTool(ctx, 'aggregate_instances', { step: 0 }) as { total: number }
+    expect(atZero.total).toBe(0)
   })
 
   it('aggregate groups by status with compact rows', () => {
@@ -235,6 +283,8 @@ describe('runAnalysis', () => {
     expect(params.model).toBe('claude-sonnet-5')
     expect(String(params.system)).toContain('emit_report')
     expect(String(params.system)).toContain('score (number)')
+    expect(String(params.system)).toContain('null checkpoint')
+    expect(JSON.stringify(params.tools)).toContain('"enum":["train","test","unknown"]')
   })
 
   it('dispatches aggregate_instances through the loop and documents it in the system prompt', async () => {

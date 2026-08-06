@@ -68,6 +68,47 @@ function isErrorResult(content: string): boolean {
   return /^\s*error\b/i.test(content)
 }
 
+interface IndexedToolCall {
+  id: string
+  name: string
+  messageIndex: number
+}
+
+type ToolCallMatch = 'exact' | 'tool-name' | 'single-pending' | 'unmatched'
+
+interface ResolvedToolResult {
+  toolCallId: string
+  match: ToolCallMatch
+  sourceToolCallId?: string
+}
+
+/**
+ * Index source-provided call ids up front. Some captured conversations place a
+ * tool result before the assistant message that emitted the matching call, so
+ * exact ids must be recognized independently of message order.
+ */
+function indexSourceToolCalls(rawMessages: unknown[]): Map<string, IndexedToolCall[]> {
+  const indexed = new Map<string, IndexedToolCall[]>()
+  rawMessages.forEach((raw, messageIndex) => {
+    if (!isRecord(raw) || !Array.isArray(raw.tool_calls)) return
+    for (const candidate of raw.tool_calls) {
+      if (!isRecord(candidate) || typeof candidate.id !== 'string' || candidate.id === '') {
+        continue
+      }
+      const call: IndexedToolCall = {
+        id: candidate.id,
+        name:
+          typeof candidate.name === 'string' && candidate.name !== '' ? candidate.name : 'unknown',
+        messageIndex,
+      }
+      const existing = indexed.get(call.id)
+      if (existing) existing.push(call)
+      else indexed.set(call.id, [call])
+    }
+  })
+  return indexed
+}
+
 function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
   let value: unknown
   let truncated = false
@@ -96,6 +137,84 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
   const agents: string[] = []
   let escalated = false
   let toolCallSeq = 0
+  let repairedToolResultLinks = 0
+  let unmatchedToolResults = 0
+  let toolErrors = 0
+  let timestampRegressions = 0
+  let previousTimestamp: number | undefined
+  const indexedCalls = indexSourceToolCalls(rawMessages)
+  const pendingCalls: IndexedToolCall[] = []
+  const matchedCallIds = new Set<string>()
+
+  const resolveToolResult = (
+    rawId: unknown,
+    rawName: unknown,
+    messageIndex: number,
+  ): ResolvedToolResult => {
+    const sourceId = typeof rawId === 'string' && rawId !== '' ? rawId : undefined
+    const sourceName = typeof rawName === 'string' && rawName !== '' ? rawName : undefined
+
+    if (sourceId !== undefined) {
+      const exact = indexedCalls.get(sourceId)
+      const generatedExact = pendingCalls.filter((call) => call.id === sourceId)
+      const candidates = exact ?? generatedExact
+      if (
+        candidates.length === 1 &&
+        !matchedCallIds.has(sourceId) &&
+        (sourceName === undefined || candidates[0].name === sourceName)
+      ) {
+        matchedCallIds.add(sourceId)
+        return { toolCallId: sourceId, match: 'exact' }
+      }
+
+      // An explicit id that is duplicated, already consumed, or conflicts with
+      // tool_name is not safe to redirect to a different call by name.
+      if (candidates.length > 0) {
+        return {
+          toolCallId: '',
+          match: 'unmatched',
+          sourceToolCallId: sourceId,
+        }
+      }
+    }
+
+    if (sourceName !== undefined) {
+      const sameName = pendingCalls.filter(
+        (call) =>
+          call.messageIndex < messageIndex &&
+          call.name === sourceName &&
+          !matchedCallIds.has(call.id),
+      )
+      // A name-only repair is safe only when it identifies exactly one prior
+      // unmatched call. "Most recent" is deterministic but can silently swap
+      // results when an assistant emits multiple calls to the same tool.
+      if (sameName.length === 1) {
+        matchedCallIds.add(sameName[0].id)
+        return {
+          toolCallId: sameName[0].id,
+          match: 'tool-name',
+          ...(sourceId !== undefined ? { sourceToolCallId: sourceId } : {}),
+        }
+      }
+    } else if (sourceId === undefined) {
+      const unmatched = pendingCalls.filter(
+        (call) => call.messageIndex < messageIndex && !matchedCallIds.has(call.id),
+      )
+      if (unmatched.length === 1) {
+        matchedCallIds.add(unmatched[0].id)
+        return { toolCallId: unmatched[0].id, match: 'single-pending' }
+      }
+    }
+
+    return {
+      // An empty canonical id explicitly means "unlinked". Keeping an unknown
+      // source id here could accidentally collide with a generated call id;
+      // the raw id remains available in metadata for inspection.
+      toolCallId: '',
+      match: 'unmatched',
+      ...(sourceId !== undefined ? { sourceToolCallId: sourceId } : {}),
+    }
+  }
 
   rawMessages.forEach((raw, index) => {
     if (!isRecord(raw)) {
@@ -105,6 +224,12 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
     const role = raw.role
     const content = typeof raw.content === 'string' ? raw.content : ''
     const timestamp = toIso(raw.timestamp)
+    if (typeof raw.timestamp === 'number' && Number.isFinite(raw.timestamp)) {
+      if (previousTimestamp !== undefined && raw.timestamp < previousTimestamp) {
+        timestampRegressions += 1
+      }
+      previousTimestamp = raw.timestamp
+    }
     if (role === 'assistant') {
       const agentType = typeof raw.agent_type === 'string' ? raw.agent_type : undefined
       if (agentType !== undefined) {
@@ -127,27 +252,53 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
           // Arguments arrive pre-parsed (an object), so serialize for the
           // canonical string field and pass the object through untouched.
           const args = rec.arguments
-          return {
+          const call = {
             id: typeof rec.id === 'string' && rec.id !== '' ? rec.id : `fc-${toolCallSeq}`,
             name: typeof rec.name === 'string' && rec.name !== '' ? rec.name : 'unknown',
             arguments: typeof args === 'string' ? args : JSON.stringify(args ?? {}),
             parsedArguments: args,
           }
+          pendingCalls.push({ id: call.id, name: call.name, messageIndex: index })
+          return call
         })
       }
       messages.push(base)
     } else if (role === 'tool') {
-      if (typeof raw.tool_name === 'string' && raw.tool_name === 'escalate_to_human') {
+      const toolName =
+        typeof raw.tool_name === 'string' && raw.tool_name !== '' ? raw.tool_name : undefined
+      if (toolName === 'escalate_to_human') {
         escalated = true
+      }
+      const resolved = resolveToolResult(raw.tool_call_id, raw.tool_name, index)
+      if (resolved.match === 'tool-name' || resolved.match === 'single-pending') {
+        repairedToolResultLinks += 1
+        warnings.push(
+          `message ${index + 1}: linked tool result to '${resolved.toolCallId}' by ${
+            resolved.match === 'tool-name' ? `tool_name '${toolName}'` : 'the only pending call'
+          }`,
+        )
+      } else if (resolved.match === 'unmatched') {
+        unmatchedToolResults += 1
+        warnings.push(
+          `message ${index + 1}: tool result could not be safely linked to an assistant call`,
+        )
+      }
+      const isError = isErrorResult(content)
+      if (isError) toolErrors += 1
+      const metadata: Record<string, unknown> = { toolCallMatch: resolved.match }
+      if (toolName !== undefined) metadata.toolName = toolName
+      if (resolved.sourceToolCallId !== undefined) {
+        metadata.sourceToolCallId = resolved.sourceToolCallId
       }
       messages.push({
         id: '',
         role: 'tool',
         content,
         toolResult: {
-          toolCallId: typeof raw.tool_call_id === 'string' ? raw.tool_call_id : '',
-          isError: isErrorResult(content),
+          toolCallId: resolved.toolCallId,
+          isError,
         },
+        metadata,
         ...(timestamp !== undefined ? { timestamp } : {}),
       })
     } else if (role === 'system' || role === 'developer' || role === 'user') {
@@ -167,6 +318,12 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
     return { traces: [], warnings: [...warnings, 'no messages found'] }
   }
 
+  if (timestampRegressions > 0) {
+    warnings.push(
+      `${timestampRegressions} timestamp regression(s) found; source message order was preserved`,
+    )
+  }
+
   const fileStem = ctx.sourcePath
     ?.split('/')
     .pop()
@@ -178,16 +335,40 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
     // Primary agent = who handled the conversation first; splits the
     // Categories & datasets tree into one dataset per agent variant.
     component: `conversations/${agents[0] ?? 'unknown'}`,
-    status: 'completed',
+    // This format records messages, not a lifecycle or task verdict. Do not
+    // infer either from the presence of a final message or a tool error.
+    status: 'unknown',
     timestamp: messages.find((m) => m.timestamp)?.timestamp ?? ctx.fallbackTimestamp ?? EPOCH,
     checkpointStep: 0,
-    split: 'train',
+    split: 'unknown',
     sourceFormat: 'agent-conversation',
     dataLocation: ctx.sourcePath,
-    extra: { agents, escalated },
+    extra: {
+      agents,
+      escalated,
+      lifecycle: { state: 'unknown', provenance: 'not_provided_by_source' },
+      outcome: {
+        state: 'unknown',
+        provenance: 'not_provided_by_source',
+        observations: [
+          ...(toolErrors > 0 ? ['tool_error'] : []),
+          ...(truncated ? ['truncated_source'] : []),
+        ],
+      },
+      normalization: {
+        status: 'source_missing',
+        split: 'source_missing',
+        checkpointStep: 'default',
+      },
+      dataQuality: {
+        timestampRegressions,
+        repairedToolResultLinks,
+        unmatchedToolResults,
+      },
+    },
   }
 
-  const statsOverrides: Partial<TraceStats> = truncated ? { truncated: true } : {}
+  const statsOverrides: Partial<TraceStats> = truncated ? { truncated: true, hasError: true } : {}
   return {
     traces: [
       {

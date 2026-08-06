@@ -153,6 +153,17 @@ describe('evaluateFilter', () => {
       )
       expect(evaluateFilter(ungraded, fs({ key: 'durationMs', op: 'gt', value: '0' }))).toBe(false)
     })
+
+    it('treats a connector default checkpoint as undefined', () => {
+      const noCheckpoint = makeSummary({
+        meta: {
+          checkpointStep: 0,
+          extra: { normalization: { checkpointStep: 'default' } },
+        },
+      })
+      expect(evaluateFilter(noCheckpoint, fs({ key: 'step', op: 'eq', value: 0 }))).toBe(false)
+      expect(evaluateFilter(noCheckpoint, fs({ key: 'step', op: 'neq', value: 100 }))).toBe(false)
+    })
   })
 
   it('fails conditions with unknown keys', () => {

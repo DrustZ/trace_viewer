@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages'
+import { recordedCheckpoint } from '../../shared/schema/provenance'
 import type { Trace } from '../../shared/schema/types'
 
 /**
@@ -170,8 +171,19 @@ export async function runPlayground(
     throw new PlaygroundError(503, 'Playground replay requires ANTHROPIC_API_KEY')
   }
   const model = process.env.AI_PLAYGROUND_MODEL ?? 'claude-sonnet-5'
-  const step = params.checkpointStep ?? trace.meta.checkpointStep
-  const preamble = `You are simulating policy checkpoint step ${step} for an RL debugging playground. Answer as the task agent would.`
+  const sourceStep = recordedCheckpoint(trace.meta)
+  let preamble: string
+  if (params.checkpointStep !== undefined) {
+    preamble =
+      sourceStep === null
+        ? `You are simulating a hypothetical task-agent checkpoint labeled step ${params.checkpointStep} for an RL debugging playground. This step was user-specified, not recorded in the source trace. Answer as the task agent would.`
+        : `You are simulating policy checkpoint step ${params.checkpointStep} for an RL debugging playground. Answer as the task agent would.`
+  } else {
+    preamble =
+      sourceStep === null
+        ? 'You are simulating the task agent for an RL debugging playground. The source trace does not record a policy checkpoint. Answer as the task agent would.'
+        : `You are simulating policy checkpoint step ${sourceStep} for an RL debugging playground. Answer as the task agent would.`
+  }
   const system = prefix.system === '' ? preamble : `${preamble}\n\n${prefix.system}`
   const promptChars = system.length + prefix.messages.reduce((sum, m) => sum + m.content.length, 0)
   try {

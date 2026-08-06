@@ -66,6 +66,35 @@ describe('computeStats', () => {
     expect(stats.hasError).toBe(true)
   })
 
+  it('counts sandbox results independently of source order', () => {
+    const messages: Message[] = [
+      msg({ role: 'tool', toolResult: { toolCallId: 'c1', isError: false } }),
+      msg({
+        role: 'assistant',
+        toolCalls: [{ id: 'c1', name: 'bash', arguments: '{}' }],
+      }),
+    ]
+    expect(computeStats(meta, messages).sandboxExecutions).toBe(1)
+  })
+
+  it('uses a safely-carried raw tool name for an intentionally unlinked result', () => {
+    const messages: Message[] = [
+      msg({
+        role: 'tool',
+        toolResult: { toolCallId: '', isError: false },
+        metadata: { toolName: 'bash', toolCallMatch: 'unmatched' },
+      }),
+      msg({
+        role: 'tool',
+        toolResult: { toolCallId: '', isError: false },
+        // An arbitrary metadata field without connector match provenance is
+        // not trusted for metrics.
+        metadata: { toolName: 'python' },
+      }),
+    ]
+    expect(computeStats(meta, messages).sandboxExecutions).toBe(1)
+  })
+
   it('prefers timestamps for duration and falls back to summed durations', () => {
     const stamped: Message[] = [
       msg({ role: 'user', content: 'a', timestamp: '2026-03-01T00:00:00.000Z' }),
@@ -79,6 +108,19 @@ describe('computeStats', () => {
     expect(computeStats(meta, stamped).durationMs).toBe(1500)
     const unstamped: Message[] = [msg({ role: 'assistant', content: 'b', durationMs: 250 })]
     expect(computeStats(meta, unstamped).durationMs).toBe(250)
+  })
+
+  it('uses safe min/max bounds for non-monotonic timestamps', () => {
+    const messages: Message[] = [
+      msg({
+        role: 'assistant',
+        timestamp: '2026-03-01T00:00:02.000Z',
+        durationMs: 500,
+      }),
+      msg({ role: 'tool', timestamp: '2026-03-01T00:00:00.000Z' }),
+      msg({ role: 'user', timestamp: '2026-03-01T00:00:01.000Z' }),
+    ]
+    expect(computeStats(meta, messages).durationMs).toBe(2500)
   })
 
   it('lets overrides win and recomputes thinkingPortion from overridden tokens', () => {

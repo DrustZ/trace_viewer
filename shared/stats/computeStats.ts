@@ -74,6 +74,11 @@ export function computeStats(
   let inAssistantBlock = false
 
   const toolNameByCallId = new Map<string, string>()
+  // Build this independently of result order: asynchronous capture pipelines
+  // can flush a result before the assistant call record that identifies it.
+  for (const m of messages) {
+    for (const call of m.toolCalls ?? []) toolNameByCallId.set(call.id, call.name)
+  }
 
   for (const m of messages) {
     const tokens = messageTokens(m)
@@ -90,11 +95,21 @@ export function computeStats(
     }
     if (m.toolCalls) {
       toolUses += m.toolCalls.length
-      for (const call of m.toolCalls) toolNameByCallId.set(call.id, call.name)
     }
     if (m.toolResult) {
       if (m.toolResult.isError) toolErrors += 1
-      const name = toolNameByCallId.get(m.toolResult.toolCallId)
+      const carriedName = m.metadata?.toolName
+      const match = m.metadata?.toolCallMatch
+      const safeCarriedName =
+        typeof carriedName === 'string' &&
+        carriedName !== '' &&
+        (match === 'exact' ||
+          match === 'tool-name' ||
+          match === 'single-pending' ||
+          match === 'unmatched')
+          ? carriedName
+          : undefined
+      const name = toolNameByCallId.get(m.toolResult.toolCallId) ?? safeCarriedName
       if (name && SANDBOX_TOOLS.has(name)) sandboxExecutions += 1
     }
   }
@@ -133,14 +148,29 @@ function thinkingPortionOf(thinkingTokens: number, outputTokens: number): number
 }
 
 function computeDuration(messages: Message[]): number | undefined {
-  const stamped = messages.filter((m) => m.timestamp)
+  const stamped = messages.flatMap((m) => {
+    if (!m.timestamp) return []
+    const start = Date.parse(m.timestamp)
+    if (!Number.isFinite(start)) return []
+    const duration =
+      typeof m.durationMs === 'number' && Number.isFinite(m.durationMs)
+        ? Math.max(m.durationMs, 0)
+        : 0
+    return [{ start, end: start + duration }]
+  })
   if (stamped.length >= 2) {
-    const first = Date.parse(stamped[0].timestamp as string)
-    const last = stamped[stamped.length - 1]
-    const end = Date.parse(last.timestamp as string) + (last.durationMs ?? 0)
-    if (!Number.isNaN(first) && !Number.isNaN(end) && end >= first) return end - first
+    const first = Math.min(...stamped.map((entry) => entry.start))
+    const end = Math.max(...stamped.map((entry) => entry.end))
+    return Math.max(end - first, 0)
   }
-  const summed = messages.reduce((acc, m) => acc + (m.durationMs ?? 0), 0)
+  const summed = messages.reduce(
+    (acc, m) =>
+      acc +
+      (typeof m.durationMs === 'number' && Number.isFinite(m.durationMs)
+        ? Math.max(m.durationMs, 0)
+        : 0),
+    0,
+  )
   return summed > 0 ? summed : undefined
 }
 

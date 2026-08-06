@@ -62,6 +62,7 @@ describe('qwenGenericConnector.parse', () => {
       dataLocation: '/data/qwen.json',
     })
     expect(trace.meta.traceId).toMatch(/^qwen-[0-9a-f]{8}$/)
+    expect(trace.meta.extra).toMatchObject({ normalization: { checkpointStep: 'default' } })
   })
 
   it('parses the object {messages} form (e.g. via a format hint) with tool roles and model', () => {

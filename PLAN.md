@@ -34,7 +34,8 @@ Core (table stakes from the brief):
 - **Stats** — per-trace metrics (score, tokens, turns, tool uses, sandbox executions, thinking
   portion, duration, errors, truncation) and corpus aggregates (tiles, per-component table)
 - **Multiple formats** — connector registry with auto-detection: native JSON, raw harmony token
-  text, OpenAI chat-completions JSON; new format = one file + one registry entry
+  text, OpenAI Chat/Responses, Anthropic Messages, Qwen/DeepSeek, and agent conversations;
+  new format = one file + one registry entry
 - **Raw view** — untouched source text, lazily loaded, downloadable
 
 Differentiators (the RL-debugging layer):
@@ -95,21 +96,22 @@ src/                     # web app
   components/            # home/, trace/, common/
 generator/               # deterministic synthetic-trace CLI (+ scenarios/, emit/)
 data/
-  traces/native/<component>/step-<n>/*.json    # committed example corpus
-  traces/harmony/*.txt   traces/openai/*.json  # connector demo files
-  traces/manifest.json                         # seed + composition summary
-  imported/                                    # paste/upload/URL persistence (gitignored)
+  runs/<run>/<component>/*.json                # generated/local on-disk corpora
+  imported/                                    # optional watched files dropped in manually
+examples/                                      # importable connector fixtures
 ```
 
-Data flow: `data/` files → connector registry (detect + parse) → normalized `Trace` → in-memory
-store (+ minisearch index) → REST API → React Query → views. Imports go through the same
-connectors and are persisted to `data/imported/`, so they survive restarts and can be shared as
-files. Every filter/sort/tab/message anchor lives in the URL — a link *is* the share unit.
+Data flow: built-in or configured external files → connector registry (detect + parse) →
+normalized `Trace` → in-memory store (+ minisearch index) → REST API → React Query → views.
+Paste/upload/URL imports use the same connectors but remain in memory; persistent corpora are
+kept on disk under `data/runs` or a configured `TRACE_DATA_ROOTS` mount. Every
+filter/sort/tab/message anchor lives in the URL — a link *is* the share unit.
 
 ## Normalized schema (summary)
 
 - `TraceMeta` — traceId, instanceId (join key for Evolution), component (dataset name), status
-  (`completed | failed | executing`), timestamp, checkpointStep, split (`train | test`),
+  (`completed | failed | executing | unknown`), timestamp, checkpointStep, split
+  (`train | test | unknown`),
   dataLocation, sourceFormat, rewardDetails, extra (unrecognized fields are kept, never dropped)
 - `TraceStats` — score (`number | null` = ungraded), hasError, truncated, model config (name,
   contextWindow, temperature, topP), input/output/thinking/total tokens, turns, toolUses,

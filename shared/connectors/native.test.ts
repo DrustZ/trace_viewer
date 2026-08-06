@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { recordedCheckpoint } from '../schema/provenance'
 import { nativeConnector } from './native'
 
 const ctx = { sourcePath: '/data/t.json', fallbackTimestamp: '2026-01-02T03:04:05.000Z' }
@@ -75,7 +76,28 @@ describe('nativeConnector.parse', () => {
       split: 'train',
       sourceFormat: 'native',
       dataLocation: '/data/t.json',
+      extra: { normalization: { checkpointStep: 'default' } },
     })
+  })
+
+  it('keeps an explicit native step zero real and preserves source extra', () => {
+    const source = {
+      ...fullTrace,
+      meta: { ...fullTrace.meta, checkpointStep: 0, extra: { note: 'real initial checkpoint' } },
+    }
+    const trace = nativeConnector.parse(JSON.stringify(source), ctx).traces[0]
+    expect(recordedCheckpoint(trace.meta)).toBe(0)
+    expect(trace.meta.extra).toEqual({ note: 'real initial checkpoint' })
+  })
+
+  it('round-trips explicit unknown lifecycle and split without inventing values', () => {
+    const source = {
+      ...fullTrace,
+      meta: { ...fullTrace.meta, status: 'unknown', split: 'unknown' },
+    }
+    const trace = nativeConnector.parse(JSON.stringify(source), ctx).traces[0]
+    expect(trace.meta.status).toBe('unknown')
+    expect(trace.meta.split).toBe('unknown')
   })
 
   it('uses epoch when no timestamp anywhere', () => {

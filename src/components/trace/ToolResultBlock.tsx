@@ -81,7 +81,11 @@ export function ToolResultBlock({
   const durationMs = message.toolResult?.durationMs
   const callId = message.toolResult?.toolCallId
   const callLabel =
-    callId !== undefined ? (callId.startsWith('call') ? callId : `call-${callId}`) : undefined
+    callId !== undefined && callId !== ''
+      ? callId.startsWith('call')
+        ? callId
+        : `call-${callId}`
+      : undefined
   const card = isError
     ? 'border-red-200 border-l-red-400 bg-red-50'
     : 'border-cyan-200 border-l-cyan-400 bg-cyan-50'
@@ -96,14 +100,13 @@ export function ToolResultBlock({
             ERROR
           </span>
         )}
-        {callLabel !== undefined && (
+        {(callLabel !== undefined || toolName !== undefined) && (
           <span
             data-testid="tool-result-call-chip"
-            title="Tool call this result belongs to"
+            title="Tool result identity"
             className="truncate rounded bg-white/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-500"
           >
-            {callLabel}
-            {toolName !== undefined ? ` · ${toolName}` : ''}
+            {[callLabel, toolName].filter((part) => part !== undefined).join(' · ')}
           </span>
         )}
         <span className="ml-auto flex items-center gap-2">

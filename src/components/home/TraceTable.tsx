@@ -1,4 +1,5 @@
 import type { GroupedTracesResponse, InstanceGroup, TracesListResponse } from '@shared/schema/api'
+import { recordedCheckpoint } from '@shared/schema/provenance'
 import type { TraceSummary } from '@shared/schema/types'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -67,7 +68,7 @@ interface RangeCol {
 }
 const RANGE_COLS: Record<string, RangeCol> = {
   score: { key: 'score', accessor: (t) => t.stats.score, step: 0.05, fixedDomain: [0, 1] },
-  step: { key: 'step', accessor: (t) => t.meta.checkpointStep, step: 1 },
+  step: { key: 'step', accessor: (t) => recordedCheckpoint(t.meta) ?? undefined, step: 1 },
   turns: { key: 'turns', accessor: (t) => t.stats.turns, step: 1 },
   tools: { key: 'toolUses', accessor: (t) => t.stats.toolUses, step: 1 },
   outTok: { key: 'outputTokens', accessor: (t) => t.stats.outputTokens, step: 10 },
@@ -134,6 +135,7 @@ function TraceRow({
   onSelect: () => void
 }) {
   const { meta, stats } = trace
+  const checkpoint = recordedCheckpoint(meta)
   const num = 'text-right tabular-nums text-slate-600'
   return (
     // Real anchor keeps middle-click / cmd-click open-in-new-tab; plain click previews.
@@ -161,7 +163,9 @@ function TraceRow({
       <span>
         <ScoreBadge score={stats.score} />
       </span>
-      <span className={num}>{meta.checkpointStep}</span>
+      <span className={num} title={checkpoint === null ? 'Checkpoint unavailable' : undefined}>
+        {checkpoint ?? '—'}
+      </span>
       <span className="text-slate-600">{meta.split}</span>
       <span className="flex min-w-0 items-center gap-1 overflow-hidden">
         <StatusPill status={meta.status} />
@@ -211,9 +215,15 @@ function GroupRow({
   const avgOutTok = avgOf(items.map((t) => t.stats.outputTokens))
   const avgThinkTok = avgOf(items.map((t) => t.stats.thinkingTokens))
   const avgDuration = avgOf(items.map((t) => t.stats.durationMs))
-  const steps = new Set(items.map((t) => t.meta.checkpointStep))
-  const minStep = Math.min(...steps)
-  const maxStep = Math.max(...steps)
+  const checkpointValues = items.flatMap((t) => {
+    const step = recordedCheckpoint(t.meta)
+    return step === null ? [] : [step]
+  })
+  const steps = new Set(checkpointValues)
+  const orderedSteps = [...steps].sort((a, b) => a - b)
+  const minStep = orderedSteps[0]
+  const maxStep = orderedSteps[orderedSteps.length - 1]
+  const unavailableCheckpoints = items.length - checkpointValues.length
   const splits = new Set(items.map((t) => t.meta.split))
   const statuses = new Set(items.map((t) => t.meta.status))
   const anyTruncated = items.some((t) => t.stats.truncated)
@@ -243,15 +253,26 @@ function GroupRow({
         <span className="shrink-0 font-normal text-slate-400">({group.count})</span>
       </span>
       <span className="flex min-w-0 items-center gap-1 overflow-hidden">
-        <span className={stepChip}>S{minStep}</span>
-        <span className="shrink-0 text-slate-400">→</span>
-        <span className={stepChip}>S{maxStep}</span>
-        <span
-          title={`${steps.size} checkpoint${steps.size === 1 ? '' : 's'}`}
-          className="truncate whitespace-nowrap font-normal text-[10px] text-slate-400"
-        >
-          {steps.size} checkpoint{steps.size === 1 ? '' : 's'}
-        </span>
+        {minStep === undefined || maxStep === undefined ? (
+          <span className="truncate font-normal text-[10px] text-slate-400">
+            checkpoint unavailable
+          </span>
+        ) : (
+          <>
+            <span className={stepChip}>S{minStep}</span>
+            <span className="shrink-0 text-slate-400">→</span>
+            <span className={stepChip}>S{maxStep}</span>
+            <span
+              title={`${steps.size} checkpoint${steps.size === 1 ? '' : 's'}${
+                unavailableCheckpoints > 0 ? `; ${unavailableCheckpoints} unavailable` : ''
+              }`}
+              className="truncate whitespace-nowrap font-normal text-[10px] text-slate-400"
+            >
+              {steps.size} checkpoint{steps.size === 1 ? '' : 's'}
+              {unavailableCheckpoints > 0 ? ` + ${unavailableCheckpoints} unavailable` : ''}
+            </span>
+          </>
+        )}
       </span>
       <span className="min-w-0">
         <ComponentBadge component={group.component} />
@@ -260,7 +281,7 @@ function GroupRow({
         <ScoreBadge score={group.avgScore} />
       </span>
       <span className={num}>
-        {steps.size === 1 && first ? first.meta.checkpointStep : `${steps.size} steps`}
+        {steps.size === 0 ? '—' : steps.size === 1 ? orderedSteps[0] : `${steps.size} steps`}
       </span>
       <span className="text-slate-600">
         {splits.size === 1 && first ? first.meta.split : 'mixed'}

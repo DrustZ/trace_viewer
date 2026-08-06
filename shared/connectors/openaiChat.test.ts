@@ -88,6 +88,7 @@ describe('openaiChatConnector.parse', () => {
       dataLocation: '/data/chat.json',
     })
     expect(trace.meta.traceId).toMatch(/^openai-[0-9a-f]{8}$/)
+    expect(trace.meta.extra).toMatchObject({ normalization: { checkpointStep: 'default' } })
   })
 
   it('maps response-style with reasoning_content, logprobs, usage and created', () => {
@@ -110,7 +111,10 @@ describe('openaiChatConnector.parse', () => {
       outputTokens: 7,
       totalTokens: 18,
     })
-    expect(trace.meta.extra).toEqual({ object: 'chat.completion' })
+    expect(trace.meta.extra).toEqual({
+      object: 'chat.completion',
+      normalization: { checkpointStep: 'default' },
+    })
   })
 
   it('merges request messages before choices[0].message', () => {

@@ -11,6 +11,7 @@ const t = (over: {
   step?: number
   score?: number | null
   run?: string
+  defaultCheckpoint?: boolean
 }): TraceSummary => ({
   meta: {
     traceId: over.id ?? `t-${++seq}`,
@@ -21,7 +22,14 @@ const t = (over: {
     checkpointStep: over.step ?? 0,
     split: 'train',
     sourceFormat: 'native',
-    ...(over.run !== undefined ? { extra: { run: over.run } } : {}),
+    ...(over.run !== undefined || over.defaultCheckpoint
+      ? {
+          extra: {
+            ...(over.run !== undefined ? { run: over.run } : {}),
+            ...(over.defaultCheckpoint ? { normalization: { checkpointStep: 'default' } } : {}),
+          },
+        }
+      : {}),
   },
   stats: {
     score: over.score ?? null,
@@ -42,6 +50,25 @@ describe('buildEvolutionSeries', () => {
   it('returns null for an unknown instance', () => {
     expect(buildEvolutionSeries([t({ instance: 'inst-1' })], 'inst-404')).toBeNull()
     expect(buildEvolutionSeries([], 'inst-1')).toBeNull()
+  })
+
+  it('excludes rollouts whose checkpoint is only a connector default', () => {
+    expect(
+      buildEvolutionSeries(
+        [t({ instance: 'inst-1', step: 0, score: 1, defaultCheckpoint: true })],
+        'inst-1',
+      ),
+    ).toBeNull()
+
+    const series = buildEvolutionSeries(
+      [
+        t({ id: 'defaulted', instance: 'inst-1', step: 0, score: 1, defaultCheckpoint: true }),
+        t({ id: 'recorded', instance: 'inst-1', step: 0, score: 0.5 }),
+      ],
+      'inst-1',
+    )
+    expect(series?.points).toHaveLength(1)
+    expect(series?.points[0].rollouts.map((r) => r.meta.traceId)).toEqual(['recorded'])
   })
 
   it('builds one point per step, sorted, with null-safe avgScore', () => {

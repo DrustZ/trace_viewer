@@ -1,3 +1,4 @@
+import { withDefaultCheckpointProvenance } from '../schema/provenance'
 import type { Message, TraceMeta, TraceStats } from '../schema/types'
 import { anthropicMessagesConnector } from './anthropicMessages'
 import { nativeConnector } from './native'
@@ -110,6 +111,7 @@ function parseQwenGeneric(text: string, ctx: ParseContext): ParseResult {
     split: 'train',
     sourceFormat: 'qwen-generic',
     dataLocation: ctx.sourcePath,
+    extra: withDefaultCheckpointProvenance(),
   }
 
   return {

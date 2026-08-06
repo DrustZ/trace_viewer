@@ -5,6 +5,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages'
 import { z } from 'zod'
 import { FILTER_KEYS } from '../../shared/filter/keys'
+import { recordedCheckpoint } from '../../shared/schema/provenance'
 import type { Trace, TraceSummary } from '../../shared/schema/types'
 import { runOf } from '../../shared/stats/evolution'
 import { firstParam, type RouteCtx } from '../routes/context'
@@ -104,8 +105,8 @@ const TOOLS: MessageCreateParamsNonStreaming['tools'] = [
             "Filter DSL: 'key.op.value' segments joined by ';' (e.g. 'status.eq.failed;turns.gt.20')",
         },
         component: { type: 'string', description: 'Exact component name' },
-        split: { type: 'string', enum: ['train', 'test'] },
-        status: { type: 'string', enum: ['completed', 'failed', 'executing'] },
+        split: { type: 'string', enum: ['train', 'test', 'unknown'] },
+        status: { type: 'string', enum: ['completed', 'failed', 'executing', 'unknown'] },
         sort: { type: 'string', description: "'time' (default) or any filter key id" },
         order: { type: 'string', enum: ['asc', 'desc'] },
         limit: {
@@ -201,7 +202,7 @@ const TOOLS: MessageCreateParamsNonStreaming['tools'] = [
 
 function buildSystemPrompt(): string {
   const keyLines = FILTER_KEYS.map((k) => `- ${k.id} (${k.type}): ${k.description}`).join('\n')
-  return `You are an AI analysis agent embedded in an RL training trace viewer. The store holds rollout traces, each with meta (traceId, component, dataset split, checkpoint step, status) and stats (score, turns, toolUses, tokens, truncated, hasError).
+  return `You are an AI analysis agent embedded in an RL training trace viewer. The store holds rollout traces, each with meta (traceId, component, dataset split, checkpoint step, status) and stats (score, turns, toolUses, tokens, truncated, hasError). Split, status, and checkpoint may be unknown; a null checkpoint means the source did not record one and must not be interpreted as step 0.
 
 Tools: list_traces (filtered summaries), aggregate (grouped stats), aggregate_instances (per-instance group score averages), get_trace (one trace with messages), search_traces (full-text), and emit_report (your final answer — always call it exactly once at the end).
 
@@ -225,10 +226,12 @@ function toNumber(value: unknown, fallback: number, max: number): number {
 
 /** Summary condensed to the fields the model needs (plus kl/end_reason extras). */
 function condenseSummary(s: TraceSummary): Record<string, unknown> {
+  const step = recordedCheckpoint(s.meta)
   const row: Record<string, unknown> = {
     traceId: s.meta.traceId,
     component: s.meta.component,
-    step: s.meta.checkpointStep,
+    step,
+    checkpointRecorded: step !== null,
     split: s.meta.split,
     status: s.meta.status,
     score: s.stats.score,
@@ -263,7 +266,7 @@ function aggregate(ctx: RouteCtx, input: Record<string, unknown>): unknown {
     groupBy === 'component'
       ? s.meta.component
       : groupBy === 'step'
-        ? String(s.meta.checkpointStep)
+        ? String(recordedCheckpoint(s.meta) ?? 'unknown')
         : s.meta.status
   const groups = new Map<string, TraceSummary[]>()
   for (const s of ctx.store.list()) {
@@ -279,6 +282,8 @@ function aggregate(ctx: RouteCtx, input: Record<string, unknown>): unknown {
       count: items.length,
       completed: items.filter((s) => s.meta.status === 'completed').length,
       failed: items.filter((s) => s.meta.status === 'failed').length,
+      executing: items.filter((s) => s.meta.status === 'executing').length,
+      unknown: items.filter((s) => s.meta.status === 'unknown').length,
       avgScore: scores.length > 0 ? scores.reduce((acc, v) => acc + v, 0) / scores.length : null,
       avgTurns: items.reduce((acc, s) => acc + s.stats.turns, 0) / items.length,
       truncated: items.filter((s) => s.stats.truncated).length,
@@ -297,7 +302,7 @@ function aggregateInstances(ctx: RouteCtx, input: Record<string, unknown>): unkn
   let items = ctx.store.list()
   const step =
     typeof input.step === 'number' ? input.step : Number(firstParam(input.step) ?? Number.NaN)
-  if (Number.isFinite(step)) items = items.filter((s) => s.meta.checkpointStep === step)
+  if (Number.isFinite(step)) items = items.filter((s) => recordedCheckpoint(s.meta) === step)
   const component = firstParam(input.component)
   if (component) items = items.filter((s) => s.meta.component === component)
   const run = firstParam(input.run)
@@ -311,10 +316,15 @@ function aggregateInstances(ctx: RouteCtx, input: Record<string, unknown>): unkn
   }
   let rows = [...groups.entries()].map(([instanceId, group]) => {
     const scores = group.map((s) => s.stats.score).filter((v): v is number => v !== null)
+    const knownSteps = group.flatMap((s) => {
+      const recorded = recordedCheckpoint(s.meta)
+      return recorded === null ? [] : [recorded]
+    })
     return {
       instanceId,
       component: group[0].meta.component,
-      steps: [...new Set(group.map((s) => s.meta.checkpointStep))].sort((a, b) => a - b),
+      steps: [...new Set(knownSteps)].sort((a, b) => a - b),
+      checkpointUnavailable: knownSteps.length !== group.length,
       rollouts: group.length,
       avgScore: scores.length > 0 ? scores.reduce((acc, v) => acc + v, 0) / scores.length : null,
       minScore: scores.length > 0 ? Math.min(...scores) : null,

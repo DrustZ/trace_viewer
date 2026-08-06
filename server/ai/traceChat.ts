@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages'
+import { recordedCheckpoint } from '../../shared/schema/provenance'
 import type { Trace } from '../../shared/schema/types'
 
 /**
@@ -62,8 +63,11 @@ function clamp(text: string, limit: number): string {
  */
 export function buildTraceContext(trace: Trace): string {
   const { meta, stats } = trace
+  const checkpoint = recordedCheckpoint(meta)
+  const checkpointLabel =
+    checkpoint === null ? 'checkpoint unavailable' : `checkpoint step ${checkpoint}`
   const lines: string[] = [
-    `Trace ${meta.traceId} — component ${meta.component} (${meta.split} split, checkpoint step ${meta.checkpointStep})`,
+    `Trace ${meta.traceId} — component ${meta.component} (${meta.split} split, ${checkpointLabel})`,
     `Status: ${meta.status} | instance: ${meta.instanceId} | source: ${meta.sourceFormat} | ${meta.timestamp}`,
     `Stats: score=${stats.score ?? 'ungraded'} turns=${stats.turns} toolUses=${stats.toolUses} ` +
       `tokens(in/out/thinking)=${stats.inputTokens}/${stats.outputTokens}/${stats.thinkingTokens} ` +

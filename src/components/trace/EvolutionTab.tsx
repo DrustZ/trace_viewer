@@ -1,3 +1,4 @@
+import { hasRecordedCheckpoint } from '@shared/schema/provenance'
 import type { Trace, TraceSummary } from '@shared/schema/types'
 import { type ReactNode, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -199,14 +200,27 @@ function RolloutRow({
  * Instance evolution: avg-score-vs-checkpoint curve for this trace's instance, the
  * rollouts at a selected step, and a same-step siblings strip for quick jumps.
  */
-export function EvolutionTab({
-  trace,
-  onNavigate,
-}: {
+interface EvolutionTabProps {
   trace: Trace
   /** Drawer only: jump to another rollout in place instead of navigating. */
   onNavigate?: (traceId: string) => void
-}) {
+}
+
+export function EvolutionTab(props: EvolutionTabProps) {
+  if (!hasRecordedCheckpoint(props.trace.meta)) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-6" data-testid="evolution-empty">
+        <EmptyState
+          title="Checkpoint unavailable"
+          hint="The source trace did not record a checkpoint, so checkpoint evolution and same-step siblings cannot be computed."
+        />
+      </div>
+    )
+  }
+  return <RecordedCheckpointEvolutionTab {...props} />
+}
+
+function RecordedCheckpointEvolutionTab({ trace, onNavigate }: EvolutionTabProps) {
   const { traceId, instanceId, checkpointStep } = trace.meta
   const evolution = useEvolution(
     instanceId,

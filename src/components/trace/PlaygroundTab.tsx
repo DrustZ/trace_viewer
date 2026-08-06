@@ -1,5 +1,6 @@
+import { recordedCheckpoint } from '@shared/schema/provenance'
 import type { Trace } from '@shared/schema/types'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ApiError, apiPost } from '../../api/client'
 import { formatNumber } from '../common/format'
 import { MarkdownContent } from '../common/MarkdownContent'
@@ -45,6 +46,7 @@ function optionLabel(index: number, role: string, content: string): string {
 }
 
 export function PlaygroundTab({ trace }: { trace: Trace }) {
+  const sourceCheckpoint = recordedCheckpoint(trace.meta)
   // Cut candidates: user/tool messages (replaying makes the model answer what follows them).
   const cutOptions = useMemo(
     () =>
@@ -57,10 +59,15 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
 
   const [uptoMessageId, setUptoMessageId] = useState<string | undefined>(defaultCut?.message.id)
   const [override, setOverride] = useState('')
-  const [step, setStep] = useState(String(trace.meta.checkpointStep))
+  const [step, setStep] = useState(sourceCheckpoint === null ? '' : String(sourceCheckpoint))
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<PlaygroundResponse | null>(null)
+
+  useEffect(() => {
+    const checkpoint = recordedCheckpoint(trace.meta)
+    setStep(checkpoint === null ? '' : String(checkpoint))
+  }, [trace.meta])
 
   // Recorded rollout = the trace's final assistant message (prefer the 'final' channel).
   const recorded = useMemo(() => {
@@ -75,12 +82,13 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
     setPending(true)
     setError(null)
     try {
-      const stepNum = Number(step)
+      const stepText = step.trim()
+      const stepNum = stepText === '' ? undefined : Number(stepText)
       const response = await apiPost<PlaygroundResponse>('/api/playground', {
         traceId: trace.meta.traceId,
         uptoMessageId,
         ...(override.trim() !== '' ? { userOverride: override } : {}),
-        ...(Number.isFinite(stepNum) ? { checkpointStep: stepNum } : {}),
+        ...(stepNum !== undefined && Number.isFinite(stepNum) ? { checkpointStep: stepNum } : {}),
       })
       setResult(response)
     } catch (err) {
@@ -125,12 +133,17 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
         </label>
 
         <label className="block text-xs text-slate-600">
-          <span className="mb-1 block font-medium">Checkpoint step</span>
+          <span className="mb-1 block font-medium">
+            {sourceCheckpoint === null
+              ? 'Hypothetical checkpoint override (optional)'
+              : 'Checkpoint step'}
+          </span>
           <input
             data-testid="playground-step"
             type="number"
             value={step}
             onChange={(e) => setStep(e.target.value)}
+            placeholder={sourceCheckpoint === null ? 'Source checkpoint unavailable' : undefined}
             className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-slate-400"
           />
         </label>

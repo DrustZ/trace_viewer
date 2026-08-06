@@ -1,3 +1,4 @@
+import { recordedCheckpoint } from '../schema/provenance'
 import type { TraceSummary } from '../schema/types'
 import type { FilterKeyDef } from './types'
 
@@ -44,7 +45,7 @@ const ENTRIES: KeyEntry[] = [
       label: 'Status',
       type: 'enum',
       enumSource: 'statuses',
-      description: "Trace lifecycle state: 'completed', 'failed' or 'executing'",
+      description: "Trace lifecycle state: 'completed', 'failed', 'executing' or 'unknown'",
     },
     get: (s) => s.meta.status,
   },
@@ -64,7 +65,7 @@ const ENTRIES: KeyEntry[] = [
       label: 'Split',
       type: 'enum',
       enumSource: 'splits',
-      description: "Dataset split: 'train' or 'test'",
+      description: "Dataset split: 'train', 'test' or 'unknown'",
     },
     get: (s) => s.meta.split,
   },
@@ -76,7 +77,7 @@ const ENTRIES: KeyEntry[] = [
       enumSource: 'steps',
       description: 'Training checkpoint step that produced this rollout',
     },
-    get: (s) => s.meta.checkpointStep,
+    get: (s) => recordedCheckpoint(s.meta) ?? undefined,
   },
   {
     def: {

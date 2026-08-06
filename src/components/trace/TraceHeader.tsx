@@ -1,3 +1,4 @@
+import { hasRecordedCheckpoint } from '@shared/schema/provenance'
 import type { Trace } from '@shared/schema/types'
 import { type ReactNode, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -51,7 +52,7 @@ export function TraceHeader({
   // Chat/message imports have no RL run/checkpoint/split — drop the synthetic
   // default badges (step 0, train) so they don't read as real metadata. (The
   // trace views themselves stay consistent with loaded-run traces.)
-  const showStep = !(isImported && meta.checkpointStep === 0)
+  const showStep = hasRecordedCheckpoint(meta)
   const showSplit = !(isImported && meta.sourceFormat !== 'native')
 
   // Cheap tab counts only: messages are already loaded. (Profiling spans now live

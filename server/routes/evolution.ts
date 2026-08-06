@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { buildEvolutionSeries } from '../../shared/stats/evolution'
 import { firstParam, type RouteCtx } from './context'
+import { publicEvolution } from './publicView'
 
 export function evolutionRoutes(ctx: RouteCtx): Router {
   const router = Router()
@@ -13,7 +14,7 @@ export function evolutionRoutes(ctx: RouteCtx): Router {
       res.status(404).json({ error: 'instance not found' })
       return
     }
-    res.json(series)
+    res.json(publicEvolution(series))
   })
 
   return router

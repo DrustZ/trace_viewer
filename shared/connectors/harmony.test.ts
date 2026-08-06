@@ -65,6 +65,7 @@ describe('harmonyConnector.parse', () => {
       dataLocation: '/data/t.txt',
     })
     expect(b.meta.timestamp).toBe('1970-01-01T00:00:00.000Z')
+    expect(a.meta.extra).toMatchObject({ normalization: { checkpointStep: 'default' } })
   })
 
   it('keeps malformed tool-call arguments raw with a parseError', () => {

@@ -5,6 +5,9 @@ import type {
   MetaResponse,
   NeighborsResponse,
   RefreshResponse,
+  RunAggregate,
+  RunInstancesResponse,
+  RunsResponse,
   SearchHit,
   TracesListResponse,
 } from '@shared/schema/api'
@@ -40,6 +43,8 @@ export interface ListParams {
   offset?: number
 }
 
+export type { RunAggregate }
+
 function listQueryString(params: ListParams): string {
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
@@ -54,6 +59,38 @@ export function useMeta(options?: Pick<UseQueryOptions<MetaResponse>, 'refetchIn
     queryKey: ['meta'],
     queryFn: () => apiGet<MetaResponse>('/api/meta'),
     ...options,
+  })
+}
+
+export function useRuns() {
+  return useQuery({
+    queryKey: ['runs'],
+    queryFn: () => apiGet<RunsResponse>('/api/runs'),
+    // Startup scans and filesystem watches mutate the store outside React.
+    // The server-side catalog is version-cached, so this is a cheap freshness check.
+    refetchInterval: 2_000,
+  })
+}
+
+export function useRunInstances(
+  runs: readonly string[],
+  q = '',
+  limit = 200,
+  dataVersion?: number,
+) {
+  const distinctRuns = [...new Set(runs.filter(Boolean))].sort()
+  const search = new URLSearchParams({ limit: String(limit) })
+  for (const run of distinctRuns) search.append('run', run)
+  const query = q.trim()
+  if (query !== '') search.set('q', query)
+  const qs = search.toString()
+  return useQuery({
+    // dataVersion comes from the lightweight /api/runs poll. Instance search is
+    // potentially O(number of instance ids), so rerun it only when inputs or
+    // corpus version change instead of polling the full catalog independently.
+    queryKey: ['run-instances', qs, dataVersion],
+    queryFn: () => apiGet<RunInstancesResponse>(`/api/runs/instances?${qs}`),
+    enabled: distinctRuns.length > 0,
   })
 }
 

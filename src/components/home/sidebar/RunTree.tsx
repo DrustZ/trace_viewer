@@ -1,25 +1,8 @@
 import { decodeFilterSet, encodeFilterSet } from '@shared/filter/parse'
 import { useState } from 'react'
-import { type ListParams, useTiles } from '../../../api/hooks'
+import { type ListParams, type RunAggregate, useRuns } from '../../../api/hooks'
 import type { ListParamKey } from '../../../state/filterParams'
 import { formatNumber, formatScore } from '../../common/format'
-
-/**
- * Known training runs, in corpus order. Static and time-boxed: the generator
- * produces exactly these under data/runs. `imported` is the catch-all bucket
- * for traces imported via the dialog / drag-and-drop; it only renders when it
- * actually holds traces.
- */
-const KNOWN_RUNS = ['run-a', 'run-b', 'run-c', 'run-d'] as const
-const IMPORTED_RUN = 'imported'
-const ALL_RUNS = [...KNOWN_RUNS, IMPORTED_RUN]
-
-/** A filter scoped to a single run — used both to count a row and to load it. */
-function runFilter(run: string): ListParams {
-  return {
-    filters: encodeFilterSet({ conditions: [{ key: 'run', op: 'eq', value: run }] }) || undefined,
-  }
-}
 
 /** The currently loaded run, i.e. the single `run.eq.<run>` condition if any. */
 function runFromFilters(filters: string | undefined): string {
@@ -27,41 +10,46 @@ function runFromFilters(filters: string | undefined): string {
   return cond && !Array.isArray(cond.value) ? String(cond.value) : ''
 }
 
-/** One run row: name + trace count + avg score. Counts always reflect the full
- * run (own filter), not the current selection, so the list mirrors the corpus. */
+export interface RunOption extends RunAggregate {
+  /** False only for a run preserved from a deep link while it is absent from the catalog. */
+  discovered: boolean
+}
+
+/** Preserve a deep-linked selection while the catalog loads or after the run disappears. */
+export function runOptions(items: readonly RunAggregate[], selectedRun: string): RunOption[] {
+  const options = items.map((item) => ({ ...item, discovered: true }))
+  if (selectedRun !== '' && !options.some((item) => item.run === selectedRun)) {
+    options.push({ run: selectedRun, count: 0, avgScore: null, discovered: false })
+  }
+  return options.sort((a, b) => a.run.localeCompare(b.run))
+}
+
+/** One run row: name + trace count + avg score from the metadata catalog. */
 function RunRow({
-  run,
+  option,
   active,
-  hideWhenEmpty,
   onSelect,
 }: {
-  run: string
+  option: RunOption
   active: boolean
-  hideWhenEmpty: boolean
   onSelect: (run: string) => void
 }) {
-  const tiles = useTiles(runFilter(run))
-  const total = tiles.data?.total ?? 0
-  const avg = tiles.data?.avgScore ?? null
-  // The imported bucket is hidden until it holds traces; known runs always show.
-  if (hideWhenEmpty && total === 0) return null
-
   return (
     <button
       type="button"
-      data-testid={`run-row-${run}`}
-      onClick={() => onSelect(run)}
+      data-testid={`run-row-${option.run}`}
+      onClick={() => onSelect(option.run)}
       className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium ${
         active ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
       }`}
     >
-      <span className="truncate">{run}</span>
+      <span className="truncate">{option.run}</span>
       <span className="ml-auto flex shrink-0 items-center gap-1 text-[10px] tabular-nums text-slate-400">
-        {formatNumber(total)}
-        {avg !== null && (
+        {option.discovered ? formatNumber(option.count) : '—'}
+        {option.discovered && option.avgScore !== null && (
           <>
             <span>·</span>
-            {formatScore(avg)}
+            {formatScore(option.avgScore)}
           </>
         )}
       </span>
@@ -83,9 +71,12 @@ export function RunTree({
   setParam: (key: ListParamKey, value: string | undefined) => void
 }) {
   const [filter, setFilter] = useState('')
+  const catalog = useRuns()
   const selectedRun = runFromFilters(params.filters)
   const q = filter.trim().toLowerCase()
-  const runs = ALL_RUNS.filter((r) => q === '' || r.toLowerCase().includes(q))
+  const runs = runOptions(catalog.data?.items ?? [], selectedRun).filter(
+    (item) => q === '' || item.run.toLowerCase().includes(q),
+  )
 
   const selectRun = (run: string) => {
     const others = decodeFilterSet(params.filters).conditions.filter(
@@ -109,16 +100,23 @@ export function RunTree({
         className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
       />
       <div className="flex flex-col">
-        {runs.map((run) => (
+        {runs.map((option) => (
           <RunRow
-            key={run}
-            run={run}
-            active={selectedRun === run}
-            hideWhenEmpty={run === IMPORTED_RUN}
+            key={option.run}
+            option={option}
+            active={selectedRun === option.run}
             onSelect={selectRun}
           />
         ))}
-        {runs.length === 0 && <p className="px-2 py-1 text-xs text-slate-400">No runs match.</p>}
+        {catalog.isLoading && runs.length === 0 && (
+          <p className="px-2 py-1 text-xs text-slate-400">Loading runs…</p>
+        )}
+        {catalog.isError && runs.length === 0 && (
+          <p className="px-2 py-1 text-xs text-red-600">Could not load runs.</p>
+        )}
+        {!catalog.isLoading && !catalog.isError && runs.length === 0 && (
+          <p className="px-2 py-1 text-xs text-slate-400">No runs match.</p>
+        )}
       </div>
     </section>
   )

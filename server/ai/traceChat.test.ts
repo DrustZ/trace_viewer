@@ -77,6 +77,15 @@ describe('buildTraceContext', () => {
     expect(ctxText).toContain('#3 assistant/final: Use two pointers')
   })
 
+  it('labels a connector default checkpoint as unavailable instead of step zero', () => {
+    const trace = makeTrace(BASE_MESSAGES)
+    trace.meta.checkpointStep = 0
+    trace.meta.extra = { normalization: { checkpointStep: 'default' } }
+    const ctxText = buildTraceContext(trace)
+    expect(ctxText).toContain('checkpoint unavailable')
+    expect(ctxText).not.toContain('checkpoint step 0')
+  })
+
   it('clamps each message content to MESSAGE_CHAR_LIMIT with a truncation marker', () => {
     const long = 'x'.repeat(MESSAGE_CHAR_LIMIT + 500)
     const ctxText = buildTraceContext(

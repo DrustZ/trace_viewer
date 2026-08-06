@@ -1,3 +1,4 @@
+import { recordedCheckpoint } from '@shared/schema/provenance'
 import type { Trace } from '@shared/schema/types'
 import { useMemo, useState } from 'react'
 import { FoldSection, type FoldTone } from '../common/CollapsibleText'
@@ -141,6 +142,7 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
   const [open, setOpen] = useState(false)
   const [judgeFull, setJudgeFull] = useState(false)
   const { meta, stats } = trace
+  const checkpoint = recordedCheckpoint(meta)
   const extra = meta.extra ?? {}
   const groundTruth = typeof extra.ground_truth === 'string' ? extra.ground_truth : undefined
   const successCriteria =
@@ -241,7 +243,8 @@ export function TraceSummaryPanel({ trace }: { trace: Trace }) {
         ))}
         {scoreNote && <span className={`text-[11px] ${scoreNote.cls}`}>{scoreNote.text}</span>}
         <span className="ml-auto shrink-0 text-[10px] text-slate-400">
-          step {meta.checkpointStep} · {meta.split} · {meta.status}
+          {checkpoint === null ? 'checkpoint unavailable' : `step ${checkpoint}`} · {meta.split} ·{' '}
+          {meta.status}
         </span>
         {hasDetails && (
           <button

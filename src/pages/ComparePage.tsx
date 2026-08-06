@@ -1,28 +1,53 @@
-import type { TraceSummary } from '@shared/schema/types'
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useTraces } from '../api/hooks'
+import { useRunInstances, useRuns } from '../api/hooks'
 import { EmptyState } from '../components/common/EmptyState'
 import { DualEvolutionChart } from '../components/compare/DualEvolutionChart'
 import { RunColumn } from '../components/compare/RunColumn'
 import { CollapsibleSection } from '../components/home/CollapsibleSection'
 
-const INSTANCE_SCAN_LIMIT = 5000
-// Fallback when the corpus scan yields no distinct extra.run values.
-const DEFAULT_RUNS = ['run-a', 'run-b'] as const
+const INSTANCE_RESULT_LIMIT = 200
 
 const INPUT_CLASS =
   'rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400'
 
-function itemsOf(data: unknown): TraceSummary[] {
-  return data && typeof data === 'object' && 'items' in data
-    ? (data as { items: TraceSummary[] }).items
-    : []
+/** Keep deep-linked runs selectable while the catalog is loading or no longer contains them. */
+export function selectableRuns(
+  discovered: readonly string[],
+  selected: readonly string[],
+): string[] {
+  return [...new Set([...discovered, ...selected.filter(Boolean)])].sort()
 }
-function totalOf(data: unknown): number {
-  return data && typeof data === 'object' && 'total' in data
-    ? Number((data as { total: number }).total)
-    : 0
+
+export interface CompareRuns {
+  runA: string
+  runB: string
+}
+
+/** Resolve missing run params deterministically while preserving every explicit deep-link value. */
+export function resolveCompareRuns(
+  discovered: readonly string[],
+  selectedA: string | null | undefined,
+  selectedB: string | null | undefined,
+): CompareRuns {
+  const explicitA = selectedA || undefined
+  const explicitB = selectedB || undefined
+  const ordered = [...new Set(discovered.filter(Boolean))].sort()
+  const runA = explicitA ?? ordered.find((run) => run !== explicitB) ?? explicitB ?? ''
+  const runB = explicitB ?? ordered.find((run) => run !== runA) ?? runA
+  return { runA, runB }
+}
+
+/** Fill missing run params without touching any explicit value or other shareable state. */
+export function materializeCompareRuns(
+  search: URLSearchParams,
+  discovered: readonly string[],
+): URLSearchParams {
+  const next = new URLSearchParams(search)
+  const { runA, runB } = resolveCompareRuns(discovered, next.get('runA'), next.get('runB'))
+  if (!next.get('runA') && runA !== '') next.set('runA', runA)
+  if (!next.get('runB') && runB !== '') next.set('runB', runB)
+  return next
 }
 
 /**
@@ -33,11 +58,40 @@ function totalOf(data: unknown): number {
 export default function ComparePage() {
   const [search, setSearch] = useSearchParams()
   const instance = search.get('instance') ?? ''
-  const runA = search.get('runA') ?? DEFAULT_RUNS[0]
-  const runB = search.get('runB') ?? DEFAULT_RUNS[1]
   const traceA = search.get('traceA') ?? ''
   const traceB = search.get('traceB') ?? ''
   const [instanceInput, setInstanceInput] = useState(instance)
+
+  const runCatalog = useRuns()
+  const discoveredRuns = useMemo(
+    () => runCatalog.data?.items.map((item) => item.run) ?? [],
+    [runCatalog.data?.items],
+  )
+  const runAParam = search.get('runA')
+  const runBParam = search.get('runB')
+  const { runA, runB } = resolveCompareRuns(discoveredRuns, runAParam, runBParam)
+  const runOptions = selectableRuns(discoveredRuns, [runA, runB])
+  const deferredInstanceInput = useDeferredValue(instanceInput)
+  const instances = useRunInstances(
+    [runA, runB],
+    deferredInstanceInput,
+    INSTANCE_RESULT_LIMIT,
+    runCatalog.data?.dataVersion,
+  )
+  const instanceOptions = instances.data?.items ?? []
+
+  useEffect(() => setInstanceInput(instance), [instance])
+
+  // Freeze catalog-derived defaults into the shareable URL once. Subsequent
+  // progressive-scan updates cannot silently change the runs being compared.
+  useEffect(() => {
+    const missingA = !runAParam
+    const missingB = !runBParam
+    if (runCatalog.data === undefined || (!missingA && !missingB) || runA === '' || runB === '') {
+      return
+    }
+    setSearch((prev) => materializeCompareRuns(prev, discoveredRuns), { replace: true })
+  }, [runAParam, runBParam, runA, runB, discoveredRuns, runCatalog.data, setSearch])
 
   const setQP = (patch: Record<string, string>) => {
     setSearch(
@@ -53,23 +107,6 @@ export default function ComparePage() {
     )
   }
 
-  // Distinct instanceIds + runs from a broad scan (used for the pickers).
-  const allTraces = useTraces({ limit: INSTANCE_SCAN_LIMIT })
-  const scanned = itemsOf(allTraces.data)
-  const instanceOptions = useMemo(
-    () => [...new Set(scanned.map((s) => s.meta.instanceId))].sort(),
-    [scanned],
-  )
-  const runOptions = useMemo(() => {
-    const runs = new Set<string>()
-    for (const s of scanned) {
-      const r = s.meta.extra?.run
-      if (typeof r === 'string') runs.add(r)
-    }
-    return runs.size > 0 ? [...runs].sort() : [...DEFAULT_RUNS]
-  }, [scanned])
-  const scanPartial = totalOf(allTraces.data) > scanned.length
-
   const commitInstance = (value: string) => {
     const v = value.trim()
     setInstanceInput(v)
@@ -84,8 +121,10 @@ export default function ComparePage() {
         className={INPUT_CLASS}
         data-testid={`select-${key}`}
         value={value}
+        disabled={runOptions.length === 0}
         onChange={(e) => setQP({ [key]: e.target.value, [clear]: '' })}
       >
+        {runOptions.length === 0 && <option value="">No runs</option>}
         {runOptions.map((r) => (
           <option key={r} value={r}>
             {r}
@@ -135,13 +174,22 @@ export default function ComparePage() {
             ))}
           </datalist>
           <span className="font-normal normal-case tracking-normal text-slate-500">
-            {instanceOptions.length} instances discovered
-            {scanPartial ? ` (first ${INSTANCE_SCAN_LIMIT} scanned — list may be partial)` : ''} ·
-            diff an instance across two runs
+            {instances.isFetching
+              ? 'Searching instances…'
+              : `${instances.data?.total ?? 0} matching instances`}
+            {(instances.data?.total ?? 0) > instanceOptions.length
+              ? ` · showing first ${instanceOptions.length}`
+              : ''}{' '}
+            · diff an instance across two runs
           </span>
         </label>
 
-        {instance === '' ? (
+        {runA === '' || runB === '' ? (
+          <EmptyState
+            title={runCatalog.isLoading ? 'Loading runs' : 'No runs available'}
+            hint="Load or import traces before comparing runs."
+          />
+        ) : instance === '' ? (
           <EmptyState
             title="Pick an instance to compare"
             hint="Choose an instance above to overlay both runs' reward curves and browse rollouts side by side."
@@ -151,7 +199,11 @@ export default function ComparePage() {
             <div className="shrink-0">
               {/* Collapsed by default so the two trace views get the full height;
                   the state persists per-id, and it's one click to compare curves. */}
-              <CollapsibleSection id="compare-curves" title="Reward curves — A vs B">
+              <CollapsibleSection
+                id="compare-curves"
+                title="Reward curves — A vs B"
+                defaultOpen={false}
+              >
                 <DualEvolutionChart instanceId={instance} runA={runA} runB={runB} />
               </CollapsibleSection>
             </div>

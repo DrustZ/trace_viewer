@@ -10,6 +10,7 @@ import { importRoutes } from './routes/importRoute'
 import { metaRoutes } from './routes/meta'
 import { playgroundRoutes } from './routes/playground'
 import { refreshRoutes } from './routes/refresh'
+import { runsRoutes } from './routes/runs'
 import { searchRoutes } from './routes/search'
 import { tracesRoutes } from './routes/traces'
 import { SearchIndex } from './search/searchIndex'
@@ -56,6 +57,7 @@ export function createApp(deps: AppDeps = {}): Express {
   })
 
   app.use(metaRoutes(ctx))
+  app.use(runsRoutes(ctx))
   app.use(tracesRoutes(ctx))
   app.use(chatRoutes(ctx))
   app.use(analysisRoutes(ctx))

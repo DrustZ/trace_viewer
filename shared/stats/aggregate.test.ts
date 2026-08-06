@@ -11,6 +11,7 @@ interface FixtureOverrides {
   status?: TraceStatus
   step?: number
   score?: number | null
+  extra?: Record<string, unknown>
   stats?: Partial<TraceStats>
 }
 
@@ -24,6 +25,7 @@ const t = (over: FixtureOverrides = {}): TraceSummary => ({
     checkpointStep: over.step ?? 0,
     split: over.split ?? 'train',
     sourceFormat: 'native',
+    ...(over.extra ? { extra: over.extra } : {}),
   },
   stats: {
     score: over.score ?? null,
@@ -48,6 +50,7 @@ describe('statTiles', () => {
       completed: 0,
       failed: 0,
       executing: 0,
+      unknown: 0,
       avgScore: null,
       avgTurns: 0,
       avgDurationMs: null,
@@ -59,11 +62,13 @@ describe('statTiles', () => {
       t({ status: 'completed', score: 1, stats: { turns: 2, durationMs: 100 } }),
       t({ status: 'failed', score: 0, stats: { turns: 4 } }),
       t({ status: 'executing', score: null, stats: { turns: 0, durationMs: 300 } }),
+      t({ status: 'unknown', score: null, stats: { turns: 2 } }),
     ])
-    expect(tiles.total).toBe(3)
+    expect(tiles.total).toBe(4)
     expect(tiles.completed).toBe(1)
     expect(tiles.failed).toBe(1)
     expect(tiles.executing).toBe(1)
+    expect(tiles.unknown).toBe(1)
     expect(tiles.avgScore).toBeCloseTo(0.5) // over the two scored traces only
     expect(tiles.avgTurns).toBeCloseTo(2) // over all three
     expect(tiles.avgDurationMs).toBeCloseTo(200) // over the two defined durations
@@ -85,11 +90,13 @@ describe('componentAggregates', () => {
       t({ component: 'comp/a', split: 'test' }),
       t({ component: 'comp/b', split: 'train' }),
       t({ component: 'comp/a', split: 'train' }),
+      t({ component: 'comp/a', split: 'unknown' }),
       t({ component: 'comp/a', split: 'train' }),
     ])
     expect(aggs.map((a) => [a.component, a.split])).toEqual([
       ['comp/a', 'train'],
       ['comp/a', 'test'],
+      ['comp/a', 'unknown'],
       ['comp/b', 'train'],
       ['comp/b', 'test'],
     ])
@@ -101,14 +108,16 @@ describe('componentAggregates', () => {
       t({ status: 'completed', score: 1, stats: { truncated: true } }),
       t({ status: 'failed', score: 0 }),
       t({ status: 'executing', score: null }),
+      t({ status: 'unknown', score: null }),
     ])
-    expect(agg.count).toBe(3)
+    expect(agg.count).toBe(4)
     expect(agg.completed).toBe(1)
     expect(agg.failed).toBe(1)
     expect(agg.executing).toBe(1)
+    expect(agg.unknown).toBe(1)
     expect(agg.avgScore).toBeCloseTo(0.5)
     expect(agg.successRate).toBeCloseTo(0.5) // 1 of 2 scored has score > 0
-    expect(agg.truncatedRate).toBeCloseTo(1 / 3)
+    expect(agg.truncatedRate).toBeCloseTo(1 / 4)
   })
 
   it('reports null avgScore and successRate when nothing is scored', () => {
@@ -156,6 +165,16 @@ describe('componentAggregates', () => {
       { step: 100, avgScore: 1, count: 2 },
     ])
   })
+
+  it('does not turn a connector default checkpoint into a step-zero curve point', () => {
+    const defaulted = t({
+      step: 0,
+      score: 1,
+      extra: { normalization: { checkpointStep: 'default' } },
+    })
+    expect(componentAggregates([defaulted])[0].scoreByStep).toEqual([])
+    expect(rewardCurves([defaulted]).train).toEqual([])
+  })
 })
 
 describe('rewardCurves', () => {
@@ -166,6 +185,7 @@ describe('rewardCurves', () => {
     t({ component: 'comp/a', split: 'train', step: 20, score: null }),
     t({ component: 'comp/a', split: 'test', step: 10, score: 0 }),
     t({ component: 'comp/b', split: 'train', step: 10, score: 0 }),
+    t({ component: 'comp/a', split: 'unknown', step: 10, score: 1 }),
   ]
 
   it('one point per scored step per split, count over all, sorted by step', () => {

@@ -79,6 +79,10 @@ describe('agentConversationConnector.parse', () => {
       toolCallId: 'call_example001',
       isError: false,
     })
+    expect(trace.messages[2].metadata).toMatchObject({
+      toolName: 'get_order_details',
+      toolCallMatch: 'exact',
+    })
     expect(trace.messages[4].toolResult).toEqual({
       toolCallId: 'call_example002',
       isError: true,
@@ -91,11 +95,32 @@ describe('agentConversationConnector.parse', () => {
       traceId: '0054a6c4-4fdc-47c3-b885-f8ddb282aab1',
       instanceId: '0054a6c4-4fdc-47c3-b885-f8ddb282aab1',
       component: 'conversations/beta',
-      status: 'completed',
+      status: 'unknown',
       timestamp: '2026-01-27T09:44:00.394Z',
+      checkpointStep: 0,
+      split: 'unknown',
       sourceFormat: 'agent-conversation',
       dataLocation: ctx.sourcePath,
-      extra: { agents: ['beta', 'human'], escalated: true },
+      extra: {
+        agents: ['beta', 'human'],
+        escalated: true,
+        lifecycle: { state: 'unknown', provenance: 'not_provided_by_source' },
+        outcome: {
+          state: 'unknown',
+          provenance: 'not_provided_by_source',
+          observations: ['tool_error'],
+        },
+        normalization: {
+          status: 'source_missing',
+          split: 'source_missing',
+          checkpointStep: 'default',
+        },
+      },
+    })
+    expect(trace.meta.extra?.dataQuality).toEqual({
+      timestampRegressions: 0,
+      repairedToolResultLinks: 0,
+      unmatchedToolResults: 0,
     })
     expect(trace.statsOverrides).toBeUndefined()
   })
@@ -112,8 +137,144 @@ describe('agentConversationConnector.parse', () => {
     // The cut is inside message 3 (the first tool result) — the two before survive.
     expect(trace.messages).toHaveLength(2)
     expect(trace.messages[1].toolCalls?.[0]?.name).toBe('get_order_details')
-    expect(trace.statsOverrides).toEqual({ truncated: true })
+    expect(trace.statsOverrides).toEqual({ truncated: true, hasError: true })
     expect(trace.warnings.some((w) => w.includes('truncated'))).toBe(true)
+  })
+
+  it('repairs mismatched ids when raw tool_name identifies one unmatched call', () => {
+    const input = JSON.stringify({
+      conversation: [
+        {
+          role: 'assistant',
+          agent_type: 'beta',
+          tool_calls: [
+            { id: 'call-search', name: 'search', arguments: {} },
+            { id: 'call-bash', name: 'bash', arguments: {} },
+          ],
+        },
+        {
+          role: 'tool',
+          agent_type: null,
+          content: 'ok',
+          tool_call_id: 'wrong-1',
+          tool_name: 'bash',
+        },
+        {
+          role: 'tool',
+          agent_type: null,
+          content: 'found',
+          tool_call_id: 'wrong-2',
+          tool_name: 'search',
+        },
+      ],
+    })
+    const trace = agentConversationConnector.parse(input, ctx).traces[0]
+    expect(trace.messages[1].toolResult?.toolCallId).toBe('call-bash')
+    expect(trace.messages[1].metadata).toMatchObject({
+      toolName: 'bash',
+      toolCallMatch: 'tool-name',
+      sourceToolCallId: 'wrong-1',
+    })
+    expect(trace.messages[2].toolResult?.toolCallId).toBe('call-search')
+    expect(trace.meta.extra?.dataQuality).toMatchObject({ repairedToolResultLinks: 2 })
+  })
+
+  it('does not invent a link when id and name cannot identify a call', () => {
+    const input = JSON.stringify({
+      conversation: [
+        {
+          role: 'assistant',
+          agent_type: 'beta',
+          tool_calls: [{ id: 'call-search', name: 'search', arguments: {} }],
+        },
+        {
+          role: 'tool',
+          agent_type: null,
+          content: 'opaque output',
+          tool_call_id: 'missing-call',
+          tool_name: 'unseen_tool',
+        },
+      ],
+    })
+    const trace = agentConversationConnector.parse(input, ctx).traces[0]
+    expect(trace.messages[1].toolResult?.toolCallId).toBe('')
+    expect(trace.messages[1].metadata).toMatchObject({
+      toolName: 'unseen_tool',
+      toolCallMatch: 'unmatched',
+      sourceToolCallId: 'missing-call',
+    })
+    expect(trace.meta.extra?.dataQuality).toMatchObject({ unmatchedToolResults: 1 })
+    expect(trace.warnings.some((warning) => warning.includes('could not be safely linked'))).toBe(
+      true,
+    )
+  })
+
+  it('leaves a name-only result unlinked when multiple calls share that name', () => {
+    const input = JSON.stringify({
+      conversation: [
+        {
+          role: 'assistant',
+          agent_type: 'beta',
+          tool_calls: [
+            { id: 'call-search-1', name: 'search', arguments: { q: 'one' } },
+            { id: 'call-search-2', name: 'search', arguments: { q: 'two' } },
+          ],
+        },
+        {
+          role: 'tool',
+          agent_type: null,
+          content: 'ambiguous output',
+          tool_call_id: 'missing-call',
+          tool_name: 'search',
+        },
+      ],
+    })
+    const trace = agentConversationConnector.parse(input, ctx).traces[0]
+    expect(trace.messages[1].toolResult?.toolCallId).toBe('')
+    expect(trace.messages[1].metadata).toMatchObject({
+      toolName: 'search',
+      toolCallMatch: 'unmatched',
+      sourceToolCallId: 'missing-call',
+    })
+    expect(trace.meta.extra?.dataQuality).toMatchObject({
+      repairedToolResultLinks: 0,
+      unmatchedToolResults: 1,
+    })
+  })
+
+  it('recognizes an exact source id even when its call appears later in source order', () => {
+    const input = JSON.stringify({
+      conversation: [
+        {
+          role: 'tool',
+          agent_type: null,
+          content: 'early flush',
+          tool_call_id: 'call-later',
+          tool_name: 'search',
+        },
+        {
+          role: 'assistant',
+          agent_type: 'beta',
+          tool_calls: [{ id: 'call-later', name: 'search', arguments: {} }],
+        },
+      ],
+    })
+    const trace = agentConversationConnector.parse(input, ctx).traces[0]
+    expect(trace.messages[0].toolResult?.toolCallId).toBe('call-later')
+    expect(trace.messages[0].metadata).toMatchObject({ toolCallMatch: 'exact' })
+  })
+
+  it('preserves source order and reports timestamp regressions', () => {
+    const input = JSON.stringify({
+      conversation: [
+        { role: 'user', agent_type: 'user', content: 'first', timestamp: 20 },
+        { role: 'assistant', agent_type: 'beta', content: 'second', timestamp: 10 },
+      ],
+    })
+    const trace = agentConversationConnector.parse(input, ctx).traces[0]
+    expect(trace.messages.map((message) => message.content)).toEqual(['first', 'second'])
+    expect(trace.meta.extra?.dataQuality).toMatchObject({ timestampRegressions: 1 })
+    expect(trace.warnings.some((warning) => warning.includes('timestamp regression'))).toBe(true)
   })
 
   it('degrades to warnings on unsalvageable and wrong-shape input', () => {

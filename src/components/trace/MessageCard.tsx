@@ -212,6 +212,10 @@ function Body({
   toolName?: string
 }) {
   const [tab, setTab] = useMessageViewTab(message.id)
+  const carriedToolName =
+    typeof message.metadata?.toolName === 'string' && message.metadata.toolName.length > 0
+      ? message.metadata.toolName
+      : undefined
   const card = `rounded-lg border border-l-4 px-2 py-1.5 ${CARD[kind]}`
   const header = (
     <CardHeader kind={kind} number={number} message={message} tab={tab} onTabChange={setTab} />
@@ -232,7 +236,7 @@ function Body({
         ) : (
           <ToolResultBlock
             message={message}
-            toolName={toolName}
+            toolName={toolName ?? carriedToolName}
             expanded={expanded}
             onToggle={onToggle}
           />
@@ -308,8 +312,8 @@ export function MessageCard({
   onToggleBody: () => void
   /**
    * Tool name for the tool-result chip. MessageCard only sees its own message,
-   * so the owner of the message list resolves it (see buildCallNameMap); when
-   * absent the chip shows just the call id.
+   * so the owner of the message list normally resolves it (see buildCallNameMap).
+   * Connectors may also preserve an unlinked raw name in message metadata.
    */
   toolName?: string
 }) {

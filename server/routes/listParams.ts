@@ -1,6 +1,7 @@
 import { evaluateFilter } from '../../shared/filter/evaluate'
 import { getKeyValue } from '../../shared/filter/keys'
 import { decodeFilterSet } from '../../shared/filter/parse'
+import { recordedCheckpoint } from '../../shared/schema/provenance'
 import type { TraceSummary } from '../../shared/schema/types'
 import { firstParam, type RouteCtx } from './context'
 
@@ -33,7 +34,7 @@ export function applyListParams(
   const step = firstParam(query.step)
   if (step) {
     const stepNum = Number(step)
-    items = items.filter((s) => s.meta.checkpointStep === stepNum)
+    items = items.filter((s) => recordedCheckpoint(s.meta) === stepNum)
   }
   const component = firstParam(query.component)
   if (component) items = items.filter((s) => s.meta.component === component)

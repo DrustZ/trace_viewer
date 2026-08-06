@@ -129,7 +129,7 @@ describe('api', () => {
       'imported/harmony',
       'imported/openai-chat',
     ])
-    expect(res.body.steps).toEqual([0, 100, 200])
+    expect(res.body.steps).toEqual([100, 200])
     expect(res.body.splits).toEqual(['train', 'test'])
     expect(res.body.statuses).toEqual(['completed'])
     expect(res.body.traceCount).toBe(5)
@@ -139,6 +139,42 @@ describe('api', () => {
     expect(res.body.scanning).toBe(false)
     expect(typeof res.body.scannedFiles).toBe('number')
     expect(typeof res.body.totalFiles).toBe('number')
+    expect(Array.isArray(res.body.scanRoots)).toBe(true)
+    expect(res.body.scanRoots.every((root: object) => !('path' in root))).toBe(true)
+  })
+
+  it('GET /api/meta omits connector-default checkpoint sentinels from step options', async () => {
+    const store = new TraceStore()
+    store.upsert({
+      meta: {
+        traceId: 'checkpoint-missing',
+        instanceId: 'checkpoint-missing',
+        component: 'imported/agent-conversation',
+        status: 'unknown',
+        timestamp: '2026-03-01T00:00:00.000Z',
+        checkpointStep: 0,
+        split: 'unknown',
+        sourceFormat: 'agent-conversation',
+        extra: { normalization: { checkpointStep: 'default' } },
+      },
+      messages: [{ id: 'm-0', role: 'user', content: 'hello' }],
+      warnings: [],
+    })
+    const defaultApp = createApp({ store, importDir, dataRoots: [] })
+    const res = await request(defaultApp).get('/api/meta')
+    expect(res.status).toBe(200)
+    expect(res.body.steps).toEqual([])
+    expect(res.body.splits).toEqual(['unknown'])
+    expect(res.body.statuses).toEqual(['unknown'])
+
+    const directStep = await request(defaultApp).get('/api/traces?step=0')
+    expect(directStep.body.total).toBe(0)
+    const dslStep = await request(defaultApp).get('/api/traces?filters=step.eq.0')
+    expect(dslStep.body.total).toBe(0)
+    const siblings = await request(defaultApp).get('/api/traces/checkpoint-missing/siblings')
+    expect(siblings.body).toEqual([])
+    const evolution = await request(defaultApp).get('/api/evolution/checkpoint-missing')
+    expect(evolution.status).toBe(404)
   })
 
   it('GET /api/traces sorts by time desc by default, total before limit/offset', async () => {

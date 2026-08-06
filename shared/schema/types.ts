@@ -12,9 +12,9 @@ export type Role = 'system' | 'developer' | 'user' | 'assistant' | 'tool'
  */
 export type Channel = 'analysis' | 'commentary' | 'final'
 
-export type Split = 'train' | 'test'
+export type Split = 'train' | 'test' | 'unknown'
 
-export type TraceStatus = 'completed' | 'failed' | 'executing'
+export type TraceStatus = 'completed' | 'failed' | 'executing' | 'unknown'
 
 export interface TokenLogprob {
   token: string
@@ -147,6 +147,7 @@ export interface ComponentAggregate {
   completed: number
   failed: number
   executing: number
+  unknown: number
   /** null when no trace in the group has a score. */
   avgScore: number | null
   /** Fraction of scored traces with score > 0; null when nothing is scored. */
@@ -189,6 +190,7 @@ export interface StatTiles {
   completed: number
   failed: number
   executing: number
+  unknown: number
   avgScore: number | null
   avgTurns: number
   avgDurationMs: number | null

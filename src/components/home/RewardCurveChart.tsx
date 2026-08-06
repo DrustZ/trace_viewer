@@ -1,4 +1,4 @@
-import type { RewardCurvePoint } from '@shared/schema/types'
+import type { RewardCurvePoint, RewardCurves } from '@shared/schema/types'
 import { useMemo, useState } from 'react'
 import {
   CartesianGrid,
@@ -13,6 +13,7 @@ import {
 import { type ListParams, useRewardCurves } from '../../api/hooks'
 import type { ListParamKey } from '../../state/filterParams'
 import { formatScore } from '../common/format'
+import { CollapsibleSection } from './CollapsibleSection'
 
 // Categorical slots 1 (blue) and 2 (green) from the dataviz reference palette —
 // validated CVD-safe and >=3:1 on the white card surface.
@@ -90,8 +91,26 @@ export function RewardCurveChart({
   params: ListParams
   setParam: (key: ListParamKey, value: string | undefined) => void
 }) {
-  const [mode, setMode] = useState<SeriesMode>('both')
   const curves = useRewardCurves(params.component ? [params.component] : undefined, params)
+  return <RewardCurveBody params={params} setParam={setParam} curves={curves} />
+}
+
+interface CurveQueryState {
+  data?: RewardCurves
+  isLoading: boolean
+  isFetching: boolean
+}
+
+function RewardCurveBody({
+  params,
+  setParam,
+  curves,
+}: {
+  params: ListParams
+  setParam: (key: ListParamKey, value: string | undefined) => void
+  curves: CurveQueryState
+}) {
+  const [mode, setMode] = useState<SeriesMode>('both')
   const rows = useMemo(
     () => buildRows(curves.data?.train ?? [], curves.data?.test ?? []),
     [curves.data],
@@ -219,5 +238,43 @@ export function RewardCurveChart({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Keeps an unscored corpus from looking empty: once the query settles with no
+ * curve points, the section switches to a compact, collapsed explanation.
+ * Scored selections retain the normal persisted expand/collapse preference.
+ */
+export function RewardCurvesSection({
+  params,
+  setParam,
+}: {
+  params: ListParams
+  setParam: (key: ListParamKey, value: string | undefined) => void
+}) {
+  const curves = useRewardCurves(params.component ? [params.component] : undefined, params)
+  const hasPoints = (curves.data?.train.length ?? 0) + (curves.data?.test.length ?? 0) > 0
+
+  if (!curves.isLoading && !hasPoints) {
+    return (
+      <CollapsibleSection
+        id="curves-empty"
+        title="Reward curves"
+        defaultOpen={false}
+        summary="Unavailable · no scored checkpoints"
+      >
+        <p className="text-xs text-slate-500">
+          This selection has traces, but none include both a grader score and checkpoint series. The
+          component aggregates and trace table below are still available.
+        </p>
+      </CollapsibleSection>
+    )
+  }
+
+  return (
+    <CollapsibleSection id="curves" title="Reward curves" defaultOpen>
+      <RewardCurveBody params={params} setParam={setParam} curves={curves} />
+    </CollapsibleSection>
   )
 }

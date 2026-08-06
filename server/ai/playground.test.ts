@@ -184,6 +184,32 @@ describe('runPlayground', () => {
     )
   })
 
+  it('does not present a connector default as a recorded policy checkpoint', async () => {
+    const trace = makeTrace(BASE_MESSAGES)
+    trace.meta.checkpointStep = 0
+    trace.meta.extra = { normalization: { checkpointStep: 'default' } }
+    const create: CreateMock = vi.fn().mockResolvedValue(textResponse('ok'))
+
+    await runPlayground(trace, {}, fakeClient(create))
+
+    const system = String(create.mock.calls[0][0].system)
+    expect(system).toContain('does not record a policy checkpoint')
+    expect(system).not.toContain('checkpoint step 0')
+  })
+
+  it('labels a user override as hypothetical when the source checkpoint is unavailable', async () => {
+    const trace = makeTrace(BASE_MESSAGES)
+    trace.meta.checkpointStep = 0
+    trace.meta.extra = { normalization: { checkpointStep: 'default' } }
+    const create: CreateMock = vi.fn().mockResolvedValue(textResponse('ok'))
+
+    await runPlayground(trace, { checkpointStep: 250 }, fakeClient(create))
+
+    const system = String(create.mock.calls[0][0].system)
+    expect(system).toContain('hypothetical task-agent checkpoint labeled step 250')
+    expect(system).toContain('user-specified, not recorded')
+  })
+
   it('maps upstream failures to a 502 PlaygroundError', async () => {
     const create: CreateMock = vi.fn().mockRejectedValue(new Error('overloaded'))
     await expect(

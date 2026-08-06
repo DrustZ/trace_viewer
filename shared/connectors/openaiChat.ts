@@ -1,3 +1,4 @@
+import { withDefaultCheckpointProvenance } from '../schema/provenance'
 import type { Message, TokenLogprob, ToolCall, TraceMeta, TraceStats } from '../schema/types'
 import type { Connector, ParseContext, ParseResult } from './types'
 
@@ -189,7 +190,7 @@ function parseOpenaiChat(text: string, ctx: ParseContext): ParseResult {
     sourceFormat: 'openai-chat',
     dataLocation: ctx.sourcePath,
   }
-  if (Object.keys(extra).length > 0) meta.extra = extra
+  meta.extra = withDefaultCheckpointProvenance(extra)
 
   return {
     traces: [

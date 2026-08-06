@@ -4,7 +4,7 @@ import { EmptyState } from '../components/common/EmptyState'
 import { AnalysisPanel } from '../components/home/AnalysisPanel'
 import { CollapsibleSection } from '../components/home/CollapsibleSection'
 import { ComponentTable } from '../components/home/ComponentTable'
-import { RewardCurveChart } from '../components/home/RewardCurveChart'
+import { RewardCurvesSection } from '../components/home/RewardCurveChart'
 import { RunStatusBar } from '../components/home/RunStatusBar'
 import { Sidebar } from '../components/home/sidebar/Sidebar'
 import { TraceDrawer } from '../components/home/TraceDrawer'
@@ -73,9 +73,7 @@ export default function HomePage() {
           {hasActiveSelection(params) ? (
             <>
               <AnalysisPanel setParam={setParam} />
-              <CollapsibleSection id="curves" title="Reward curves" defaultOpen>
-                <RewardCurveChart params={params} setParam={setParam} />
-              </CollapsibleSection>
+              <RewardCurvesSection params={params} setParam={setParam} />
               <CollapsibleSection id="components" title="Components" defaultOpen>
                 <ComponentTable params={params} />
               </CollapsibleSection>

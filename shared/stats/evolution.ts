@@ -1,3 +1,4 @@
+import { hasRecordedCheckpoint } from '../schema/provenance'
 import type { EvolutionSeries, TraceSummary } from '../schema/types'
 
 /** Run identity: `meta.extra.run` when present, else the default 'run-a'. */
@@ -25,7 +26,9 @@ export function buildEvolutionSeries(
   run?: string,
 ): EvolutionSeries | null {
   const pool = run === undefined ? items : items.filter((t) => runOf(t) === run)
-  const rollouts = pool.filter((t) => t.meta.instanceId === instanceId)
+  const rollouts = pool.filter(
+    (t) => t.meta.instanceId === instanceId && hasRecordedCheckpoint(t.meta),
+  )
   if (rollouts.length === 0) return null
 
   const byStep = new Map<number, TraceSummary[]>()

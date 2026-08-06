@@ -79,6 +79,7 @@ describe('openaiResponsesConnector.parse', () => {
       component: 'imported/openai-responses',
       sourceFormat: 'openai-responses',
       dataLocation: '/data/resp.json',
+      extra: { normalization: { checkpointStep: 'default' } },
     })
   })
 

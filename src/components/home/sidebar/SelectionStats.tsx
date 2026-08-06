@@ -20,6 +20,12 @@ export function SelectionStats({ params }: { params: ListParams }) {
       value: formatNumber(d?.failed),
       valueClass: (d?.failed ?? 0) > 0 ? 'text-red-600' : undefined,
     },
+    { label: 'In progress', value: formatNumber(d?.executing) },
+    {
+      label: 'Unknown',
+      value: formatNumber(d?.unknown),
+      valueClass: (d?.unknown ?? 0) > 0 ? 'text-amber-700' : undefined,
+    },
     { label: 'Avg score', value: formatScore(d?.avgScore) },
     { label: 'Avg turns', value: d ? d.avgTurns.toFixed(1) : '—' },
     { label: 'Avg duration', value: formatDuration(d?.avgDurationMs) },

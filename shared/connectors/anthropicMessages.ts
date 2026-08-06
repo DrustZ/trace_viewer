@@ -1,3 +1,4 @@
+import { withDefaultCheckpointProvenance } from '../schema/provenance'
 import type { Message, ToolCall, TraceMeta, TraceStats } from '../schema/types'
 import type { Connector, ParseContext, ParseResult } from './types'
 
@@ -187,7 +188,7 @@ function parseAnthropicMessages(text: string, ctx: ParseContext): ParseResult {
     sourceFormat: 'anthropic-messages',
     dataLocation: ctx.sourcePath,
   }
-  if (Object.keys(extra).length > 0) meta.extra = extra
+  meta.extra = withDefaultCheckpointProvenance(extra)
 
   return {
     traces: [

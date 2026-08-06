@@ -3,6 +3,8 @@
  *
  * GET  /api/health                -> { ok, version }
  * GET  /api/meta                  -> MetaResponse
+ * GET  /api/runs                  -> RunsResponse
+ * GET  /api/runs/instances        -> RunInstancesResponse (query: run? repeated, q?, limit?, offset?)
  * GET  /api/traces                -> TracesListResponse | GroupedTracesResponse (when groupBy=instance)
  *      query: split, step, component, status, filters (encoded FilterSet), q (keyword),
  *             sort (any FilterKey id, default 'time' = meta.timestamp), order (asc|desc),
@@ -23,6 +25,25 @@
 import type { FilterKeyDef } from '../filter/types'
 import type { Split, TraceStatus, TraceSummary } from './types'
 
+export type ScanRootMode = 'runs' | 'metadata' | 'fixed'
+export type ScanRootState = 'pending' | 'scanning' | 'ready' | 'missing' | 'error'
+
+/** Safe, aggregate-only scanner diagnostics. No trace or file contents are exposed. */
+export interface ScanRootStatus {
+  /** Stable opaque id for UI reconciliation; derived from but does not reveal the host path. */
+  id: string
+  /** Project/home-relative or basename-only display label; never an absolute host path. */
+  label: string
+  /** A fixed run label, or null when run names come from folders/trace metadata. */
+  run: string | null
+  mode: ScanRootMode
+  state: ScanRootState
+  files: number
+  scannedFiles: number
+  traces: number
+  warnings: number
+}
+
 export interface MetaResponse {
   components: string[]
   steps: number[]
@@ -30,6 +51,30 @@ export interface MetaResponse {
   statuses: TraceStatus[]
   filterKeys: FilterKeyDef[]
   traceCount: number
+  dataVersion: number
+  scanning: boolean
+  scannedFiles: number
+  totalFiles: number
+  scanRoots: ScanRootStatus[]
+}
+
+export interface RunAggregate {
+  run: string
+  count: number
+  avgScore: number | null
+}
+
+export interface RunsResponse {
+  total: number
+  items: RunAggregate[]
+  dataVersion: number
+}
+
+export interface RunInstancesResponse {
+  total: number
+  items: string[]
+  limit: number
+  offset: number
   dataVersion: number
 }
 

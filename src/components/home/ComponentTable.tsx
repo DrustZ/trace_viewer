@@ -16,6 +16,8 @@ interface Row {
   count: number
   completed: number
   failed: number
+  executing: number
+  unknown: number
   avgScore: number | null
   successRate: number | null
   truncatedRate: number
@@ -71,6 +73,8 @@ function mergeRows(component: string, rows: Row[]): Row {
     count: rows.reduce((s, r) => s + r.count, 0),
     completed: rows.reduce((s, r) => s + r.completed, 0),
     failed: rows.reduce((s, r) => s + r.failed, 0),
+    executing: rows.reduce((s, r) => s + r.executing, 0),
+    unknown: rows.reduce((s, r) => s + r.unknown, 0),
     avgScore: weightedMean(rows, (r) => r.avgScore),
     successRate: weightedMean(rows, (r) => r.successRate),
     truncatedRate: weightedMean(rows, (r) => r.truncatedRate) ?? 0,
@@ -125,6 +129,10 @@ function MetricCells({ row }: { row: Row }) {
       <td className={`${NUM_CELL} ${row.failed > 0 ? 'font-medium text-red-600' : ''}`}>
         {formatNumber(row.failed)}
       </td>
+      <td className={NUM_CELL}>{formatNumber(row.executing)}</td>
+      <td className={`${NUM_CELL} ${row.unknown > 0 ? 'font-medium text-amber-700' : ''}`}>
+        {formatNumber(row.unknown)}
+      </td>
       <td className={NUM_CELL}>{formatPercent(row.successRate)}</td>
       <td className={NUM_CELL}>{formatScore(row.avgScore)}</td>
       <td className={NUM_CELL}>{formatPercent(row.truncatedRate)}</td>
@@ -144,6 +152,8 @@ const HEADERS = [
   'Count',
   'Completed',
   'Failed',
+  'In progress',
+  'Unknown',
   'Success %',
   'Avg score',
   'Trunc %',
@@ -180,7 +190,7 @@ export function ComponentTable({ params }: { params: ListParams }) {
     <div>
       <div className="mb-2 flex items-center gap-2">
         <div className="flex rounded-md border border-slate-200 p-0.5">
-          {(['train', 'test', 'all'] as const).map((s) => (
+          {(['train', 'test', 'unknown', 'all'] as const).map((s) => (
             <button
               key={s}
               type="button"

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import type { AiFilterResponse } from '../../shared/schema/api'
+import { recordedCheckpoint } from '../../shared/schema/provenance'
 import { nlToFilter } from '../ai/anthropic'
 import { asyncHandler, isRecord, type RouteCtx } from './context'
 
@@ -18,7 +19,14 @@ export function aiFilterRoutes(ctx: RouteCtx): Router {
       }
       const summaries = ctx.store.list()
       const components = [...new Set(summaries.map((s) => s.meta.component))].sort()
-      const steps = [...new Set(summaries.map((s) => s.meta.checkpointStep))].sort((a, b) => a - b)
+      const steps = [
+        ...new Set(
+          summaries.flatMap((s) => {
+            const step = recordedCheckpoint(s.meta)
+            return step === null ? [] : [step]
+          }),
+        ),
+      ].sort((a, b) => a - b)
       const result = await nlToFilter(query, { components, steps })
       res.json(result satisfies AiFilterResponse)
     }),

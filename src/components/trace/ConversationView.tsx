@@ -14,6 +14,11 @@ const COMPACT_KEY = 'tv.compact'
 const MATCH_CAP = 500
 const NO_MATCHES: number[] = []
 
+function carriedToolName(message: Trace['messages'][number]): string | undefined {
+  const value = message.metadata?.toolName
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
 function readTimelineOpen(): boolean {
   try {
     return localStorage.getItem(TIMELINE_KEY) === '1'
@@ -87,6 +92,7 @@ export function ConversationView({ trace }: { trace: Trace }) {
       if (
         m.content.toLowerCase().includes(q) ||
         m.judgeOutput?.toLowerCase().includes(q) ||
+        carriedToolName(m)?.toLowerCase().includes(q) ||
         m.toolCalls?.some(
           (c) =>
             c.arguments.toLowerCase().includes(q) ||
@@ -324,7 +330,10 @@ export function ConversationView({ trace }: { trace: Trace }) {
                               message={unit.message}
                               bodyExpanded={toolOpen.get(unit.id) ?? toolDefault}
                               onToggleBody={() => toggleTool(unit.id)}
-                              toolName={callNames.get(unit.message.toolResult?.toolCallId ?? '')}
+                              toolName={
+                                callNames.get(unit.message.toolResult?.toolCallId ?? '') ??
+                                carriedToolName(unit.message)
+                              }
                             />
                           ) : (
                             <MessageCard

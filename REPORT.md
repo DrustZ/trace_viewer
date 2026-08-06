@@ -60,7 +60,7 @@ read.**
   corpus and cite traces. All degrade gracefully to a clear notice (or a rule-based fallback)
   when there's no API key, so the tool never *depends* on credentials.
 
-- **Import (paste / file / URL, six format connectors).** Load a one-off trace to view; it opens
+- **Import (paste / file / URL, seven format connectors).** Load a one-off trace to view; it opens
   in the drawer, held in memory only. Anthropic Messages, OpenAI Chat/Responses, Qwen/DeepSeek,
   harmony, and the native format are auto-detected.
 
@@ -72,12 +72,14 @@ read.**
 
 Foreign formats pass through **connectors that never throw** into one **normalized Trace/Message
 model** (roles + harmony-style channels); every view renders only that model, so adding a format
-is one file and unknown fields survive in `meta.extra` + the Raw view. Metrics come from **one
+is one file and unknown fields survive in `meta.extra` + the Raw view. Missing lifecycle, split,
+or checkpoint facts remain explicitly unknown rather than becoming synthetic evidence. Metrics come from **one
 stats definition** so "turns"/"tokens" mean the same thing regardless of source. Storage is an
-**in-memory store over plain JSON** under `data/runs/<run>/` (a run *is* a folder — drop one in
-and it appears); the store sits behind a narrow interface, so scaling to 100k+ traces is a
+**in-memory store over plain JSON** under `data/runs/<run>/` plus labelled external roots from
+`TRACE_DATA_ROOTS`; a run can be a folder or a mounted corpus and both stay live via the watcher.
+The store sits behind a narrow interface, so scaling to 100k+ traces is a
 SQLite/DuckDB swap without touching the views. All view-feeding logic (stats, filters, connectors,
-tokenization, span-building) is pure and unit-tested (~320 tests); the React UI stays thin.
+tokenization, span-building) is pure and unit-tested (387 tests); the React UI stays thin.
 
 ## Trade-offs & non-goals
 
@@ -87,8 +89,9 @@ tokenization, span-building) is pure and unit-tested (~320 tests); the React UI 
   logprobs are synthetic (the UI renders real ones as-is).
 - **Compare is A/B** — the data model is n-run-ready; the UI fixes it at two.
 - **Not a production platform** — no auth, multi-tenant, OTel ingestion, or alerting by design.
-- **No component unit tests** — the pure-function core is heavily tested and the UI was verified
-  with a headless-Playwright harness; React E2E specs are the natural next step.
+- **Limited end-to-end automation** — component/API/pure-function tests cover the critical
+  contracts and the UI was browser-regression tested; a persistent cross-browser E2E suite is
+  the natural next step.
 
 ## AI-tooling disclosure
 

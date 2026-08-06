@@ -85,6 +85,32 @@ trace opens in a side drawer (the home view stays put, so you can keep importing
 Imports are held in memory only (re-importing just refreshes) — for a persistent corpus, drop
 files into `data/runs/<run>/` and the server watches + rescans.
 
+### Load a corpus outside the repository
+
+Keep large or private traces where they already live and add the directory in `.env`:
+
+```bash
+TRACE_DATA_ROOTS=work-trial=/Users/you/Downloads/data
+```
+
+Restart `npm run dev`, then select `work-trial` in the run picker. The built-in
+`data/runs` and `data/imported` roots remain enabled; configured roots are additive and are
+watched with the same live-reload behavior. Multiple roots use the platform path delimiter:
+`:` on macOS/Linux and `;` on Windows.
+
+The `work-trial=` prefix is an explicit run label. It is recommended for generic directory
+names such as `data`; without a label, a direct external corpus uses its directory basename as
+the run name instead of silently appearing under `imported`. Relative paths are resolved from
+the repository root, regardless of the directory from which the server was launched.
+
+Private `data/runs/work-trial` files remain intentionally ignored by Git and are not included in
+a push or a fresh clone. Configure `TRACE_DATA_ROOTS` on each machine (or mount the corpus in a
+deployment) instead of committing received traces.
+
+The status bar's **data roots** menu shows each root's scan state, file/trace counts, and warning
+count. The same aggregate-only diagnostics are available from `GET /api/meta`; paths are shown
+only as project/home-relative or basename labels, and no file or trace contents are included.
+
 Regenerate the corpus (byte-identical for a given seed):
 
 ```bash

@@ -119,7 +119,10 @@ function leafName(
       return { name: `assistant.${channel}`, kind: 'model' }
     }
     case 'tool': {
-      const tool = toolNames.get(message.toolResult?.toolCallId ?? '') ?? 'tool'
+      const carriedName = message.metadata?.toolName
+      const tool =
+        toolNames.get(message.toolResult?.toolCallId ?? '') ??
+        (typeof carriedName === 'string' && carriedName !== '' ? carriedName : 'tool')
       if (GRADER_TOOLS.has(tool)) return { name: tool, kind: 'grader' }
       return { name: `${tool}.exec`, kind: 'sandbox' }
     }
@@ -148,7 +151,7 @@ function deriveSpans(trace: Trace): ProfSpan[] {
     name: meta.traceId,
     kind: 'trace',
     startMs: 0,
-    durationMs: Math.max(stats.durationMs ?? 0, 1),
+    durationMs: Math.max(stats.durationMs ?? 0, 0),
     status: rootStatus,
   }
   if (messages.length === 0) return [root]
@@ -157,12 +160,24 @@ function deriveSpans(trace: Trace): ProfSpan[] {
   const times = messages.map((m) => (m.timestamp ? Date.parse(m.timestamp) : Number.NaN))
   const hasTimestamps = times.every((t) => Number.isFinite(t))
   const metaTs = Date.parse(meta.timestamp)
-  const base = hasTimestamps ? Math.min(times[0], Number.isFinite(metaTs) ? metaTs : times[0]) : 0
-  const startOf = (i: number) => (hasTimestamps ? Math.max(times[i] - base, 0) : i * 1000)
+  const base = hasTimestamps ? Math.min(...times, ...(Number.isFinite(metaTs) ? [metaTs] : [])) : 0
+  const starts: number[] = []
+  let latestStart = 0
+  for (const [i, time] of times.entries()) {
+    const rawStart = hasTimestamps ? Math.max(time - base, 0) : i * 1000
+    // Captured timestamps can move backwards due to clock skew or async log
+    // flushing. Preserve source order in the timeline by clamping each start
+    // to the preceding displayed start instead of sorting messages by time.
+    latestStart = Math.max(latestStart, rawStart)
+    starts.push(latestStart)
+  }
+  const startOf = (i: number) => starts[i]
   const durationOf = (i: number) => {
     const explicit = messages[i].durationMs
-    if (explicit !== undefined && Number.isFinite(explicit)) return Math.max(explicit, 1)
-    if (hasTimestamps && i + 1 < messages.length) return Math.max(times[i + 1] - times[i], 1)
+    if (explicit !== undefined && Number.isFinite(explicit)) return Math.max(explicit, 0)
+    if (hasTimestamps) {
+      return i + 1 < messages.length ? Math.max(starts[i + 1] - starts[i], 0) : 0
+    }
     return 1000
   }
 
@@ -228,7 +243,7 @@ function deriveSpans(trace: Trace): ProfSpan[] {
     const b = bounds.get(turn.id)
     if (!b) continue
     turn.startMs = b.start
-    turn.durationMs = Math.max(b.end - b.start, 1)
+    turn.durationMs = Math.max(b.end - b.start, 0)
   }
   root.startMs = 0
   root.durationMs = Math.max(

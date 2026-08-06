@@ -1,5 +1,7 @@
 import { encodeFilterSet } from '@shared/filter/parse'
+import { recordedCheckpoint } from '@shared/schema/provenance'
 import type { TraceSummary } from '@shared/schema/types'
+import { runOf } from '@shared/stats/evolution'
 import { useEffect, useMemo, useState } from 'react'
 import { useTrace, useTraces } from '../../api/hooks'
 import { EmptyState, LoadingState } from '../common/EmptyState'
@@ -12,22 +14,32 @@ import { TraceView } from '../trace/TraceView'
 const PER_RUN_LIMIT = 1000
 
 interface StepGroup {
-  step: number
+  step: number | null
   count: number
   avgScore: number | null
   rollouts: TraceSummary[]
 }
 
-/** Group one run's rollouts by checkpoint step, ascending; avg over scored rollouts only. */
+/** A direct trace deep link is safe to render only under its own run and instance header. */
+export function traceMatchesSelection(
+  trace: TraceSummary,
+  run: string,
+  instanceId: string,
+): boolean {
+  return trace.meta.instanceId === instanceId && runOf(trace) === run
+}
+
+/** Group by recorded checkpoint (unknown provenance last); avg over scored rollouts only. */
 export function groupByStep(items: readonly TraceSummary[]): StepGroup[] {
-  const byStep = new Map<number, TraceSummary[]>()
+  const byStep = new Map<number | null, TraceSummary[]>()
   for (const s of items) {
-    const g = byStep.get(s.meta.checkpointStep)
+    const step = recordedCheckpoint(s.meta)
+    const g = byStep.get(step)
     if (g) g.push(s)
-    else byStep.set(s.meta.checkpointStep, [s])
+    else byStep.set(step, [s])
   }
   return [...byStep.entries()]
-    .sort((a, b) => a[0] - b[0])
+    .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a - b))
     .map(([step, rollouts]) => {
       const scores = rollouts.map((r) => r.stats.score).filter((v): v is number => v !== null)
       return {
@@ -110,8 +122,9 @@ export function RunColumn({
   const total = totalOf(query.data)
   const groups = useMemo(() => groupByStep(items), [items])
 
-  const selectedStep = items.find((s) => s.meta.traceId === selectedTraceId)?.meta.checkpointStep
-  const [open, setOpen] = useState<Set<number>>(() => new Set())
+  const selected = items.find((s) => s.meta.traceId === selectedTraceId)
+  const selectedStep = selected === undefined ? undefined : recordedCheckpoint(selected.meta)
+  const [open, setOpen] = useState<Set<number | null>>(() => new Set())
   // Auto-expand the group holding the current selection (default: all collapsed).
   useEffect(() => {
     if (selectedStep !== undefined) {
@@ -124,9 +137,16 @@ export function RunColumn({
   // Once a trace is picked, collapse the rollout list so the trace view fills
   // the column (reopen via the run header to switch rollouts).
   useEffect(() => {
-    if (selectedTraceId) setShowRollouts(false)
+    setShowRollouts(!selectedTraceId)
   }, [selectedTraceId])
   const trace = useTrace(selectedTraceId || undefined)
+  const selectedTraceIsValid =
+    trace.data !== undefined && traceMatchesSelection(trace.data, run, instanceId)
+
+  // A stale or edited URL must never label one run/instance's trace as another.
+  useEffect(() => {
+    if (selectedTraceId && trace.data !== undefined && !selectedTraceIsValid) onSelect('')
+  }, [selectedTraceId, selectedTraceIsValid, trace.data, onSelect])
 
   return (
     <section
@@ -170,11 +190,12 @@ export function RunColumn({
           >
             {groups.map((g) => {
               const isOpen = open.has(g.step)
+              const stepKey = g.step === null ? 'unavailable' : String(g.step)
               return (
-                <li key={g.step} className="rounded-md border border-slate-200 bg-white">
+                <li key={stepKey} className="rounded-md border border-slate-200 bg-white">
                   <button
                     type="button"
-                    data-testid={`step-header-${run}-${g.step}`}
+                    data-testid={`step-header-${run}-${stepKey}`}
                     onClick={() =>
                       setOpen((s) => {
                         const next = new Set(s)
@@ -186,7 +207,7 @@ export function RunColumn({
                     className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
                   >
                     <span className="text-slate-400">{isOpen ? '▾' : '▸'}</span>
-                    Step {g.step}
+                    {g.step === null ? 'Step unavailable' : `Step ${g.step}`}
                     <span className="text-slate-400">· avg {formatScore(g.avgScore)}</span>
                     <span className="ml-auto text-slate-400">({g.count})</span>
                   </button>
@@ -218,7 +239,7 @@ export function RunColumn({
             <div className="p-4">
               <LoadingState label="Loading trace…" />
             </div>
-          ) : trace.data ? (
+          ) : trace.data && selectedTraceIsValid ? (
             <TraceView
               trace={trace.data}
               tab={tab}
@@ -228,6 +249,10 @@ export function RunColumn({
               onNavigate={onSelect}
               onClose={() => onSelect('')}
             />
+          ) : trace.data ? (
+            <div className="p-4 text-xs text-amber-700">
+              This trace does not belong to {run} / {instanceId}. Clearing the stale selection…
+            </div>
           ) : (
             <div className="p-4 text-xs text-red-600">Failed to load trace.</div>
           )}

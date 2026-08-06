@@ -101,6 +101,7 @@ describe('anthropicMessagesConnector.parse', () => {
       dataLocation: '/data/anthropic.json',
     })
     expect(trace.meta.traceId).toMatch(/^anthropic-[0-9a-f]{8}$/)
+    expect(trace.meta.extra).toMatchObject({ normalization: { checkpointStep: 'default' } })
   })
 
   it('honors is_error on tool_result and handles string content', () => {

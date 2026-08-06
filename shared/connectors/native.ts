@@ -1,3 +1,4 @@
+import { withDefaultCheckpointProvenance } from '../schema/provenance'
 import type { Message, TraceMeta, TraceStats, TraceStatus } from '../schema/types'
 import type { Connector, ParseContext, ParsedTrace, ParseResult } from './types'
 
@@ -13,7 +14,9 @@ function asString(value: unknown): string | undefined {
 }
 
 function asStatus(value: unknown): TraceStatus | undefined {
-  return value === 'completed' || value === 'failed' || value === 'executing' ? value : undefined
+  return value === 'completed' || value === 'failed' || value === 'executing' || value === 'unknown'
+    ? value
+    : undefined
 }
 
 function errorMessage(e: unknown): string {
@@ -36,6 +39,8 @@ function buildTrace(entry: Record<string, unknown>, ctx: ParseContext): ParsedTr
   for (const [key, value] of Object.entries(entry)) {
     if (!KNOWN_TOP_LEVEL.has(key)) extra[key] = value
   }
+  const hasSourceCheckpoint = typeof sourceMeta.checkpointStep === 'number'
+  const normalizedExtra = hasSourceCheckpoint ? extra : withDefaultCheckpointProvenance(extra)
   const meta: TraceMeta = {
     ...(sourceMeta as Partial<TraceMeta>),
     traceId,
@@ -43,12 +48,13 @@ function buildTrace(entry: Record<string, unknown>, ctx: ParseContext): ParsedTr
     component: asString(sourceMeta.component) ?? 'imported/native',
     status: asStatus(sourceMeta.status) ?? 'completed',
     timestamp: asString(sourceMeta.timestamp) ?? ctx.fallbackTimestamp ?? EPOCH,
-    checkpointStep: typeof sourceMeta.checkpointStep === 'number' ? sourceMeta.checkpointStep : 0,
-    split: sourceMeta.split === 'test' ? 'test' : 'train',
+    checkpointStep: hasSourceCheckpoint ? (sourceMeta.checkpointStep as number) : 0,
+    split:
+      sourceMeta.split === 'test' || sourceMeta.split === 'unknown' ? sourceMeta.split : 'train',
     sourceFormat: asString(sourceMeta.sourceFormat) ?? 'native',
     dataLocation: asString(sourceMeta.dataLocation) ?? ctx.sourcePath,
   }
-  if (Object.keys(extra).length > 0) meta.extra = extra
+  if (Object.keys(normalizedExtra).length > 0) meta.extra = normalizedExtra
   const warnings = Array.isArray(entry.warnings)
     ? entry.warnings.filter((w): w is string => typeof w === 'string')
     : []

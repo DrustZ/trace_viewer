@@ -6,10 +6,12 @@ import type {
   NeighborsResponse,
   TracesListResponse,
 } from '../../shared/schema/api'
+import { recordedCheckpoint } from '../../shared/schema/provenance'
 import type { TraceSummary } from '../../shared/schema/types'
 import { runOf } from '../../shared/stats/evolution'
 import { asyncHandler, firstParam, type RouteCtx } from './context'
 import { appliedSummaries } from './listParams'
+import { publicTrace, publicTraceSummary } from './publicView'
 
 const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 5000
@@ -86,7 +88,7 @@ export function tracesRoutes(ctx: RouteCtx): Router {
       Number.isFinite(limitRaw) && limitRaw >= 0 ? Math.min(limitRaw, MAX_LIMIT) : DEFAULT_LIMIT
     const offsetRaw = Number(firstParam(req.query.offset))
     const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0
-    const page = items.slice(offset, offset + limit)
+    const page = items.slice(offset, offset + limit).map(publicTraceSummary)
     if (firstParam(req.query.groupBy) === 'instance') {
       const groups = applyGroupAvgBounds(groupByInstance(page), req.query)
       res.json({ total, groups } satisfies GroupedTracesResponse)
@@ -101,7 +103,7 @@ export function tracesRoutes(ctx: RouteCtx): Router {
       res.status(404).json({ error: 'trace not found' })
       return
     }
-    res.json(trace)
+    res.json(publicTrace(trace))
   })
 
   router.get(
@@ -150,6 +152,11 @@ export function tracesRoutes(ctx: RouteCtx): Router {
     }
     // Same instance + step within the SAME RUN only — the same instanceId can
     // exist in several runs and cross-run rollouts are not siblings.
+    const checkpoint = recordedCheckpoint(trace.meta)
+    if (checkpoint === null) {
+      res.json([])
+      return
+    }
     const run = runOf(trace)
     const siblings = ctx.store
       .list()
@@ -157,11 +164,11 @@ export function tracesRoutes(ctx: RouteCtx): Router {
         (s) =>
           s.meta.traceId !== trace.meta.traceId &&
           s.meta.instanceId === trace.meta.instanceId &&
-          s.meta.checkpointStep === trace.meta.checkpointStep &&
+          recordedCheckpoint(s.meta) === checkpoint &&
           runOf(s) === run,
       )
       .sort(scoreDescNullsLast)
-    res.json(siblings)
+    res.json(siblings.map(publicTraceSummary))
   })
 
   return router
