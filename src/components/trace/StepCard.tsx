@@ -35,6 +35,26 @@ function firstToolCall(unit: StepUnit): ToolCall | undefined {
   return undefined
 }
 
+/** Known agent variants get stable colors; anything else falls back to slate. */
+const AGENT_CHIP_CLS: Record<string, string> = {
+  alpha: 'bg-violet-100 text-violet-700',
+  beta: 'bg-sky-100 text-sky-700',
+  human: 'bg-amber-100 text-amber-800',
+}
+
+/**
+ * Distinct metadata.agentType values across the step's messages (multi-agent
+ * transcripts label who produced each assistant message: alpha / beta / human).
+ */
+function agentTypes(unit: StepUnit): string[] {
+  const seen: string[] = []
+  for (const m of unit.messages) {
+    const agent = m.metadata?.agentType
+    if (typeof agent === 'string' && agent !== '' && !seen.includes(agent)) seen.push(agent)
+  }
+  return seen
+}
+
 /** One response piece: a commentary message's tool call(s) or the final text. */
 function ResponsePiece({
   message,
@@ -192,6 +212,17 @@ export function StepCard({
           <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
             Assistant
           </span>
+          {agentTypes(unit).map((agent) => (
+            <span
+              key={agent}
+              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                AGENT_CHIP_CLS[agent] ?? 'bg-slate-100 text-slate-600'
+              }`}
+              data-testid="agent-chip"
+            >
+              {agent}
+            </span>
+          ))}
           {number !== undefined && (
             <span className="font-mono text-[10px] text-slate-400" data-testid="message-number">
               #{number}

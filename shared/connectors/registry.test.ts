@@ -12,6 +12,7 @@ const exampleFixtures: Record<string, string> = {
   'openai-chat-sample.json': 'openai-chat',
   'openai-responses-sample.json': 'openai-responses',
   'anthropic-messages-sample.json': 'anthropic-messages',
+  'agent-conversation-sample.json': 'agent-conversation',
   'qwen-messages-sample.json': 'qwen-generic',
   'simple-role-content.json': 'qwen-generic',
   'harmony-sample.txt': 'harmony',
@@ -36,6 +37,7 @@ describe('registry', () => {
       'openai-chat',
       'openai-responses',
       'anthropic-messages',
+      'agent-conversation',
       'qwen-generic',
       'harmony',
     ])

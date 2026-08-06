@@ -1,3 +1,4 @@
+import { agentConversationConnector } from './agentConversation'
 import { anthropicMessagesConnector } from './anthropicMessages'
 import { harmonyConnector } from './harmony'
 import { nativeConnector } from './native'
@@ -14,6 +15,7 @@ export const connectors: Connector[] = [
   openaiChatConnector,
   openaiResponsesConnector,
   anthropicMessagesConnector,
+  agentConversationConnector,
   qwenGenericConnector,
   harmonyConnector,
 ]

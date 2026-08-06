@@ -1,0 +1,88 @@
+{
+  "conversation": [
+    {
+      "role": "user",
+      "content": "Hi, I want a refund for order order_001 — one item arrived broken.",
+      "agent_type": "user",
+      "timestamp": 1769507040.394264,
+      "tool_calls": [],
+      "tool_call_id": null,
+      "tool_name": null
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "agent_type": "beta",
+      "timestamp": 1769507052.11002,
+      "tool_calls": [
+        {
+          "id": "call_example001",
+          "name": "get_order_details",
+          "arguments": { "order_id": "order_001" }
+        }
+      ],
+      "tool_call_id": null,
+      "tool_name": null
+    },
+    {
+      "role": "tool",
+      "content": "{'order_id': 'order_001', 'status': 'delivered', 'items': [{'sku': 'mug-11oz', 'qty': 2}], 'total': 24.0}",
+      "agent_type": null,
+      "timestamp": 1769507052.110412,
+      "tool_calls": [],
+      "tool_call_id": "call_example001",
+      "tool_name": "get_order_details"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "agent_type": "beta",
+      "timestamp": 1769507061.500001,
+      "tool_calls": [
+        {
+          "id": "call_example002",
+          "name": "issue_refund",
+          "arguments": { "order_id": "order_001", "amount": 12.0 }
+        }
+      ],
+      "tool_call_id": null,
+      "tool_name": null
+    },
+    {
+      "role": "tool",
+      "content": "Error: Unable to issue refund: not_eligible",
+      "agent_type": null,
+      "timestamp": 1769507061.500533,
+      "tool_calls": [],
+      "tool_call_id": "call_example002",
+      "tool_name": "issue_refund"
+    },
+    {
+      "role": "assistant",
+      "content": "I couldn't process the refund automatically, so I'm bringing in a human agent to help.",
+      "agent_type": "beta",
+      "timestamp": 1769507070.220144,
+      "tool_calls": [],
+      "tool_call_id": null,
+      "tool_name": null
+    },
+    {
+      "role": "assistant",
+      "content": "Hi, this is a support specialist. I've reviewed your order and issued the $12.00 refund manually — you'll see it within 3 business days.",
+      "agent_type": "human",
+      "timestamp": 1769507102.87345,
+      "tool_calls": [],
+      "tool_call_id": null,
+      "tool_name": null
+    },
+    {
+      "role": "user",
+      "content": "Great, thank you! <HANGUP>",
+      "agent_type": "user",
+      "timestamp": 1769507118.03411,
+      "tool_calls": [],
+      "tool_call_id": null,
+      "tool_name": null
+    }
+  ]
+}

@@ -20,6 +20,7 @@ you import them yourself.
 | `openai-chat-sample.json` | `openai-chat` | Chat Completions with `tool_calls` + a `tool` reply and `usage`. |
 | `openai-responses-sample.json` | `openai-responses` | Responses API `output`: reasoning → function_call → function_call_output → message. |
 | `anthropic-messages-sample.json` | `anthropic-messages` | Messages API content blocks: `text` + `tool_use`, and a `tool_result` in a user turn, plus top-level `system`. |
+| `agent-conversation-sample.json` | `agent-conversation` | `{conversation: [...]}` support transcript: per-message `agent_type` (beta → human escalation), object tool-call arguments, unix-float timestamps, an `Error:` tool result. |
 | `qwen-messages-sample.json` | `qwen-generic` | Bare message list with Qwen/DeepSeek `reasoning_content` (split into analysis + final). |
 | `simple-role-content.json` | `qwen-generic` | Minimal bare `[{role, content}]` array — the permissive fallback. |
 | `harmony-sample.txt` | `harmony` | Harmony token text with `<|channel|>` tags and a tool call/result. |

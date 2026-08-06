@@ -63,7 +63,7 @@ BrowseComp) with realistic failure modes: tool timeouts + retries, malformed too
 truncation, budget exhaustion, cancelled runs, wrong answers — plus one 3.5 MB / 400-turn
 stress trace and one deliberately corrupt file (the scanner must survive it).
 
-Six **connectors** parse input formats (auto-detected; adding a format = one file +
+Seven **connectors** parse input formats (auto-detected; adding a format = one file +
 one registry entry in `shared/connectors/`):
 
 | Connector | Input |
@@ -72,6 +72,7 @@ one registry entry in `shared/connectors/`):
 | `openai-chat` | OpenAI Chat Completions JSON |
 | `openai-responses` | OpenAI Responses API JSON (`output` items, reasoning, function calls) |
 | `anthropic-messages` | Anthropic Messages API JSON (content blocks, `tool_use`/`tool_result`, extended `thinking`) |
+| `agent-conversation` | `{conversation: [...]}` multi-agent support transcripts (per-message `agent_type`, object tool-call args, unix timestamps; salvages truncated files) |
 | `qwen-generic` | Qwen/DeepSeek `reasoning_content`, or a bare `[{role, content}]` list |
 | `harmony` | raw OpenAI-harmony token text (`<\|start\|>…<\|message\|>…<\|end\|>`) |
 
