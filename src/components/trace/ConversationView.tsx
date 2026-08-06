@@ -4,6 +4,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { CompactMode } from './CompactMode'
 import { ConversationToolbar } from './ConversationToolbar'
 import { buildCallNameMap, MessageCard } from './MessageCard'
+import {
+  orderMessagesByTimestamp,
+  timestampedMessageCount,
+  timestampRegressionCount,
+} from './messageOrder'
 import { StepCard } from './StepCard'
 import { TimelineMode } from './TimelineMode'
 import { TraceSummaryPanel } from './TraceSummaryPanel'
@@ -35,6 +40,17 @@ function readCompact(): boolean {
   }
 }
 
+function recordedRegressionCount(trace: Trace): number {
+  const dataQuality = trace.meta.extra?.dataQuality
+  if (typeof dataQuality === 'object' && dataQuality !== null) {
+    const value = (dataQuality as Record<string, unknown>).timestampRegressions
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      return Math.floor(value)
+    }
+  }
+  return timestampRegressionCount(trace.messages)
+}
+
 export function ConversationView({ trace }: { trace: Trace }) {
   const parentRef = useRef<HTMLDivElement>(null)
   const headRef = useRef<HTMLDivElement>(null)
@@ -61,7 +77,31 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const [matchPos, setMatchPos] = useState(0)
   const [timelineOpen, setTimelineOpen] = useState(readTimelineOpen)
   const [compact, setCompact] = useState(readCompact)
-  const messages = trace.messages
+  const traceOrderKey = `${trace.meta.sourceFormat}:${trace.meta.dataLocation ?? ''}:${trace.meta.traceId}`
+  const regressionCount = useMemo(() => recordedRegressionCount(trace), [trace])
+  const timestampCount = useMemo(() => timestampedMessageCount(trace.messages), [trace.messages])
+  const timeOrderAvailable = timestampCount >= 2
+  const untimestampedMessageCount = trace.messages.length - timestampCount
+  // A complete trace with backwards timestamps opens in its readable projection.
+  // Partial-timestamp traces stay in source order unless the user opts in.
+  const defaultTimeOrdered =
+    timeOrderAvailable && regressionCount > 0 && untimestampedMessageCount === 0
+  const [timeOrderOverride, setTimeOrderOverride] = useState<{
+    traceKey: string
+    enabled: boolean
+  } | null>(null)
+  const timeOrdered =
+    timeOrderAvailable &&
+    (timeOrderOverride?.traceKey === traceOrderKey ? timeOrderOverride.enabled : defaultTimeOrdered)
+  const messages = useMemo(
+    () => (timeOrdered ? orderMessagesByTimestamp(trace.messages) : trace.messages),
+    [timeOrdered, trace.messages],
+  )
+  const displayTrace = useMemo(
+    () => (messages === trace.messages ? trace : { ...trace, messages }),
+    [messages, trace],
+  )
+  const displayOrderKey = `${traceOrderKey}:${timeOrdered ? 'time' : 'source'}`
 
   const units = useMemo(() => buildUnits(messages), [messages])
 
@@ -196,6 +236,12 @@ export function ConversationView({ trace }: { trace: Trace }) {
     })
   }, [])
 
+  const toggleTimeOrder = useCallback(() => {
+    if (!timeOrderAvailable) return
+    setTimeOrderOverride({ traceKey: traceOrderKey, enabled: !timeOrdered })
+    parentRef.current?.scrollTo({ top: 0 })
+  }, [timeOrderAvailable, timeOrdered, traceOrderKey])
+
   // The summary panel collapses/expands with local state, so track its size directly.
   // Re-runs when compact mode toggles: the list DOM unmounts/remounts across the switch.
   useLayoutEffect(() => {
@@ -211,6 +257,7 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const virtualizer = useVirtualizer({
     count: units.length,
     getScrollElement: () => parentRef.current,
+    getItemKey: (index) => units[index]?.id ?? index,
     estimateSize: () => 120,
     overscan: 8,
     scrollMargin: listOffset,
@@ -278,12 +325,17 @@ export function ConversationView({ trace }: { trace: Trace }) {
         onToggleTimeline={toggleTimeline}
         compact={compact}
         onToggleCompact={toggleCompact}
+        timeOrdered={timeOrdered}
+        onToggleTimeOrder={toggleTimeOrder}
+        timeOrderAvailable={timeOrderAvailable}
+        timestampRegressionCount={regressionCount}
+        untimestampedMessageCount={untimestampedMessageCount}
       />
       <div className="relative min-h-0 flex-1">
         {compact ? (
-          <CompactMode trace={trace} />
+          <CompactMode key={`compact:${displayOrderKey}`} trace={displayTrace} />
         ) : timelineOpen ? (
-          <TimelineMode trace={trace} />
+          <TimelineMode key={`timeline:${displayOrderKey}`} trace={displayTrace} />
         ) : (
           <>
             {/* relative so listRef.offsetTop measures against the scroll container */}

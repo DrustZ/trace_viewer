@@ -7,12 +7,14 @@ function ToggleButton({
   onClick,
   testId,
   disabled = false,
+  title,
   children,
 }: {
   pressed: boolean
   onClick: () => void
   testId: string
   disabled?: boolean
+  title?: string
   children: string
 }) {
   return (
@@ -22,6 +24,7 @@ function ToggleButton({
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className={`h-7 rounded border px-2 text-xs font-medium transition-colors disabled:opacity-40 ${
         pressed
           ? 'border-slate-700 bg-slate-800 text-white'
@@ -70,6 +73,11 @@ export function ConversationToolbar({
   onToggleTimeline,
   compact,
   onToggleCompact,
+  timeOrdered,
+  onToggleTimeOrder,
+  timeOrderAvailable,
+  timestampRegressionCount,
+  untimestampedMessageCount,
 }: {
   /** Receives the debounced query; must be referentially stable (e.g. a setState). */
   onQueryChange: (query: string) => void
@@ -87,6 +95,12 @@ export function ConversationToolbar({
   /** Compact three-pane reading mode; search/expand/timeline controls are disabled while on. */
   compact: boolean
   onToggleCompact: () => void
+  /** Display projection only; canonical messages and source-derived # labels stay unchanged. */
+  timeOrdered: boolean
+  onToggleTimeOrder: () => void
+  timeOrderAvailable: boolean
+  timestampRegressionCount: number
+  untimestampedMessageCount: number
 }) {
   const [value, setValue] = useState('')
 
@@ -101,6 +115,15 @@ export function ConversationToolbar({
   // Both focus modes replace the searchable virtualized list, so search + expand
   // controls are inert there.
   const busy = compact || timelineOpen
+  const timeOrderTitle = !timeOrderAvailable
+    ? 'Time order needs at least two valid message timestamps'
+    : timeOrdered
+      ? `Showing messages by recorded time${
+          untimestampedMessageCount > 0
+            ? ` within timestamped runs; ${untimestampedMessageCount} untimestamped message(s) stay anchored`
+            : ''
+        }. Message # numbers remain in source order.`
+      : 'Sort messages by recorded time. Message # numbers remain in source order.'
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-1.5">
@@ -158,6 +181,25 @@ export function ConversationToolbar({
         <ActionButton onClick={onCollapseAll} testId="collapse-all" disabled={busy}>
           Collapse all
         </ActionButton>
+        <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
+        <ToggleButton
+          pressed={timeOrdered}
+          onClick={onToggleTimeOrder}
+          testId="toggle-time-order"
+          disabled={!timeOrderAvailable}
+          title={timeOrderTitle}
+        >
+          Time order
+        </ToggleButton>
+        {timestampRegressionCount > 0 && (
+          <span
+            data-testid="timestamp-regressions"
+            title={`${timestampRegressionCount} backward timestamp jump(s) in source order`}
+            className="rounded bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] text-amber-700"
+          >
+            {timestampRegressionCount} regression{timestampRegressionCount === 1 ? '' : 's'}
+          </span>
+        )}
         <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
         <ToggleButton
           pressed={timelineOpen}

@@ -56,10 +56,18 @@ describe('agentConversationConnector.parse', () => {
     ])
     // Unix float seconds → ISO 8601.
     expect(trace.messages[0].timestamp).toBe('2026-01-27T09:44:00.394Z')
-    // agent_type lands in message metadata on assistant messages.
-    expect(trace.messages[1].metadata).toEqual({ agentType: 'beta' })
-    expect(trace.messages[6].metadata).toEqual({ agentType: 'human' })
-    expect(trace.messages[0].metadata).toBeUndefined()
+    // agent_type and the higher-precision source timestamp are retained in metadata.
+    expect(trace.messages[1].metadata).toEqual({
+      agentType: 'beta',
+      sourceTimestampSeconds: 1769507052.11002,
+    })
+    expect(trace.messages[6].metadata).toEqual({
+      agentType: 'human',
+      sourceTimestampSeconds: 1769507102.87345,
+    })
+    expect(trace.messages[0].metadata).toEqual({
+      sourceTimestampSeconds: 1769507040.394264,
+    })
   })
 
   it('serializes object arguments and passes them through as parsedArguments', () => {
@@ -82,6 +90,7 @@ describe('agentConversationConnector.parse', () => {
     expect(trace.messages[2].metadata).toMatchObject({
       toolName: 'get_order_details',
       toolCallMatch: 'exact',
+      sourceTimestampSeconds: 1769507052.110412,
     })
     expect(trace.messages[4].toolResult).toEqual({
       toolCallId: 'call_example002',

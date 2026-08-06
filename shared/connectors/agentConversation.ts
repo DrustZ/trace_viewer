@@ -224,11 +224,15 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
     const role = raw.role
     const content = typeof raw.content === 'string' ? raw.content : ''
     const timestamp = toIso(raw.timestamp)
-    if (typeof raw.timestamp === 'number' && Number.isFinite(raw.timestamp)) {
-      if (previousTimestamp !== undefined && raw.timestamp < previousTimestamp) {
+    const sourceTimestampSeconds =
+      typeof raw.timestamp === 'number' && Number.isFinite(raw.timestamp)
+        ? raw.timestamp
+        : undefined
+    if (sourceTimestampSeconds !== undefined) {
+      if (previousTimestamp !== undefined && sourceTimestampSeconds < previousTimestamp) {
         timestampRegressions += 1
       }
-      previousTimestamp = raw.timestamp
+      previousTimestamp = sourceTimestampSeconds
     }
     if (role === 'assistant') {
       const agentType = typeof raw.agent_type === 'string' ? raw.agent_type : undefined
@@ -242,7 +246,14 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
         channel: 'final',
         content,
         ...(timestamp !== undefined ? { timestamp } : {}),
-        ...(agentType !== undefined ? { metadata: { agentType } } : {}),
+        ...(agentType !== undefined || sourceTimestampSeconds !== undefined
+          ? {
+              metadata: {
+                ...(agentType !== undefined ? { agentType } : {}),
+                ...(sourceTimestampSeconds !== undefined ? { sourceTimestampSeconds } : {}),
+              },
+            }
+          : {}),
       }
       if (Array.isArray(raw.tool_calls) && raw.tool_calls.length > 0) {
         base.channel = 'commentary'
@@ -287,6 +298,9 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
       if (isError) toolErrors += 1
       const metadata: Record<string, unknown> = { toolCallMatch: resolved.match }
       if (toolName !== undefined) metadata.toolName = toolName
+      if (sourceTimestampSeconds !== undefined) {
+        metadata.sourceTimestampSeconds = sourceTimestampSeconds
+      }
       if (resolved.sourceToolCallId !== undefined) {
         metadata.sourceToolCallId = resolved.sourceToolCallId
       }
@@ -307,10 +321,17 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
         role,
         content,
         ...(timestamp !== undefined ? { timestamp } : {}),
+        ...(sourceTimestampSeconds !== undefined ? { metadata: { sourceTimestampSeconds } } : {}),
       })
     } else {
       warnings.push(`message ${index + 1}: unknown role '${String(role)}', treated as user`)
-      messages.push({ id: '', role: 'user', content })
+      messages.push({
+        id: '',
+        role: 'user',
+        content,
+        ...(timestamp !== undefined ? { timestamp } : {}),
+        ...(sourceTimestampSeconds !== undefined ? { metadata: { sourceTimestampSeconds } } : {}),
+      })
     }
   })
 
@@ -320,7 +341,7 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
 
   if (timestampRegressions > 0) {
     warnings.push(
-      `${timestampRegressions} timestamp regression(s) found; source message order was preserved`,
+      `${timestampRegressions} timestamp regression(s) found in source order; normalized source sequence was retained`,
     )
   }
 
