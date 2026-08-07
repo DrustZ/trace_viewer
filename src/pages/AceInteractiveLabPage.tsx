@@ -265,6 +265,7 @@ export default function AceInteractiveLabPage() {
   )
   const checkpointBranchable = Boolean(
     checkpoints.data?.available &&
+      checkpoints.data.forkAvailable &&
       checkpoints.data.checkpoints.some((checkpoint) => checkpoint.branchable),
   )
 

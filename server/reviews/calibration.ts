@@ -137,6 +137,18 @@ export function computeCalibrationStats(
   }
 }
 
+/**
+ * Compare human vs judge verdicts directly instead of going through
+ * computeCalibrationStats, whose filters only admit calibration-mode records —
+ * assisted reviews carry the same judge snapshot and need the same flag.
+ */
 export function recordHasDisagreement(record: ReviewRecord): boolean {
-  return computeCalibrationStats([record]).disagreements.length > 0
+  const automatic = record.automaticSnapshot?.judgeVerdicts
+  if (!automatic) return false
+  return record.rubricReviews.some((humanReview) => {
+    if (humanReview.verdict === 'skip') return false
+    const automaticVerdict = automatic[humanReview.dimensionId]?.verdict
+    if (automaticVerdict !== 'pass' && automaticVerdict !== 'fail') return false
+    return humanReview.verdict !== automaticVerdict
+  })
 }

@@ -1,5 +1,7 @@
 import path from 'node:path'
 import express, { type ErrorRequestHandler, type Express } from 'express'
+import { AceAnalysisCoordinator, type AceAnalysisLoader } from './ace/analysisCoordinator'
+import { AceBridgeClient } from './ace/bridge'
 import { loadAceTaskCatalog } from './ace/taskCatalog'
 import {
   ACCESS_TOKEN_ENV,
@@ -9,7 +11,7 @@ import {
 } from './auth'
 import type { ReviewStore } from './reviews/reviewStore'
 import { createTraceStoreReviewSource } from './reviews/traceSource'
-import { aceRoutes } from './routes/ace'
+import { aceRoutes, resolveAceConfig } from './routes/ace'
 import { aceTasksRoutes, resolveAceTaskConfig } from './routes/aceTasks'
 import { aggregatesRoutes } from './routes/aggregates'
 import { aiFilterRoutes } from './routes/aiFilter'
@@ -49,14 +51,16 @@ export interface AppDeps {
   reviewStore?: ReviewStore
   /** Stable Calibration alias key override. Tests should inject a 32-byte Buffer. */
   reviewBlindSecret?: Buffer
+  /** Shared canonical production detector coordinator override for focused tests. */
+  aceAnalysisCoordinator?: AceAnalysisLoader
   /** Explicit override for focused tests. Undefined reads TRACE_VIEWER_ACCESS_TOKEN; null disables. */
   accessToken?: string | null
 }
 
-/** Malformed JSON bodies arrive as body-parser errors with a 4xx status; everything else is a 500. */
+/** Preserve explicit HTTP errors (including local bridge 5xx); unknown failures become a 500. */
 const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next) => {
   const status =
-    isRecord(err) && typeof err.status === 'number' && err.status >= 400 && err.status < 500
+    isRecord(err) && typeof err.status === 'number' && err.status >= 400 && err.status < 600
       ? err.status
       : 500
   res.status(status).json({ error: err instanceof Error ? err.message : 'internal error' })
@@ -74,6 +78,13 @@ export function createApp(deps: AppDeps = {}): Express {
     importDir: deps.importDir ?? 'data/imported',
   }
   const aceTaskProjectRoot = resolveAceTaskConfig().projectRoot
+  const aceConfig = resolveAceConfig()
+  const aceBridge = new AceBridgeClient({
+    projectRoot: aceConfig.projectRoot,
+    python: aceConfig.python,
+  })
+  const aceAnalysisCoordinator =
+    deps.aceAnalysisCoordinator ?? new AceAnalysisCoordinator(store, aceBridge)
   const accessToken = normalizeAccessToken(
     deps.accessToken === undefined ? process.env[ACCESS_TOKEN_ENV] : deps.accessToken,
   )
@@ -99,11 +110,12 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use(metaRoutes(ctx))
   app.use(dataRootsRoutes(ctx))
   app.use(eventsRoutes(ctx))
-  app.use(aceRoutes(ctx))
+  app.use(aceRoutes(ctx, aceConfig, aceBridge, undefined, aceAnalysisCoordinator))
   app.use(aceTasksRoutes(ctx))
   app.use(runsRoutes(ctx))
   app.use(
     tracesRoutes(ctx, {
+      analysisCoordinator: aceAnalysisCoordinator,
       loadTaskDefinitions: () =>
         loadAceTaskCatalog(aceTaskProjectRoot, store.list()).then((catalog) => catalog.tasks),
     }),
@@ -111,6 +123,7 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use(
     reviewsRoutes({
       traceSource: createTraceStoreReviewSource(store, {
+        analysisCoordinator: aceAnalysisCoordinator,
         loadTaskCatalog: () => loadAceTaskCatalog(aceTaskProjectRoot),
       }),
       reviewStore: deps.reviewStore,

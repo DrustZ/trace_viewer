@@ -187,6 +187,7 @@ describe('ACE Interactive Lab page', () => {
     mocks.checkpoints.mockReset().mockReturnValue({
       data: {
         available: true,
+        forkAvailable: true,
         historicalReplayAvailable: false,
         missing: [],
         checkpoints: [{ id: 0, phase: 'await_bot', branchable: true }],
@@ -269,6 +270,7 @@ describe('ACE Interactive Lab page', () => {
     mocks.checkpoints.mockReturnValue({
       data: {
         available: false,
+        forkAvailable: false,
         historicalReplayAvailable: false,
         missing: ['checkpoint archive', 'scenario/config snapshot'],
         checkpoints: [],

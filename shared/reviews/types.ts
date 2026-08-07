@@ -97,6 +97,21 @@ export interface AutomaticFailureSummary {
   toolCallId?: string
 }
 
+export type AutomaticDetectorAnalysis =
+  | {
+      status: 'available'
+      source: 'ace.detector_registry'
+    }
+  | {
+      status: 'unavailable'
+      source: 'ace.detector_registry'
+      reason:
+        | 'coordinator_not_configured'
+        | 'analysis_failed'
+        | 'not_loaded_for_current_source'
+        | 'trace_not_covered'
+    }
+
 /** Everything in this object is forbidden in an unlocked calibration response. */
 export interface AutomaticReviewContext {
   model?: string
@@ -106,6 +121,8 @@ export interface AutomaticReviewContext {
   judgeVerdicts?: Record<string, AutomaticRubricVerdict>
   detectorVerdicts?: Record<string, AutomaticRubricVerdict>
   failures?: AutomaticFailureSummary[]
+  /** Completeness gate for production-corpus automatic findings. */
+  detectorAnalysis?: AutomaticDetectorAnalysis
 }
 
 export interface ReviewDraft extends ReviewSubject, ReviewPayload {

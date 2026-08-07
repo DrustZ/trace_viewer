@@ -266,6 +266,11 @@ export function ReviewQueue({
                     {item.automatic.outcome}
                   </span>
                 ) : null}
+                {item.automatic?.detectorAnalysis?.status === 'unavailable' ? (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">
+                    detectors unavailable
+                  </span>
+                ) : null}
               </div>
             </button>
           </li>

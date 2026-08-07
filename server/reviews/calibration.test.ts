@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ReviewRecord } from '../../shared/reviews/types'
 import { reviewRecordKey } from '../../shared/reviews/types'
-import { computeCalibrationStats } from './calibration'
+import { computeCalibrationStats, recordHasDisagreement } from './calibration'
 
 function record(
   traceUid: string,
@@ -95,5 +95,18 @@ describe('calibration statistics', () => {
       kappa: null,
       kappaStatus: 'undefined_single_class',
     })
+  })
+
+  it('flags human/judge disagreement on assisted records too', () => {
+    expect(recordHasDisagreement(record('trace-1', 'pass', 'fail', { mode: 'assisted' }))).toBe(
+      true,
+    )
+    expect(recordHasDisagreement(record('trace-2', 'pass', 'pass', { mode: 'assisted' }))).toBe(
+      false,
+    )
+    expect(recordHasDisagreement(record('trace-3', 'fail', 'pass'))).toBe(true)
+    expect(
+      recordHasDisagreement(record('trace-4', 'fail', 'pass', { automaticSnapshot: undefined })),
+    ).toBe(false)
   })
 })

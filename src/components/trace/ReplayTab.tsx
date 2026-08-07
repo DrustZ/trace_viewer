@@ -570,6 +570,15 @@ export function ReplayTab({ trace }: { trace: Trace }) {
             )}
           </p>
         )}
+        {!checkpoints.data.forkAvailable ? (
+          <p
+            data-testid="checkpoint-fork-unavailable"
+            className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"
+          >
+            Fork unavailable: {missing.join(', ') || 'no safe branchable checkpoint'}. State-only
+            restore remains available when an archive is listed above.
+          </p>
+        ) : null}
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <label className="text-xs text-slate-600">
             Child run ID (optional)
@@ -600,7 +609,12 @@ export function ReplayTab({ trace }: { trace: Trace }) {
             <button
               type="button"
               onClick={() => fork('exact')}
-              disabled={!selected?.branchable || replay.isPending || costCapInvalid}
+              disabled={
+                !checkpoints.data.forkAvailable ||
+                !selected?.branchable ||
+                replay.isPending ||
+                costCapInvalid
+              }
               className="w-full rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
             >
               Fork exact config
@@ -655,6 +669,7 @@ export function ReplayTab({ trace }: { trace: Trace }) {
           type="button"
           onClick={() => fork('counterfactual')}
           disabled={
+            !checkpoints.data.forkAvailable ||
             !selected?.counterfactual_branchable ||
             replay.isPending ||
             costCapInvalid ||

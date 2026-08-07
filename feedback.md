@@ -4,6 +4,69 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 3 — 2026-08-06 23:50
+
+### 响应验证（ed00530 + analysisCoordinator，质量好的部分）
+
+- **盲评 secret 生命周期** ✅ 机器本地文件、`wx` first-writer-wins、损坏 fail-closed 不再生
+  （别名不会静默轮换）、client 只见 20-hex 截断 HMAC。
+- **ground truth 契约** ✅ 只有 trace-bound snapshot 算 authoritative（provenance whitelist +
+  scenario-id 相等 + digest 交叉验证）；current-catalog fallback 明确标 `reference` 且盲评模式
+  转为 `unavailable`，兑现了 README 的"不静默替换"承诺。
+- **校准统计面板盲名 bug** ✅ 在 filter 层修对了（assisted 才带 runId）。
+- **analyze 双发** ✅ `analysisCoordinator` 单飞正确（fingerprint 读后同步占位，无 interleave
+  窗口；失败不缓存；强制刷新排队）。
+- **formalMetrics 隔离** ✅ pass^k/passAt1/formalScheduledEpisodes 的 scored-gate fail-closed
+  写得很细（replay lineage、synthetic、mixed-kind 降级 unknown 都覆盖）。
+- **run control 校验** ✅ 严格 schema + 状态机合理（幂等 cancel、terminal fail-closed）。
+
+### 新发现（按优先级）
+
+1. **[HIGH] Python scoring probe 仍是每请求 spawn** — `server/ace/taskCatalog.ts`
+   `loadAceTaskCatalog` → `loadScoringContract` → spawn python（30s timeout），被
+   dashboard/tasks/traces/reviews 每请求调用，无 memo 无单飞；并发轮询=并发解释器。
+   缓存所需的失效原语你们都算好了（scenario `fileDigest`、grader/split sha256、
+   `catalogDigest`），就差用上：按 digest 键 memoize + in-flight dedup。这是第三轮重复提出。
+2. **[HIGH] analysisCoordinator 缓存命中 ≠ overlay 还在 store 里** —
+   fingerprint 刻意剥离 detector overlay，但 `replaceSource` 的 dedup 拿富化后的 stored trace
+   与 fresh parse 深比较——带 `evaluation`/aceFailures 的 production trace 永不相等，任何
+   rescan 都会替换对象并抹掉 overlay；fingerprint 未变 → `load()` 继续返回缓存 summary，
+   `X-ACE-Detector-Analysis: available` 却在说谎，dashboard 的 detector 失败计数静默清零。
+   修法：缓存命中时校验 overlay 仍已应用，或 `replaceSource` dedup 比较剥离 overlay 后的形态。
+3. **[MEDIUM] `analyzeUntilStable` 无上限重试** — `while(true)` 逢 fingerprint 漂移就重跑
+   10 分钟 bridge job，连续扫描抖动期间 HTTP 请求悬死、analyze 背靠背永动。加迭代上限+背压；
+   `waitForStableScan` 同样无 ceiling。
+4. **[MEDIUM] control 授权是 TOCTOU 快照** — `batchesWithTraceUids()` 读清单后才
+   `bridge.call('control')`，并发 pause/cancel 都过校验、竞态到 bridge；run 完成后仍可收到
+   control。viewer 侧只是 advisory——确认 Python harness 侧有再校验，或加 per-run in-flight 锁。
+5. **[MEDIUM] headline 指标无 formal gate** — `passRateExecuted`/escalation matrix 只靠默认
+   选择隔离 debug run；显式选中 debug/counterfactual run 会把它的结果混进读起来像 formal 的
+   字段且响应里无任何标记。建议响应里带 `informal: true` 或前端标注。另外所有 pass rate 均
+   为点估计（`scenarioDenominator` 已暴露，可考虑 server 端加 Wilson 区间）。
+6. **[LOW] runCatalog `schema_version` 缺失默认 scored** — 不合规 producer manifest 被当
+   formal；queued 且无 trace 的 run 的 `scheduledEpisodes` 计入 formalScheduledEpisodes。
+7. **[LOW] 重复 `batch_id` 跨目录** — control 端点 `.find` 撞第一个（按 updatedAt），
+   lifecycle 校验可能对着错误的 manifest。
+8. **[LOW] detectorAnalysis map 键不一致** — map 用 `summary.meta.traceUid ?? traceId`，
+   查找用 `identity.traceUid`；uid 只在 identity 里的 production trace 会 503 且理由误导
+   （`coordinator_not_configured`）。fail-closed 无害，但排查体验差。
+9. **[LOW] 性能** — `productionAnalysisSourceFingerprint` 每次 `load()`/`statusForTrace`
+   把全部 production message canonical-JSON 一遍（缓存命中也 O(corpus) 哈希）；可用
+   `store.dataVersion` 做外层 key。`replaceSource` 的 per-file O(store) 扫描全量 rescan 是
+   O(n²)。
+10. **[LOW] reviews 队列排序比较器仍不一致**（Round 1 遗留）— `hasDisagreement`/`state` 的
+    `undefined` vs `false` 两个方向都返回 1，违反比较器契约，分页可重复/跳项。
+    （你们正在编辑 reviews.ts，顺手修下 `server/routes/reviews.ts` 的 comparator。）
+
+### 本轮 Claude 的直接修改（786 tests + tsc 全绿验证）
+
+1. `server/reviews/calibration.ts` — `recordHasDisagreement` 不再经过 calibration-only 的
+   filter，assisted 记录的人机分歧 flag 终于为真（Round 1 #遗留，+测试）。
+2. `src/components/review/ReviewPanel.tsx` — autosave 竞态双保险：timer 回调里检查
+   `submitInFlight`，提交成功后 `saveDraft.reset()`，不再出现"提交成功却弹 423/409 红错"。
+3. `server/store/traceStore.ts` — `replaceSource` dedup 守卫改为比较 uid 集合而非长度
+   （重复行折叠到同一 uid 时旧 uid 可能永不删除）。
+
 ## Round 2 — 2026-08-06 23:05
 
 ### Round 1 响应验证（codex 已修，确认质量好）

@@ -909,7 +909,7 @@ describe('ACE cockpit routes', () => {
         },
       ],
       capabilities: { exact_fork: true },
-      cockpit_fork: { missing: [] },
+      cockpit_fork: { available: true, missing: [] },
       source: {
         checkpoint_path: checkpointPath,
         sidecarPath: path.join(root, 'private.meta.json'),
@@ -923,6 +923,7 @@ describe('ACE cockpit routes', () => {
     expect(response.body).toMatchObject({
       traceUid,
       available: true,
+      forkAvailable: true,
       historicalReplayAvailable: false,
       checkpoints: [
         {
@@ -943,6 +944,28 @@ describe('ACE cockpit routes', () => {
     expect(bridge.calls[0]).toMatchObject({
       command: 'checkpoints',
       params: { checkpointPath },
+    })
+  })
+
+  it('keeps state-only restore available when checkpoint provenance cannot support a fork', async () => {
+    const { sourcePath, traceUid } = await addTrace('episode-restore-only', 'simulation', 'batch-a')
+    const checkpointPath = sourcePath.replace(/\.json$/, '.checkpoints.json')
+    await fs.writeFile(checkpointPath, '{}')
+    bridge.responses.set('checkpoints', {
+      checkpoints: [{ id: 0, phase: 'await_bot', message_count: 1, branchable: true }],
+      capabilities: { state_restore: true, exact_fork: false },
+      cockpit_fork: { available: false, missing: ['scenario snapshot'] },
+    })
+    const app = buildApp(store, bridge, config)
+
+    const response = await request(app).get(`/api/ace/traces/${traceUid}/checkpoints`)
+    expect(response.status).toBe(200)
+    expect(response.body).toMatchObject({
+      traceUid,
+      available: true,
+      forkAvailable: false,
+      missing: ['scenario snapshot'],
+      checkpoints: [{ id: 0, branchable: true }],
     })
   })
 
@@ -1151,7 +1174,11 @@ describe('ACE cockpit routes', () => {
 
     const inspect = await request(app).get(`/api/ace/traces/${trace.traceUid}/checkpoints`)
     expect(inspect.status).toBe(200)
-    expect(inspect.body).toMatchObject({ available: false, checkpoints: [] })
+    expect(inspect.body).toMatchObject({
+      available: false,
+      forkAvailable: false,
+      checkpoints: [],
+    })
 
     const replay = await request(app).post('/api/ace/replays').send({
       sourceTraceUid: trace.traceUid,

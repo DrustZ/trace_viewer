@@ -308,7 +308,23 @@ function automaticFor(
   latest: ReviewRecord | undefined,
 ) {
   if (subject.mode === 'calibration' && !latest) return undefined
-  return latest?.automaticSnapshot ?? candidate.automatic
+  const automatic = latest?.automaticSnapshot ?? candidate.automatic
+  const detectorAnalysis = candidate.automatic?.detectorAnalysis
+  return detectorAnalysis ? { ...automatic, detectorAnalysis } : automatic
+}
+
+function assertProductionDetectorAnalysis(
+  candidate: ReviewTraceCandidate,
+  operation: 'assisted_draft' | 'submit',
+): void {
+  if (candidate.trace.corpusId !== 'production') return
+  const status = candidate.automatic?.detectorAnalysis
+  if (status?.status === 'available') return
+  const reason = status?.status === 'unavailable' ? status.reason : 'coordinator_not_configured'
+  throw new ReviewStoreError(
+    `canonical production detector analysis is unavailable (${reason}); ${operation} is blocked`,
+    503,
+  )
 }
 
 /**
@@ -440,6 +456,9 @@ export function reviewsRoutes(deps: ReviewRoutesDeps): Router {
       try {
         const request = parseSaveDraftRequest(req.body)
         const canonicalSubject = canonicalSubjectForRequest(request.subject, candidate, blindSecret)
+        if (canonicalSubject.mode === 'assisted') {
+          assertProductionDetectorAnalysis(candidate, 'assisted_draft')
+        }
         assertReviewReferences(canonicalSubject, request.review, candidate)
         const draft = await store.saveDraft(
           canonicalSubject,
@@ -466,6 +485,7 @@ export function reviewsRoutes(deps: ReviewRoutesDeps): Router {
       try {
         const request = parseSubmitRequest(req.body)
         const canonicalSubject = canonicalSubjectForRequest(request.subject, candidate, blindSecret)
+        assertProductionDetectorAnalysis(candidate, 'submit')
         assertReviewReferences(canonicalSubject, request.review, candidate)
         const record = await store.submit(
           canonicalSubject,

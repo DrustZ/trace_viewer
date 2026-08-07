@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { setTimeout as delay } from 'node:timers/promises'
 import { Router } from 'express'
 import type {
   AceBatchSummary,
@@ -13,8 +12,7 @@ import type {
 import { parseAceRegressionScenarioSnapshot } from '../../shared/schema/aceRegression'
 import { ACE_RUN_CONTROL_ACTIONS, aceRunControlDecision } from '../../shared/schema/aceRunControl'
 import type { Trace } from '../../shared/schema/types'
-import { type AppliedAnalysisBundle, applyAceAnalysisBundle } from '../ace/analysisBundle'
-import { productionAnalysisSourceFingerprint } from '../ace/analysisSource'
+import { AceAnalysisCoordinator, type AceAnalysisLoader } from '../ace/analysisCoordinator'
 import { AceBridgeClient, type AceBridgeCommand, aceBridgeSourcePath } from '../ace/bridge'
 import { buildAceDashboard } from '../ace/dashboard'
 import { AceLaunchLineageStore } from '../ace/launchLineageStore'
@@ -28,7 +26,6 @@ import { AceRunCatalog } from '../ace/runCatalog'
 import { compareAceRunConfig } from '../ace/runConfigFidelity'
 import { loadAceTaskCatalog } from '../ace/taskCatalog'
 import { PROJECT_ROOT } from '../config/dataRoots'
-import { getScanProgress } from '../store/scan'
 import { asyncHandler, type RouteCtx } from './context'
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
@@ -369,58 +366,10 @@ export function aceRoutes(
   launchLineage: AceLaunchLineageStore = new AceLaunchLineageStore(
     path.join(PROJECT_ROOT, '.trace-viewer', 'ace-run-lineage.jsonl'),
   ),
+  analysisCoordinator: AceAnalysisLoader = new AceAnalysisCoordinator(ctx.store, bridge),
 ): Router {
   const router = Router()
-  let analysis: { sourceFingerprint: string; promise: Promise<AppliedAnalysisBundle> } | undefined
-  let analysisInFlight:
-    | { sourceFingerprint: string; promise: Promise<AppliedAnalysisBundle> }
-    | undefined
   const runCatalog = new AceRunCatalog()
-
-  const loadAnalysis = async (force = false): Promise<AppliedAnalysisBundle> => {
-    while (getScanProgress().scanning) await delay(50)
-    let sourceFingerprint = productionAnalysisSourceFingerprint(ctx.store)
-    if (!force && analysis?.sourceFingerprint === sourceFingerprint) return analysis.promise
-
-    // Never let an older source snapshot finish after and overwrite a newer
-    // detector overlay. Same-source callers share the current bridge request;
-    // changed-source callers wait, recompute, and then launch one fresh pass.
-    if (analysisInFlight) {
-      if (!force && analysisInFlight.sourceFingerprint === sourceFingerprint) {
-        return analysisInFlight.promise
-      }
-      try {
-        await analysisInFlight.promise
-      } catch {
-        // The caller below will retry against the latest production source.
-      }
-      while (getScanProgress().scanning) await delay(50)
-      sourceFingerprint = productionAnalysisSourceFingerprint(ctx.store)
-      if (!force && analysis?.sourceFingerprint === sourceFingerprint) return analysis.promise
-    }
-
-    const promise = (async () => {
-      const response = await bridge.call<{ bundle: unknown }>(
-        'analyze',
-        { corpusPath: '.', output: 'stdout' },
-        10 * 60 * 1000,
-      )
-      return applyAceAnalysisBundle(ctx.store, response.bundle)
-    })()
-    const entry = { sourceFingerprint, promise }
-    analysis = entry
-    analysisInFlight = entry
-    void promise.then(
-      () => {
-        if (analysisInFlight === entry) analysisInFlight = undefined
-      },
-      () => {
-        if (analysis === entry) analysis = undefined
-        if (analysisInFlight === entry) analysisInFlight = undefined
-      },
-    )
-    return promise
-  }
 
   // Task configs are intentionally read on every consuming request. The
   // sibling ACE worktree is live during local evaluation; pinning one Promise
@@ -678,8 +627,10 @@ export function aceRoutes(
       // cached load before taking the snapshot so a first-page request cannot
       // race and return a permanently detector-free aggregate. Simulation-only
       // dashboards still work if the optional Python analysis bridge is down.
+      let detectorAnalysisAvailable = false
       try {
-        await loadAnalysis()
+        await analysisCoordinator.load()
+        detectorAnalysisAvailable = true
       } catch {
         // `/api/ace/analysis` exposes the bridge error; core grade/runtime
         // aggregates remain useful and must not become unavailable with it.
@@ -688,6 +639,16 @@ export function aceRoutes(
         .then((catalog) => catalog.tasks)
         .catch(() => [])
       const batches = await batchesWithTraceUids()
+      if (detectorAnalysisAvailable) {
+        // Task/manifest reads above are asynchronous. Revalidate once at the
+        // projection boundary so a source change during those reads cannot
+        // produce a detector-free dashboard snapshot.
+        try {
+          await analysisCoordinator.load()
+        } catch {
+          // Keep the same core-browsing degradation contract as the first load.
+        }
+      }
       res.json(buildAceDashboard(ctx.store, runIds, tasks, batches, triagePage))
     }),
   )
@@ -695,14 +656,14 @@ export function aceRoutes(
   router.get(
     '/api/ace/analysis',
     asyncHandler(async (_req, res) => {
-      res.json(await loadAnalysis())
+      res.json(await analysisCoordinator.load())
     }),
   )
 
   router.post(
     '/api/ace/analysis/refresh',
     asyncHandler(async (_req, res) => {
-      res.json(await loadAnalysis(true))
+      res.json(await analysisCoordinator.load(true))
     }),
   )
 
@@ -931,6 +892,7 @@ export function aceRoutes(
         res.json({
           traceUid,
           available: false,
+          forkAvailable: false,
           historicalReplayAvailable,
           missing: ['durable source path', 'checkpoint archive'],
           checkpoints: [],
@@ -942,6 +904,7 @@ export function aceRoutes(
         res.json({
           traceUid,
           available: false,
+          forkAvailable: false,
           historicalReplayAvailable,
           missing: ['checkpoint archive', 'JSON episode source'],
           checkpoints: [],
@@ -954,6 +917,7 @@ export function aceRoutes(
         res.json({
           traceUid,
           available: false,
+          forkAvailable: false,
           historicalReplayAvailable,
           missing: ['checkpoint archive', 'scenario/config snapshot'],
           checkpoints: [],
@@ -967,6 +931,7 @@ export function aceRoutes(
       res.json({
         traceUid,
         available: true,
+        forkAvailable: fork.available === true,
         historicalReplayAvailable,
         missing: Array.isArray(fork.missing) ? fork.missing : [],
         checkpoints: Array.isArray(result.checkpoints) ? result.checkpoints : [],

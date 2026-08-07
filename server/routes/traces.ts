@@ -10,6 +10,7 @@ import type {
 import { recordedCheckpoint } from '../../shared/schema/provenance'
 import type { TraceSummary } from '../../shared/schema/types'
 import { runOf } from '../../shared/stats/evolution'
+import type { AceAnalysisLoader } from '../ace/analysisCoordinator'
 import { projectAceTraceDimensions } from '../ace/traceDimensions'
 import { asyncHandler, firstParam, type RouteCtx } from './context'
 import { appliedSummaries, appliedTraceSummaries } from './listParams'
@@ -100,6 +101,7 @@ function applyGroupAvgBounds(
 
 export interface TraceRouteDeps {
   loadTaskDefinitions?: () => Promise<readonly AceTaskDetail[]>
+  analysisCoordinator?: AceAnalysisLoader
 }
 
 export function tracesRoutes(ctx: RouteCtx, deps: TraceRouteDeps = {}): Router {
@@ -144,10 +146,40 @@ export function tracesRoutes(ctx: RouteCtx, deps: TraceRouteDeps = {}): Router {
     }),
   )
 
-  router.get('/api/traces/:id', (req, res) => {
-    const stored = resolveStored(ctx, req.params.id, res)
-    if (stored) res.json(publicTrace(stored.trace))
-  })
+  router.get(
+    '/api/traces/:id',
+    asyncHandler(async (req, res) => {
+      const id = String(req.params.id)
+      let stored = resolveStored(ctx, id, res)
+      if (!stored) return
+      if (stored.trace.meta.corpusId === 'production') {
+        if (!deps.analysisCoordinator) {
+          res.setHeader('X-ACE-Detector-Analysis', 'unavailable')
+          res.setHeader('X-ACE-Detector-Analysis-Reason', 'coordinator_not_configured')
+        } else {
+          try {
+            await deps.analysisCoordinator.load()
+            const traceUid = stored.trace.meta.traceUid ?? stored.trace.meta.traceId
+            const status = deps.analysisCoordinator.statusForTrace(traceUid)
+            res.setHeader('X-ACE-Detector-Analysis', status.status)
+            if (status.status === 'unavailable') {
+              res.setHeader('X-ACE-Detector-Analysis-Reason', status.reason)
+            }
+          } catch {
+            // Transcript browsing remains useful while the local detector bridge
+            // is unavailable, but the response must not imply analysis success.
+            res.setHeader('X-ACE-Detector-Analysis', 'unavailable')
+            res.setHeader('X-ACE-Detector-Analysis-Reason', 'analysis_failed')
+          }
+          // Detector application replaces the immutable trace projection in the
+          // store. Resolve again so this response cannot retain the pre-analysis object.
+          stored = resolveStored(ctx, id, res)
+          if (!stored) return
+        }
+      }
+      res.json(publicTrace(stored.trace))
+    }),
+  )
 
   router.get(
     '/api/traces/:id/raw',

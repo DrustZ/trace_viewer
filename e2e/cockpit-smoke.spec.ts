@@ -91,6 +91,7 @@ async function stubLocalApi(page: Page) {
       await fulfillJson(route, {
         traceUid: TRACE_UID,
         available: false,
+        forkAvailable: false,
         historicalReplayAvailable: true,
         missing: ['checkpoint archive', 'scenario snapshot'],
         checkpoints: [],

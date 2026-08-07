@@ -252,6 +252,30 @@ describe('applyAceAnalysisBundle', () => {
     })
   })
 
+  it('removes stale message anchors when a refreshed detector bundle has no findings', () => {
+    const store = new TraceStore()
+    const trace = store.upsert(
+      traceFixture({ traceId: 'production-refresh', corpusId: 'production' }),
+      '/private/data/production-refresh.json',
+    )
+    const traceUid = trace.meta.traceUid as string
+
+    applyAceAnalysisBundle(store, {
+      traces: {
+        'production-refresh': {
+          failures: [{ code: 'STALE_FINDING', severity: 'major', raw_index: 1 }],
+        },
+      },
+    })
+    expect(store.getFull(traceUid)?.messages[0].metadata?.aceFailures).toHaveLength(1)
+
+    applyAceAnalysisBundle(store, {
+      traces: { 'production-refresh': { failures: [] } },
+    })
+    expect(store.getFull(traceUid)?.evaluation?.failures).toEqual([])
+    expect(store.getFull(traceUid)?.messages[0].metadata?.aceFailures).toBeUndefined()
+  })
+
   it('does not attach production detector output to a simulation with the same source id', () => {
     const store = new TraceStore()
     store.upsert(

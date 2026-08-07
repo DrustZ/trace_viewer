@@ -1,4 +1,5 @@
 import type {
+  AutomaticDetectorAnalysis,
   AutomaticFailureSummary,
   AutomaticReviewContext,
   AutomaticRubricVerdict,
@@ -9,6 +10,7 @@ import type {
 } from '../../shared/reviews/types'
 import type { AceTaskDetail } from '../../shared/schema/aceTasks'
 import type { Trace, TraceSummary } from '../../shared/schema/types'
+import type { AceAnalysisLoader } from '../ace/analysisCoordinator'
 import type { AceTaskCatalog } from '../ace/taskCatalog'
 import type { TraceStore } from '../store/traceStore'
 import { sanitizeReviewGroundTruth, unavailableGroundTruth } from './groundTruth'
@@ -26,6 +28,8 @@ export interface ReviewTraceSource {
 export interface ReviewTraceSourceOptions {
   /** Fixed configs/scenarios catalog; failures degrade to no task ground truth. */
   loadTaskCatalog?: () => Promise<AceTaskCatalog>
+  /** Canonical production detector analysis shared with trace/dashboard routes. */
+  analysisCoordinator?: AceAnalysisLoader
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -367,6 +371,7 @@ function projectTrace(
   summary: TraceSummary,
   full: Trace,
   task: AceTaskDetail | undefined,
+  detectorAnalysis?: AutomaticDetectorAnalysis,
 ): ReviewTraceCandidate {
   const metaRecord = record(summary.meta)
   const fullRecord = record(full)
@@ -480,6 +485,7 @@ function projectTrace(
     ...(judgeVerdicts ? { judgeVerdicts } : {}),
     ...(detectorVerdicts ? { detectorVerdicts } : {}),
     ...(failures.length > 0 ? { failures } : {}),
+    ...(detectorAnalysis ? { detectorAnalysis } : {}),
   }
   const automaticPresent = Object.keys(automatic).length > 0
 
@@ -521,7 +527,72 @@ export function createTraceStoreReviewSource(
 ): ReviewTraceSource {
   let cachedVersion = -1
   let cachedCatalogDigest: string | null = null
+  let cachedAnalysisKey: string | null = null
   let cachedCandidates: Promise<ReviewTraceCandidate[]> | null = null
+
+  const detectorAnalysis = async (): Promise<{
+    byTraceUid: Map<string, AutomaticDetectorAnalysis>
+    key: string
+  }> => {
+    const productionSummaries = () =>
+      store.list().filter((summary) => summary.meta.corpusId === 'production')
+    const production = productionSummaries()
+    if (production.length === 0) return { byTraceUid: new Map(), key: 'none' }
+
+    const unavailable = (
+      reason: Extract<AutomaticDetectorAnalysis, { status: 'unavailable' }>['reason'],
+    ): AutomaticDetectorAnalysis => ({
+      status: 'unavailable',
+      source: 'ace.detector_registry',
+      reason,
+    })
+    if (!options.analysisCoordinator) {
+      return {
+        byTraceUid: new Map(
+          productionSummaries().map((summary) => [
+            summary.meta.traceUid ?? summary.meta.traceId,
+            unavailable('coordinator_not_configured'),
+          ]),
+        ),
+        key: 'unavailable:coordinator_not_configured',
+      }
+    }
+
+    try {
+      await options.analysisCoordinator.load()
+    } catch {
+      return {
+        byTraceUid: new Map(
+          productionSummaries().map((summary) => [
+            summary.meta.traceUid ?? summary.meta.traceId,
+            unavailable('analysis_failed'),
+          ]),
+        ),
+        key: 'unavailable:analysis_failed',
+      }
+    }
+
+    const byTraceUid = new Map<string, AutomaticDetectorAnalysis>()
+    for (const summary of store
+      .list()
+      .filter((candidate) => candidate.meta.corpusId === 'production')) {
+      const traceUid = summary.meta.traceUid ?? summary.meta.traceId
+      const status = options.analysisCoordinator.statusForTrace(traceUid)
+      byTraceUid.set(
+        traceUid,
+        status.status === 'available'
+          ? { status: 'available', source: 'ace.detector_registry' }
+          : unavailable(status.reason),
+      )
+    }
+    const key = [...byTraceUid]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([traceUid, status]) =>
+        status.status === 'available' ? `${traceUid}:available` : `${traceUid}:${status.reason}`,
+      )
+      .join('|')
+    return { byTraceUid, key }
+  }
 
   const tasks = async (): Promise<{
     byId: Map<string, AceTaskDetail>
@@ -536,10 +607,15 @@ export function createTraceStoreReviewSource(
   }
 
   const candidates = async (): Promise<ReviewTraceCandidate[]> => {
+    // Detector analysis runs last: once it resolves, projection below is
+    // synchronous, so a slow task-catalog read cannot leave us with a stale
+    // analysis snapshot for a source that changed in the meantime.
     const taskSnapshot = await tasks()
+    const analysisSnapshot = await detectorAnalysis()
     if (
       cachedVersion === store.dataVersion &&
       cachedCatalogDigest === taskSnapshot.digest &&
+      cachedAnalysisKey === analysisSnapshot.key &&
       cachedCandidates
     ) {
       return cachedCandidates
@@ -547,6 +623,7 @@ export function createTraceStoreReviewSource(
     const summaries = store.list()
     cachedVersion = store.dataVersion
     cachedCatalogDigest = taskSnapshot.digest
+    cachedAnalysisKey = analysisSnapshot.key
     cachedCandidates = Promise.resolve(
       summaries.flatMap((summary) => {
         const metaRecord = record(summary.meta)
@@ -562,7 +639,9 @@ export function createTraceStoreReviewSource(
           summary.meta.corpusId === 'simulation' && summary.meta.instanceId
             ? taskSnapshot.byId.get(summary.meta.instanceId)
             : undefined
-        return full ? [projectTrace(summary, full, task)] : []
+        return full
+          ? [projectTrace(summary, full, task, analysisSnapshot.byTraceUid.get(lookupId))]
+          : []
       }),
     )
     return cachedCandidates

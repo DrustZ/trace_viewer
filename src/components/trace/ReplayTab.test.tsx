@@ -66,6 +66,7 @@ function capability(overrides: Partial<AceCheckpointResponse> = {}): AceCheckpoi
   return {
     traceUid: 'production:abc123',
     available: false,
+    forkAvailable: false,
     historicalReplayAvailable: false,
     missing: ['checkpoint archive', 'scenario snapshot'],
     checkpoints: [],
@@ -271,6 +272,7 @@ describe('ReplayTab', () => {
       isError: false,
       data: capability({
         available: true,
+        forkAvailable: true,
         checkpoints: [
           {
             id: 7,
@@ -307,6 +309,41 @@ describe('ReplayTab', () => {
     expect(html).toContain('m-chronological-1')
     expect(html).toContain('Recorded lineage · checkpoint')
     expect(html).toContain('child-run')
+  })
+
+  it('keeps restore available but disables fork when trace-bound prerequisites are missing', () => {
+    const trace = makeTrace({ corpusId: 'simulation' })
+    aceMocks.checkpoints.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: capability({
+        available: true,
+        forkAvailable: false,
+        missing: ['scenario snapshot', 'config snapshot'],
+        checkpoints: [
+          {
+            id: 3,
+            phase: 'bot',
+            message_count: 1,
+            branchable: true,
+            counterfactual_branchable: true,
+          },
+        ],
+      }),
+    })
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ReplayTab trace={trace} />
+      </MemoryRouter>,
+    )
+
+    expect(html).toContain('Fork unavailable: scenario snapshot, config snapshot')
+    expect(html).toMatch(/>Restore snapshot \(no execution\)<\/button>/)
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Fork exact config<\/button>/)
+    expect(html).toMatch(
+      /<button[^>]*disabled=""[^>]*>Fork counterfactual · policy changed<\/button>/,
+    )
   })
 
   it('explains draft fidelity and exposes raw plus chronological prefix anchors', () => {

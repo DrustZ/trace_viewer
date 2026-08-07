@@ -137,6 +137,27 @@ const automaticFailureSchema = z
 
 const verdictMap = z.record(z.string(), automaticVerdictSchema)
 
+const detectorAnalysisSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      status: z.literal('available'),
+      source: z.literal('ace.detector_registry'),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal('unavailable'),
+      source: z.literal('ace.detector_registry'),
+      reason: z.enum([
+        'coordinator_not_configured',
+        'analysis_failed',
+        'not_loaded_for_current_source',
+        'trace_not_covered',
+      ]),
+    })
+    .strict(),
+])
+
 const automaticContextSchema = z
   .object({
     model: z.string().optional(),
@@ -146,6 +167,7 @@ const automaticContextSchema = z
     judgeVerdicts: verdictMap.optional(),
     detectorVerdicts: verdictMap.optional(),
     failures: z.array(automaticFailureSchema).optional(),
+    detectorAnalysis: detectorAnalysisSchema.optional(),
   })
   .strict()
 

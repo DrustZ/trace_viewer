@@ -191,8 +191,12 @@ export class TraceStore {
     // A batch heartbeat can ask the scanner to revisit sibling episode files.
     // Keep the existing objects/version when normalization produced no semantic change.
     const current = [...this.byUid.values()].filter((stored) => stored.sourcePath === sourcePath)
+    const nextUids = new Set(traces.map((trace) => trace.meta.traceUid as string))
+    // Compare uid SETS, not lengths: duplicate rows collapsing onto one uid can
+    // make lengths match while a previously stored uid was actually removed.
     if (
-      current.length === traces.length &&
+      current.length === nextUids.size &&
+      current.every((stored) => nextUids.has(stored.trace.meta.traceUid as string)) &&
       traces.every((trace) => {
         const traceUid = trace.meta.traceUid as string
         const stored = this.byUid.get(traceUid)
@@ -201,7 +205,6 @@ export class TraceStore {
     ) {
       return traces
     }
-    const nextUids = new Set(traces.map((trace) => trace.meta.traceUid as string))
     const removed: { traceUid: string; runId?: string }[] = []
     for (const [traceUid, stored] of this.byUid) {
       if (stored.sourcePath !== sourcePath || nextUids.has(traceUid)) continue
@@ -234,13 +237,14 @@ export class TraceStore {
   ): Trace | undefined {
     const stored = this.byUid.get(traceUid)
     if (!stored) return undefined
-    const hasMessageAnchors = evaluation.failures.some(
-      (failure) =>
-        failure.messageId !== undefined ||
-        failure.rawIndex !== undefined ||
-        failure.chronologicalIndex !== undefined,
-    )
-    const messages = hasMessageAnchors
+    const refreshMessageAnchors =
+      evaluation.failures.some(
+        (failure) =>
+          failure.messageId !== undefined ||
+          failure.rawIndex !== undefined ||
+          failure.chronologicalIndex !== undefined,
+      ) || stored.trace.messages.some((message) => message.metadata?.aceFailures !== undefined)
+    const messages = refreshMessageAnchors
       ? stored.trace.messages.map((message, index) => {
           const anchored = evaluation.failures.filter(
             (failure) =>
@@ -265,7 +269,10 @@ export class TraceStore {
           } else {
             delete metadata.aceFailures
           }
-          return { ...message, ...(Object.keys(metadata).length > 0 ? { metadata } : {}) }
+          const { metadata: _previousMetadata, ...messageWithoutMetadata } = message
+          return Object.keys(metadata).length > 0
+            ? { ...messageWithoutMetadata, metadata }
+            : messageWithoutMetadata
         })
       : stored.trace.messages
     const trace: Trace = {

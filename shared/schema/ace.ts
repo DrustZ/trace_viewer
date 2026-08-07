@@ -237,7 +237,10 @@ export interface AceCheckpointSummary {
 
 export interface AceCheckpointResponse {
   traceUid: string
+  /** Archive exists and can be restored without executing models/tools. */
   available: boolean
+  /** Safe state plus trace-bound scenario/config provenance supports a child fork. */
+  forkAvailable: boolean
   historicalReplayAvailable: boolean
   missing: string[]
   checkpoints: AceCheckpointSummary[]

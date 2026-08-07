@@ -238,13 +238,16 @@ export function ReviewPanel({
       setEditingRevision(false)
       setRevealedAutomatic(response.automatic)
       setDirty(false)
+      // An autosave that raced this submit lost by design (423/409); its error
+      // must not be shown over a successful "Submitted and locked".
+      saveDraft.reset()
       onSubmitted?.(response.record)
     } catch {
       // The mutation exposes the error inline and the review remains editable.
     } finally {
       submitInFlight.current = false
     }
-  }, [locked, nextRevision, onSubmitted, payload, subject, submitReview])
+  }, [locked, nextRevision, onSubmitted, payload, saveDraft.reset, subject, submitReview])
 
   const goNext = useCallback(async (): Promise<void> => {
     if (!onNext || nextInFlight.current) return
@@ -261,6 +264,9 @@ export function ReviewPanel({
     if (!dirty || !payload || locked) return
     const version = editVersion.current
     const timer = window.setTimeout(() => {
+      // A submit in flight will append and lock the final; a late autosave
+      // would land second and surface a spurious 423/409 after success.
+      if (submitInFlight.current) return
       void saveDraft
         .mutateAsync({
           subject,
@@ -451,6 +457,16 @@ export function ReviewPanel({
       {automatic ? (
         <section className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <h3 className="text-sm font-semibold text-slate-800">Automatic evaluation</h3>
+          {automatic.detectorAnalysis?.status === 'unavailable' ? (
+            <div
+              role="alert"
+              className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900"
+            >
+              Canonical production detector analysis is unavailable (
+              {automatic.detectorAnalysis.reason}). Assisted draft decisions and submission are
+              blocked until the local analysis succeeds.
+            </div>
+          ) : null}
           <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
             {automatic.model ? (
               <>

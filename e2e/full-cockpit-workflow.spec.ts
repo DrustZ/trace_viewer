@@ -416,6 +416,7 @@ test('fixed local workflow launches, follows live progress, reviews, forks, and 
       await fulfillJson(route, {
         traceUid: PARENT_TRACE,
         available: true,
+        forkAvailable: true,
         historicalReplayAvailable: true,
         missing: [],
         checkpoints: [

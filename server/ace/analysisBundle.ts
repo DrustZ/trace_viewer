@@ -40,8 +40,17 @@ export interface AppliedAnalysisBundle {
   unmatchedTraces: number
 }
 
+export interface AppliedAnalysisBundleDetails {
+  summary: AppliedAnalysisBundle
+  /** Canonical UIDs that received this exact detector snapshot, including zero-finding traces. */
+  appliedTraceUids: ReadonlySet<string>
+}
+
 /** Maps canonical Python detector output into FailureV1 without reimplementing detectors. */
-export function applyAceAnalysisBundle(store: TraceStore, value: unknown): AppliedAnalysisBundle {
+export function applyAceAnalysisBundleDetailed(
+  store: TraceStore,
+  value: unknown,
+): AppliedAnalysisBundleDetails {
   const bundle = record(value)
   const traceEntries = record(bundle.traces)
   const summaries = new Map<string, ReturnType<TraceStore['list']>>()
@@ -55,6 +64,7 @@ export function applyAceAnalysisBundle(store: TraceStore, value: unknown): Appli
   }
   let appliedTraces = 0
   let unmatchedTraces = 0
+  const appliedTraceUids = new Set<string>()
   for (const [sourceTraceId, rawEntry] of Object.entries(traceEntries)) {
     const matches = summaries.get(sourceTraceId)
     // A detector bundle is keyed by producer id. If that id is duplicated,
@@ -137,12 +147,21 @@ export function applyAceAnalysisBundle(store: TraceStore, value: unknown): Appli
       detectorBundleSchemaVersion: numberValue(bundle.schema_version) ?? 1,
     })
     appliedTraces += 1
+    appliedTraceUids.add(traceUid)
   }
   return {
-    schemaVersion: numberValue(bundle.schema_version) ?? 1,
-    source: record(bundle.source),
-    aggregates: record(bundle.aggregates),
-    appliedTraces,
-    unmatchedTraces,
+    summary: {
+      schemaVersion: numberValue(bundle.schema_version) ?? 1,
+      source: record(bundle.source),
+      aggregates: record(bundle.aggregates),
+      appliedTraces,
+      unmatchedTraces,
+    },
+    appliedTraceUids,
   }
+}
+
+/** Public/API-compatible summary wrapper; coordinator callers use the detailed variant. */
+export function applyAceAnalysisBundle(store: TraceStore, value: unknown): AppliedAnalysisBundle {
+  return applyAceAnalysisBundleDetailed(store, value).summary
 }
