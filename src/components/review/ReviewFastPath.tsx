@@ -27,9 +27,19 @@ const FAST_VERDICTS: ReadonlyArray<{
   keys: string
   active: string
 }> = [
-  { value: 'pass', label: 'Pass', keys: 'P', active: 'border-emerald-600 bg-emerald-600 text-white' },
+  {
+    value: 'pass',
+    label: 'Pass',
+    keys: 'P',
+    active: 'border-emerald-600 bg-emerald-600 text-white',
+  },
   { value: 'fail', label: 'Fail', keys: 'F', active: 'border-red-600 bg-red-600 text-white' },
-  { value: 'unsure', label: 'Unsure', keys: 'U', active: 'border-slate-700 bg-slate-700 text-white' },
+  {
+    value: 'unsure',
+    label: 'Unsure',
+    keys: 'U',
+    active: 'border-slate-700 bg-slate-700 text-white',
+  },
 ]
 
 /**
@@ -56,7 +66,7 @@ export function ReviewFastPath({
 }: ReviewFastPathProps) {
   return (
     <section aria-label="Review fast path" className="space-y-3">
-      <div role="group" aria-label="Overall verdict" className="grid grid-cols-3 gap-2">
+      <fieldset aria-label="Overall verdict" className="grid grid-cols-3 gap-2">
         {FAST_VERDICTS.map((option) => (
           <button
             key={option.value}
@@ -77,7 +87,7 @@ export function ReviewFastPath({
             </span>
           </button>
         ))}
-      </div>
+      </fieldset>
 
       <label className="block text-xs font-medium text-slate-600">
         Overall note

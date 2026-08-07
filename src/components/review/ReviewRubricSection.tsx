@@ -1,8 +1,4 @@
-import {
-  RUBRIC_VERDICTS,
-  type RubricDefinition,
-  type RubricReview,
-} from '@shared/reviews/types'
+import { RUBRIC_VERDICTS, type RubricDefinition, type RubricReview } from '@shared/reviews/types'
 import { useState } from 'react'
 import { csv, reviewInputClass } from './reviewFormShared'
 
@@ -36,9 +32,7 @@ export function ReviewRubricSection({
         messages to attach evidence.
       </p>
       {definitions.map((definition) => {
-        const review = reviews.find(
-          (candidate) => candidate.dimensionId === definition.dimensionId,
-        )
+        const review = reviews.find((candidate) => candidate.dimensionId === definition.dimensionId)
         if (!review) return null
         const focused = focusedDimensionId === definition.dimensionId
         return (
@@ -48,6 +42,7 @@ export function ReviewRubricSection({
               focused ? 'border-blue-400 bg-blue-50/40 ring-1 ring-blue-200' : 'border-slate-200'
             }`}
             onClick={() => onFocusDimension(definition.dimensionId)}
+            onKeyDown={() => onFocusDimension(definition.dimensionId)}
             onFocus={() => onFocusDimension(definition.dimensionId)}
           >
             <div className="flex flex-wrap items-start justify-between gap-2">

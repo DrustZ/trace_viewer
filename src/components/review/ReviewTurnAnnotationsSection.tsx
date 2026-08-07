@@ -42,7 +42,9 @@ export function ReviewTurnAnnotationsSection({
             aria-label="Annotated message"
             value={annotation.messageId}
             disabled={locked}
-            onChange={(event) => onChange(annotation.annotationId, { messageId: event.target.value })}
+            onChange={(event) =>
+              onChange(annotation.annotationId, { messageId: event.target.value })
+            }
           >
             {transcript?.map((message) => (
               <option key={message.id} value={message.id}>
@@ -62,7 +64,9 @@ export function ReviewTurnAnnotationsSection({
             placeholder="Tags, comma separated"
             value={annotation.tags.join(', ')}
             disabled={locked}
-            onChange={(event) => onChange(annotation.annotationId, { tags: csv(event.target.value) })}
+            onChange={(event) =>
+              onChange(annotation.annotationId, { tags: csv(event.target.value) })
+            }
           />
           <div className="flex gap-2">
             <input

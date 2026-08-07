@@ -82,9 +82,9 @@ describe('human review keyboard shortcuts', () => {
     const initial = emptyReviewPayload()
     const passed = applyReviewClassificationShortcut(initial, 'overall-pass', null, [])
     expect(passed.overallVerdict).toBe('pass')
-    expect(applyReviewClassificationShortcut(passed, 'overall-unsure', null, []).overallVerdict).toBe(
-      'unsure',
-    )
+    expect(
+      applyReviewClassificationShortcut(passed, 'overall-unsure', null, []).overallVerdict,
+    ).toBe('unsure')
 
     const hidden = applyReviewClassificationShortcut(initial, 'failure-confirm', 'secret-id', [])
     expect(hidden).toBe(initial)

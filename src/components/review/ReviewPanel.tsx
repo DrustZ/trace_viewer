@@ -99,7 +99,9 @@ function DetailsSection({
     >
       <summary className="cursor-pointer text-sm font-semibold text-slate-800">
         {title}
-        {count !== undefined ? <span className="ml-1.5 text-xs text-slate-500">({count})</span> : null}
+        {count !== undefined ? (
+          <span className="ml-1.5 text-xs text-slate-500">({count})</span>
+        ) : null}
       </summary>
       <div className="mt-3">{children}</div>
     </details>
@@ -398,9 +400,7 @@ export function ReviewPanel({
       null)
     : null
   const focusedEvidenceIds = useMemo(() => {
-    const review = payload?.rubricReviews.find(
-      (item) => item.dimensionId === focusedDimensionId,
-    )
+    const review = payload?.rubricReviews.find((item) => item.dimensionId === focusedDimensionId)
     return new Set(review?.evidenceMessageIds ?? [])
   }, [focusedDimensionId, payload?.rubricReviews])
   const evidenceBadges = useMemo(() => {

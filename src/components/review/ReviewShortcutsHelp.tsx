@@ -26,7 +26,7 @@ export function ReviewShortcutsHelp({ hasAutomaticFailures }: ReviewShortcutsHel
       </button>
       {open ? (
         <dl
-          role="tooltip"
+          aria-label="Keyboard shortcut reference"
           className="absolute right-0 z-20 mt-1.5 w-72 space-y-1.5 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg"
         >
           {visibleReviewShortcutLabels(hasAutomaticFailures).map((shortcut) => (

@@ -201,8 +201,8 @@ export function ReviewQueueFiltersPopover({
               onApply={(presetFilters) => onSetFilters(() => presetFilters)}
             />
             <p className="text-[11px] text-slate-500">
-              The page URL is the current filter source of truth, so this queue can be bookmarked
-              or shared.
+              The page URL is the current filter source of truth, so this queue can be bookmarked or
+              shared.
             </p>
           </section>
         </>
