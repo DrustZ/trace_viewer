@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { fetchReviewQueue, type ReviewQueueFilters } from '../api/reviews'
 import { CalibrationStatsPanel } from '../components/review/CalibrationStatsPanel'
-import { ReviewPanel } from '../components/review/ReviewPanel'
+import { type ReviewNavigationGuard, ReviewPanel } from '../components/review/ReviewPanel'
 import { ReviewQueue } from '../components/review/ReviewQueue'
 import {
   calibrationFiltersForQueue,
@@ -27,12 +27,18 @@ export function ReviewPage() {
   const [queueItems, setQueueItems] = useState<readonly ReviewQueueItem[]>([])
   const [queuePage, setQueuePage] = useState<ReviewQueueResponse | null>(null)
   const [queueNotice, setQueueNotice] = useState<string | null>(null)
-  const selectedPosition = useRef<{ traceUid: string; offset: number; index: number } | null>(null)
+  const [navigationPending, setNavigationPending] = useState(false)
+  const selectedPosition = useRef<{
+    traceUid: string
+    offset: number
+    index: number
+    successor?: ReviewSubject
+  } | null>(null)
   const expectedFiltersKey = useRef<string | null>(null)
   const observedFiltersKey = useRef(filtersKey)
   const activeFiltersKey = useRef(filtersKey)
   activeFiltersKey.current = filtersKey
-  const navigationGuard = useRef<(() => Promise<boolean>) | null>(null)
+  const navigationGuard = useRef<ReviewNavigationGuard | null>(null)
   const filterNavigationGeneration = useRef(0)
   const externalNavigationGeneration = useRef(0)
   const advancing = useRef(false)
@@ -50,18 +56,23 @@ export function ReviewPage() {
     setQueueItems([])
     setQueuePage(null)
     setQueueNotice(null)
+    setNavigationPending(false)
   }, [])
 
   const updateFilters = useCallback(
     (next: ReviewQueueFilters, navigation: 'replace' | 'push' = 'replace') => {
       const generation = filterNavigationGeneration.current + 1
       filterNavigationGeneration.current = generation
+      advanceGeneration.current += 1
+      advancing.current = false
       void (async () => {
         const guard = navigationGuard.current
         if (guard) {
+          setNavigationPending(true)
           setQueueNotice('Saving the current draft before changing the queue…')
           if (!(await guard())) {
             if (filterNavigationGeneration.current === generation) {
+              setNavigationPending(false)
               setQueueNotice('Queue change cancelled because the current draft could not be saved.')
             }
             return
@@ -79,16 +90,23 @@ export function ReviewPage() {
     [clearWorkspace, setSearchParams],
   )
 
-  const registerNavigationGuard = useCallback((guard: (() => Promise<boolean>) | null) => {
+  const registerNavigationGuard = useCallback((guard: ReviewNavigationGuard | null) => {
     navigationGuard.current = guard
   }, [])
 
   const choose = useCallback(
-    (subject: ReviewSubject, index: number, offset: number, selectionKey = filtersKey) => {
-      selectedPosition.current = { traceUid: subject.traceUid, offset, index }
+    (
+      subject: ReviewSubject,
+      index: number,
+      offset: number,
+      selectionKey = filtersKey,
+      successor?: ReviewSubject,
+    ) => {
+      selectedPosition.current = { traceUid: subject.traceUid, offset, index, successor }
       setSelected(subject)
       setSelectedFiltersKey(selectionKey)
       setQueueNotice(null)
+      setNavigationPending(false)
     },
     [filtersKey],
   )
@@ -101,108 +119,141 @@ export function ReviewPage() {
   const select = useCallback(
     (subject: ReviewSubject) => {
       const index = queueItems.findIndex((item) => item.subject.traceUid === subject.traceUid)
-      choose(subject, Math.max(0, index), queuePage?.offset ?? filters.offset ?? 0)
+      choose(
+        subject,
+        Math.max(0, index),
+        queuePage?.offset ?? filters.offset ?? 0,
+        filtersKey,
+        index >= 0 ? queueItems[index + 1]?.subject : undefined,
+      )
     },
-    [choose, filters.offset, queueItems, queuePage?.offset],
+    [choose, filters.offset, filtersKey, queueItems, queuePage?.offset],
   )
 
-  const next = useCallback(async () => {
-    const current = visibleSelected
-    const position = selectedPosition.current
-    if (!current || !position || advancing.current) return
-    const generation = advanceGeneration.current + 1
-    advanceGeneration.current = generation
-    advancing.current = true
-    setQueueNotice('Refreshing the queue before advancing…')
-    try {
-      const fresh = await fetchReviewQueue(filters, { anchorTraceUid: current.traceUid })
-      if (advanceGeneration.current !== generation || activeFiltersKey.current !== filtersKey)
-        return
-      setQueueItems(fresh.items)
-      setQueuePage(fresh)
-      const currentIndex =
-        fresh.anchorFound === true && fresh.anchorIndex !== undefined
-          ? fresh.anchorIndex
-          : fresh.items.findIndex((item) => item.subject.traceUid === current.traceUid)
-      // If saving/submitting removed the selected row, its old index is now
-      // occupied by the logical successor. This avoids skipping an entire row
-      // when an offset page shifts left.
-      const successorIndex = currentIndex >= 0 ? currentIndex + 1 : position.index
-      const successor = fresh.items[successorIndex]
-      if (successor) {
-        if (fresh.offset !== (filters.offset ?? 0)) {
-          const anchoredFilters = { ...filters, offset: fresh.offset }
-          const anchoredSearch = reviewQueueFiltersToSearchParams(anchoredFilters)
-          const anchoredKey = anchoredSearch.toString()
-          expectedFiltersKey.current = anchoredKey
-          activeFiltersKey.current = anchoredKey
-          choose(successor.subject, successorIndex, fresh.offset, anchoredKey)
-          setSearchParams(anchoredSearch, { replace: false })
-        } else {
-          choose(successor.subject, successorIndex, fresh.offset)
-        }
-        return
-      }
+  const next = useCallback(
+    async (persistCurrent: ReviewNavigationGuard) => {
+      const current = visibleSelected
+      const position = selectedPosition.current
+      if (!current || !position || advancing.current) return
+      const generation = advanceGeneration.current + 1
+      advanceGeneration.current = generation
+      advancing.current = true
+      setNavigationPending(true)
+      setQueueNotice('Refreshing the queue before advancing…')
+      try {
+        // Resolve a stable successor while the current row still belongs to the
+        // filtered queue. Saving a draft can immediately remove that row, and a
+        // simultaneous live insert can invalidate any old numeric index.
+        const fresh = await fetchReviewQueue(filters, { anchorTraceUid: current.traceUid })
+        if (advanceGeneration.current !== generation || activeFiltersKey.current !== filtersKey)
+          return
+        setQueueItems(fresh.items)
+        setQueuePage(fresh)
+        const currentIndex =
+          fresh.anchorFound === true && fresh.anchorIndex !== undefined
+            ? fresh.anchorIndex
+            : fresh.items.findIndex((item) => item.subject.traceUid === current.traceUid)
+        let successor =
+          currentIndex >= 0 ? fresh.items[currentIndex + 1]?.subject : position.successor
 
-      const pageWindow = reviewQueuePageWindow(
-        fresh.total,
-        fresh.limit,
-        fresh.offset,
-        fresh.items.length,
-      )
-      if (pageWindow.hasNext) {
-        const nextFilters = { ...filters, offset: pageWindow.nextOffset }
-        const nextPage = await fetchReviewQueue(nextFilters)
-        if (advanceGeneration.current !== generation || activeFiltersKey.current !== filtersKey) {
+        if (currentIndex < 0 && !successor) {
+          setNavigationPending(false)
+          setQueueNotice(
+            'The selected trace already left this queue and no stable successor was captured. Select the next trace from the refreshed queue.',
+          )
           return
         }
-        const first = nextPage.items[0]
-        if (!first) {
-          setQueueNotice('The next page became empty after the queue changed. Try again.')
-          return
-        }
-        const nextSearch = reviewQueueFiltersToSearchParams(nextFilters)
-        const nextKey = nextSearch.toString()
-        expectedFiltersKey.current = nextKey
-        setQueueItems(nextPage.items)
-        setQueuePage(nextPage)
-        choose(first.subject, 0, nextPage.offset, nextKey)
-        setSearchParams(nextSearch, { replace: false })
-        return
-      }
 
-      if (filters.state === 'unreviewed' || filters.state === 'draft') {
-        const firstFilters = { ...filters, offset: 0 }
-        const firstPage = fresh.offset === 0 ? fresh : await fetchReviewQueue(firstFilters)
-        if (advanceGeneration.current !== generation || activeFiltersKey.current !== filtersKey) {
-          return
-        }
-        const first = firstPage.items[0]
-        if (first && first.subject.traceUid !== current.traceUid) {
-          if (fresh.offset !== 0) {
-            const firstSearch = reviewQueueFiltersToSearchParams(firstFilters)
-            const firstKey = firstSearch.toString()
-            expectedFiltersKey.current = firstKey
-            setSearchParams(firstSearch, { replace: false })
-            choose(first.subject, 0, firstPage.offset, firstKey)
-          } else {
-            choose(first.subject, 0, firstPage.offset)
+        const pageWindow = reviewQueuePageWindow(
+          fresh.total,
+          fresh.limit,
+          fresh.offset,
+          fresh.items.length,
+        )
+        if (!successor && pageWindow.hasNext) {
+          const nextPage = await fetchReviewQueue({ ...filters, offset: pageWindow.nextOffset })
+          if (advanceGeneration.current !== generation || activeFiltersKey.current !== filtersKey) {
+            return
           }
-          setQueueItems(firstPage.items)
-          setQueuePage(firstPage)
+          successor = nextPage.items.find(
+            (item) => item.subject.traceUid !== current.traceUid,
+          )?.subject
+        }
+
+        if (!successor && (filters.state === 'unreviewed' || filters.state === 'draft')) {
+          const firstPage =
+            fresh.offset === 0 ? fresh : await fetchReviewQueue({ ...filters, offset: 0 })
+          if (advanceGeneration.current !== generation || activeFiltersKey.current !== filtersKey) {
+            return
+          }
+          const first = firstPage.items[0]
+          if (first?.subject.traceUid !== current.traceUid) successor = first?.subject
+        }
+
+        if (!(await persistCurrent())) {
+          if (advanceGeneration.current === generation) {
+            setNavigationPending(false)
+            setQueueNotice('Advance cancelled because the current draft could not be saved.')
+          }
           return
         }
+        if (advanceGeneration.current !== generation || activeFiltersKey.current !== filtersKey)
+          return
+
+        if (!successor) {
+          setNavigationPending(false)
+          setQueueNotice('You reached the end of the current filtered queue.')
+          return
+        }
+
+        // The successor UID was captured before persistence. Anchor it again
+        // afterwards so inserts, removals, and page shifts cannot change which
+        // trace is selected or leave the URL on the wrong page.
+        const located = await fetchReviewQueue(filters, { anchorTraceUid: successor.traceUid })
+        if (advanceGeneration.current !== generation || activeFiltersKey.current !== filtersKey)
+          return
+        const successorIndex =
+          located.anchorFound === true && located.anchorIndex !== undefined
+            ? located.anchorIndex
+            : located.items.findIndex((item) => item.subject.traceUid === successor?.traceUid)
+        const locatedSuccessor = located.items[successorIndex]
+        if (!locatedSuccessor) {
+          setNavigationPending(false)
+          setQueueNotice(
+            'The captured successor left the queue before it could be opened. Try again.',
+          )
+          return
+        }
+
+        const successorFilters = { ...filters, offset: located.offset }
+        const successorSearch = reviewQueueFiltersToSearchParams(successorFilters)
+        const successorKey = successorSearch.toString()
+        setQueueItems(located.items)
+        setQueuePage(located)
+        choose(
+          locatedSuccessor.subject,
+          successorIndex,
+          located.offset,
+          successorKey,
+          located.items[successorIndex + 1]?.subject,
+        )
+        if (successorKey !== filtersKey) {
+          expectedFiltersKey.current = successorKey
+          activeFiltersKey.current = successorKey
+          setSearchParams(successorSearch, { replace: false })
+        }
+      } catch (error) {
+        if (advanceGeneration.current !== generation) return
+        setNavigationPending(false)
+        setQueueNotice(
+          `Could not refresh the review queue: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      } finally {
+        if (advanceGeneration.current === generation) advancing.current = false
       }
-      setQueueNotice('You reached the end of the current filtered queue.')
-    } catch (error) {
-      if (advanceGeneration.current !== generation) return
-      setQueueNotice(
-        `Could not refresh the review queue: ${error instanceof Error ? error.message : String(error)}`,
-      )
-    } finally {
-      if (advanceGeneration.current === generation) advancing.current = false
-    }
-  }, [choose, filters, filtersKey, setSearchParams, visibleSelected])
+    },
+    [choose, filters, filtersKey, setSearchParams, visibleSelected],
+  )
 
   const submitted = useCallback((_record: ReviewRecord) => {
     setQueueNotice('Submitted and locked. Review the reveal, then press Alt/Option + ↓ for next.')
@@ -211,22 +262,29 @@ export function ReviewPage() {
   // All URL filters, including offset, are part of the selected workspace
   // identity. Browser back/forward must never retain a stale submit target.
   useEffect(() => {
-    if (observedFiltersKey.current === filtersKey) return
+    // Increment even when a rapid back→forward returns to the observed key;
+    // this invalidates the save continuation started by the intermediate URL.
+    const generation = externalNavigationGeneration.current + 1
+    externalNavigationGeneration.current = generation
+    if (observedFiltersKey.current === filtersKey) {
+      setNavigationPending(false)
+      return
+    }
     if (expectedFiltersKey.current === filtersKey) {
       observedFiltersKey.current = filtersKey
       expectedFiltersKey.current = null
+      setNavigationPending(false)
       return
     }
     expectedFiltersKey.current = null
     const previousFiltersKey = observedFiltersKey.current
-    const generation = externalNavigationGeneration.current + 1
-    externalNavigationGeneration.current = generation
     const guard = navigationGuard.current
     if (!guard) {
       observedFiltersKey.current = filtersKey
       clearWorkspace()
       return
     }
+    setNavigationPending(true)
     setQueueNotice('Saving the current draft before changing the queue…')
     void guard().then((saved) => {
       if (externalNavigationGeneration.current !== generation) return
@@ -236,6 +294,7 @@ export function ReviewPage() {
         return
       }
       activeFiltersKey.current = previousFiltersKey
+      setNavigationPending(false)
       setSearchParams(new URLSearchParams(previousFiltersKey), { replace: true })
       setQueueNotice('Navigation cancelled because the current draft could not be saved.')
     })
@@ -279,7 +338,7 @@ export function ReviewPage() {
               onSubmitted={submitted}
               onNext={next}
               onNavigationGuardChange={registerNavigationGuard}
-              suspended={!visibleSelected}
+              suspended={navigationPending || !visibleSelected}
             />
           ) : (
             <section className="flex min-h-96 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-sm text-slate-500">

@@ -58,6 +58,10 @@ function snakeRecord(value: unknown): Record<string, unknown> {
 
 function batchEpisode(value: Record<string, unknown>): BatchEpisode | null {
   const scenarioId = stringValue(value.scenario_id) ?? stringValue(value.scenarioId)
+  const explicitEnvironmentSeedValues = [
+    ...(Object.hasOwn(value, 'environment_seed') ? [value.environment_seed] : []),
+    ...(Object.hasOwn(value, 'environmentSeed') ? [value.environmentSeed] : []),
+  ]
   const recordedEnvironmentSeed =
     numberValue(value.environment_seed) ?? numberValue(value.environmentSeed)
   const environmentSeed = recordedEnvironmentSeed ?? numberValue(value.seed)
@@ -66,14 +70,25 @@ function batchEpisode(value: Record<string, unknown>): BatchEpisode | null {
     recordedEnvironmentSeed !== undefined &&
     Number.isSafeInteger(recordedEnvironmentSeed) &&
     recordedEnvironmentSeed >= 0
+  const invalidExplicitEnvironmentSeed = explicitEnvironmentSeedValues.some(
+    (candidate) =>
+      typeof candidate !== 'number' || !Number.isSafeInteger(candidate) || candidate < 0,
+  )
+  const validExplicitEnvironmentSeeds = explicitEnvironmentSeedValues.filter(
+    (candidate): candidate is number =>
+      typeof candidate === 'number' && Number.isSafeInteger(candidate) && candidate >= 0,
+  )
+  const explicitEnvironmentSeedMismatch = new Set(validExplicitEnvironmentSeeds).size > 1
+  const identityConflicts = [
+    ...(invalidExplicitEnvironmentSeed ? ['invalid_environment_seed'] : []),
+    ...(explicitEnvironmentSeedMismatch ? ['environment_seed'] : []),
+  ]
   return {
     ...value,
     scenarioId,
     environmentSeed,
     environmentSeedRecorded,
-    ...(recordedEnvironmentSeed !== undefined && !environmentSeedRecorded
-      ? { identityConflicts: ['invalid_environment_seed'] }
-      : {}),
+    ...(identityConflicts.length > 0 ? { identityConflicts } : {}),
     sourceFile: stringValue(value.file) ?? stringValue(value.sourceFile),
     status: stringValue(value.status),
     phase: stringValue(value.phase),

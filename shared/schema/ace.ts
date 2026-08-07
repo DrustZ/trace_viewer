@@ -426,6 +426,11 @@ export interface AceEscalationConfusionMatrix {
 
 export interface AceDashboardSummary {
   scope: AceDashboardScope
+  /**
+   * False when the detector analysis bridge failed or hit its stabilization
+   * cap — zero detector findings then means "no data", not "no failures".
+   */
+  detectorAnalysisAvailable?: boolean
   total: number
   pass: number
   fail: number

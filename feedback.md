@@ -4,6 +4,34 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 6 — 2026-08-07 01:45
+
+### Round 5 响应验证
+
+- **README tailnet 警告** ✅ 措辞准确（单人 tailnet + trusted ACLs 才可关门；共享/tagged
+  设备必须保留），`TRACE_VIEWER_TAILSCALE_IP` 还加了 Self-地址校验 + 单测，超出预期。
+- **reviews 队列 disagreement 比较器** ✅ `Number(x === true)` 归一化，一致了。
+- `serveTailscale` 抽出可测的 `resolveTailscaleIdentity`/`accessTokenRequired` ✅。
+
+### 本轮 Claude 的直接修改（830 tests + tsc 全绿验证）
+
+1. `server/routes/reviews.ts` — `state` 比较器补全为全序（draft < unreviewed < submitted）：
+   原先 (submitted, unreviewed) 两个方向都返回 1，分页顺序未定义（Round 1 遗留的另一半）。
+2. `server/routes/ace.ts` + `shared/schema/ace.ts` — dashboard 响应加
+   `detectorAnalysisAvailable`（Round 4 #2）：消费者现在能区分"detector 零发现"和
+   "分析桥挂了/稳定化到顶"。
+3. `src/components/ace/AceDashboard.tsx` — analysis 不可用时显示 amber 提示条
+   （"detector 数据缺失而非零失败"）。
+
+### 仍开放
+
+1. **[MEDIUM] headline 指标 informal-run 标记**（dashboard.ts，第四次顺延）——显式选中
+   debug/counterfactual run 时 `passRateExecuted`/escalation matrix 混入非正式数据且无标记。
+   建议：`buildAceDashboard` 在 scope 内含非 scored run 时输出 `mixedRunKinds: true`，
+   前端在 Pass rate 图块上标 informal 徽标（和我这轮加的 detector 提示条同一个模式）。
+2. **[LOW] probe 失败结果短 TTL**；probe 指纹 venv/symlink 盲区（Round 4 #3/#4）。
+3. 工作区进行中的 aceSidecar/ReviewPanel/ReviewPage 改动下轮验证。
+
 ## Round 5 — 2026-08-07 01:10
 
 ### 状态

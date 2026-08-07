@@ -428,6 +428,57 @@ describe('ACE cockpit routes', () => {
     expect(response.body.failureChecks).toEqual([])
   })
 
+  it('never promotes a manifest identity quarantine to the trace-side pass outcome', async () => {
+    const runId = 'malformed-seed-run'
+    const traceId = 'malformed-s3'
+    const added = await addTrace(traceId, 'simulation', runId, '.json', true)
+    const passingTrace = traceFixture(traceId, 'simulation', runId)
+    passingTrace.meta.pairKey = 'schedule-a:scenario-01:3'
+    passingTrace.evaluation = {
+      lifecycle: { state: 'completed' },
+      outcome: 'pass',
+      checks: [],
+      metrics: {},
+      failures: [],
+      flags: [],
+      worldDiff: [],
+      ledger: [],
+    }
+    store.upsert(passingTrace, added.sourcePath)
+
+    const batchDirectory = path.join(config.runRoot, runId)
+    await fs.writeFile(
+      path.join(batchDirectory, 'batch.json'),
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: runId,
+        run_kind: 'scored',
+        schedule_digest: 'schedule-a',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 1, passed: 1 },
+        episodes: [
+          {
+            scenario_id: 'scenario-01',
+            environment_seed: '3',
+            seed: 3,
+            file: `${traceId}.json`,
+            status: 'completed',
+            grade: { passed: true },
+          },
+        ],
+      }),
+    )
+
+    const response = await request(buildApp(store, bridge, config)).get(`/api/ace/runs/${runId}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.episodes).toEqual([
+      expect.objectContaining({ traceUid: added.traceUid, outcome: 'ungraded' }),
+    ])
+    expect(response.body.episodes[0]).not.toHaveProperty('pairKey')
+    expect(response.body.totals).toMatchObject({ passed: 0, failedGrade: 0, passRate: null })
+  })
+
   it('makes production and trace-only runs reachable as read-only synthesized summaries', async () => {
     const production = await addTrace('production-only', 'production', 'production')
     const simulation = await addTrace('simulation-only', 'simulation', 'trace-only-simulation')

@@ -7,8 +7,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tailscale = process.env.TAILSCALE_BIN || '/usr/local/bin/tailscale'
-const requireAccessToken = process.env.TRACE_VIEWER_REQUIRE_ACCESS_TOKEN !== '0'
+
+export function accessTokenRequired(environment = process.env) {
+  return environment.TRACE_VIEWER_REQUIRE_ACCESS_TOKEN !== '0'
+}
 
 function withinProject(candidate) {
   const relative = path.relative(projectRoot, candidate)
@@ -48,79 +50,111 @@ function persistentAccessToken() {
   }
 }
 
-function tailscaleIdentity() {
-  const configured = process.env.TRACE_VIEWER_TAILSCALE_IP?.trim()
-  const status = JSON.parse(execFileSync(tailscale, ['status', '--json'], { encoding: 'utf8' }))
-  const detected = configured || status.Self?.TailscaleIPs?.find((value) => isIP(value) === 4) || ''
-  const address = detected.split(/\s+/)[0]
-  if (isIP(address) !== 4) throw new Error(`No usable Tailscale IPv4 address: ${address || 'none'}`)
+export function resolveTailscaleIdentity(status, configuredAddress) {
+  const selfAddresses = Array.isArray(status?.Self?.TailscaleIPs)
+    ? status.Self.TailscaleIPs.filter((value) => typeof value === 'string')
+    : []
+  const selfIpv4Addresses = selfAddresses.filter((value) => isIP(value) === 4)
+  const configured = typeof configuredAddress === 'string' ? configuredAddress.trim() : ''
+
+  if (configured && (configured === '0.0.0.0' || isIP(configured) !== 4)) {
+    throw new Error(
+      `TRACE_VIEWER_TAILSCALE_IP must be a specific Tailscale IPv4 address: ${configured}`,
+    )
+  }
+  if (configured && !selfIpv4Addresses.includes(configured)) {
+    throw new Error(
+      `TRACE_VIEWER_TAILSCALE_IP is not assigned to this Tailscale node: ${configured}`,
+    )
+  }
+
+  const address = configured || selfIpv4Addresses[0] || ''
+  if (!address) throw new Error('No usable Tailscale IPv4 address: none')
   const dnsName = String(status.Self?.DNSName || '')
     .trim()
     .replace(/\.$/, '')
   return { address, dnsName }
 }
 
-const { address, dnsName } = tailscaleIdentity()
-const access = requireAccessToken ? persistentAccessToken() : { token: undefined, tokenPath: null }
-const webEnvironment = {
-  ...process.env,
-  ...(dnsName ? { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: dnsName } : {}),
+function tailscaleIdentity() {
+  const tailscale = process.env.TAILSCALE_BIN || '/usr/local/bin/tailscale'
+  const status = JSON.parse(execFileSync(tailscale, ['status', '--json'], { encoding: 'utf8' }))
+  return resolveTailscaleIdentity(status, process.env.TRACE_VIEWER_TAILSCALE_IP)
 }
-delete webEnvironment.TRACE_VIEWER_ACCESS_TOKEN
-delete webEnvironment.TRACE_VIEWER_ACCESS_TOKEN_FILE
-const apiEnvironment = {
-  ...process.env,
-  HOST: '127.0.0.1',
-  PORT: '8787',
-}
-delete apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN
-delete apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN_FILE
-if (access.token) apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN = access.token
-const children = [
-  spawn(process.execPath, ['./node_modules/tsx/dist/cli.mjs', 'watch', 'server/index.ts'], {
-    cwd: projectRoot,
-    env: apiEnvironment,
-    stdio: 'inherit',
-  }),
-  spawn(
-    process.execPath,
-    ['./node_modules/vite/bin/vite.js', '--host', address, '--port', '5173', '--strictPort'],
-    { cwd: projectRoot, env: webEnvironment, stdio: 'inherit' },
-  ),
-]
 
-console.log(`[tailscale] Trace Viewer available at http://${address}:5173/`)
-if (dnsName) console.log(`[tailscale] Stable URL: http://${dnsName}:5173/`)
-console.log(
-  access.token
-    ? access.tokenPath
-      ? '[tailscale] API access protection enabled; token stored outside the served project root'
-      : '[tailscale] API access protection enabled; token supplied by environment'
-    : '[tailscale] Access-token gate disabled; access is restricted by the Tailnet binding',
-)
-
-let stopping = false
-function stop(signal = 'SIGTERM', exitCode = 0) {
-  if (stopping) return
-  stopping = true
-  for (const child of children) {
-    if (!child.killed) child.kill(signal)
+export function apiEnvironmentFor(environment, accessToken) {
+  const apiEnvironment = {
+    ...environment,
+    HOST: '127.0.0.1',
+    PORT: '8787',
   }
-  setTimeout(() => process.exit(exitCode), 1_000).unref()
+  delete apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN
+  delete apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN_FILE
+  if (accessToken) apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN = accessToken
+  return apiEnvironment
 }
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => stop(signal))
-}
+function main() {
+  const { address, dnsName } = tailscaleIdentity()
+  const access = accessTokenRequired()
+    ? persistentAccessToken()
+    : { token: undefined, tokenPath: null }
+  const webEnvironment = {
+    ...process.env,
+    ...(dnsName ? { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: dnsName } : {}),
+  }
+  delete webEnvironment.TRACE_VIEWER_ACCESS_TOKEN
+  delete webEnvironment.TRACE_VIEWER_ACCESS_TOKEN_FILE
+  const apiEnvironment = apiEnvironmentFor(process.env, access.token)
+  const children = [
+    spawn(process.execPath, ['./node_modules/tsx/dist/cli.mjs', 'watch', 'server/index.ts'], {
+      cwd: projectRoot,
+      env: apiEnvironment,
+      stdio: 'inherit',
+    }),
+    spawn(
+      process.execPath,
+      ['./node_modules/vite/bin/vite.js', '--host', address, '--port', '5173', '--strictPort'],
+      { cwd: projectRoot, env: webEnvironment, stdio: 'inherit' },
+    ),
+  ]
 
-for (const child of children) {
-  child.once('error', (error) => {
-    console.error('[tailscale] child process failed:', error)
-    stop('SIGTERM', 1)
-  })
-  child.once('exit', (code, signal) => {
+  console.log(`[tailscale] Trace Viewer available at http://${address}:5173/`)
+  if (dnsName) console.log(`[tailscale] Stable URL: http://${dnsName}:5173/`)
+  console.log(
+    access.token
+      ? access.tokenPath
+        ? '[tailscale] API access protection enabled; token stored outside the served project root'
+        : '[tailscale] API access protection enabled; token supplied by environment'
+      : '[tailscale] Access-token gate disabled; access is restricted by the Tailnet binding',
+  )
+
+  let stopping = false
+  function stop(signal = 'SIGTERM', exitCode = 0) {
     if (stopping) return
-    console.error(`[tailscale] child exited (${signal ?? code ?? 'unknown'}); restarting service`)
-    stop('SIGTERM', code || 1)
-  })
+    stopping = true
+    for (const child of children) {
+      if (!child.killed) child.kill(signal)
+    }
+    setTimeout(() => process.exit(exitCode), 1_000).unref()
+  }
+
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => stop(signal))
+  }
+
+  for (const child of children) {
+    child.once('error', (error) => {
+      console.error('[tailscale] child process failed:', error)
+      stop('SIGTERM', 1)
+    })
+    child.once('exit', (code, signal) => {
+      if (stopping) return
+      console.error(`[tailscale] child exited (${signal ?? code ?? 'unknown'}); restarting service`)
+      stop('SIGTERM', code || 1)
+    })
+  }
 }
+
+const directEntry = process.argv[1] ? path.resolve(process.argv[1]) : ''
+if (directEntry === fileURLToPath(import.meta.url)) main()

@@ -474,9 +474,14 @@ export function aceRoutes(
         /^ace_.*_conflict$/.test(failure.code),
       )
       const pairMismatch = episode.pairKey !== undefined && summary.meta.pairKey !== episode.pairKey
-      const quarantined = artifactConflict || pairMismatch
+      const outcomeMismatch = episode.outcome !== traceOutcome
+      const quarantined = artifactConflict || pairMismatch || outcomeMismatch
       const outcome =
-        traceOutcome === 'runtime_error' ? 'runtime_error' : quarantined ? 'ungraded' : traceOutcome
+        episode.outcome === 'runtime_error' || traceOutcome === 'runtime_error'
+          ? 'runtime_error'
+          : quarantined
+            ? 'ungraded'
+            : traceOutcome
       const unpaired = episodeWithoutPairKey(episode)
       return {
         ...unpaired,
@@ -715,7 +720,12 @@ export function aceRoutes(
           // Keep the same core-browsing degradation contract as the first load.
         }
       }
-      res.json(buildAceDashboard(ctx.store, runIds, tasks, batches, triagePage))
+      // Without this flag a consumer cannot distinguish "zero detector
+      // findings" from "analysis bridge down / stabilization cap hit".
+      res.json({
+        ...buildAceDashboard(ctx.store, runIds, tasks, batches, triagePage),
+        detectorAnalysisAvailable,
+      })
     }),
   )
 

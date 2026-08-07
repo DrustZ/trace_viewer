@@ -25,11 +25,13 @@ export interface ReviewPanelProps {
   className?: string
   autosaveDelayMs?: number
   onSubmitted?: (record: ReviewRecord) => void
-  onNext?: () => void | Promise<void>
-  onNavigationGuardChange?: (guard: (() => Promise<boolean>) | null) => void
+  onNext?: (persistCurrent: ReviewNavigationGuard) => void | Promise<void>
+  onNavigationGuardChange?: (guard: ReviewNavigationGuard | null) => void
   /** Keep hook/form state alive while hiding all review evidence during a pending URL transition. */
   suspended?: boolean
 }
+
+export type ReviewNavigationGuard = () => Promise<boolean>
 
 function payloadOf(workspace: ReviewWorkspaceResponse): ReviewPayload {
   const stored = workspace.draft ?? workspace.latestFinal
@@ -217,20 +219,27 @@ export function ReviewPanel({
         review: payload,
         expectedRevision: nextRevision,
       })
-      if (editVersion.current === version) setDirty(false)
-      return true
+      const savedLatestVersion = editVersion.current === version
+      if (savedLatestVersion) setDirty(false)
+      // A navigation must never clear edits made while this request was in
+      // flight. The caller can retry after the newer version is persisted.
+      return savedLatestVersion
     } catch {
       // The mutation exposes the error inline; keep the workspace open.
       return false
     }
   }, [locked, nextRevision, payload, saveDraft, subject])
 
+  const persistCurrent = useCallback<ReviewNavigationGuard>(
+    async () => (!dirty || locked ? true : saveCurrent()),
+    [dirty, locked, saveCurrent],
+  )
+
   useEffect(() => {
     if (!onNavigationGuardChange) return
-    const guard = async () => (!dirty || locked ? true : saveCurrent())
-    onNavigationGuardChange(guard)
+    onNavigationGuardChange(persistCurrent)
     return () => onNavigationGuardChange(null)
-  }, [dirty, locked, onNavigationGuardChange, saveCurrent])
+  }, [onNavigationGuardChange, persistCurrent])
 
   const submitCurrent = useCallback(async (): Promise<void> => {
     if (!payload || locked || submitInFlight.current) return
@@ -265,12 +274,14 @@ export function ReviewPanel({
     if (!onNext || nextInFlight.current) return
     nextInFlight.current = true
     try {
-      if (dirty && !locked && !(await saveCurrent())) return
-      await onNext()
+      // ReviewPage captures a stable queue successor before invoking this
+      // guard, because persisting a draft can remove the current row from the
+      // active filter.
+      await onNext(persistCurrent)
     } finally {
       nextInFlight.current = false
     }
-  }, [dirty, locked, onNext, saveCurrent])
+  }, [onNext, persistCurrent])
 
   useEffect(() => {
     if (!dirty || !payload || locked || suspended) return

@@ -384,10 +384,16 @@ export function reviewsRoutes(deps: ReviewRoutesDeps): Router {
         }
       })
       const filtered = filterQueue(items, req.query).sort((a, b) => {
-        if (a.hasDisagreement !== b.hasDisagreement) return a.hasDisagreement ? -1 : 1
+        const disagreementDelta =
+          Number(b.hasDisagreement === true) - Number(a.hasDisagreement === true)
+        if (disagreementDelta !== 0) return disagreementDelta
         const priorityDelta = priorityRank(b.priority) - priorityRank(a.priority)
         if (priorityDelta !== 0) return priorityDelta
-        if (a.state !== b.state) return a.state === 'draft' ? -1 : 1
+        // Total order over all three states: (submitted, unreviewed) pairs used
+        // to return 1 in both directions, making pagination order undefined.
+        const stateRank = (state: 'draft' | 'submitted' | 'unreviewed') =>
+          state === 'draft' ? 0 : state === 'unreviewed' ? 1 : 2
+        if (a.state !== b.state) return stateRank(a.state) - stateRank(b.state)
         return (
           (b.trace.timestamp ?? '').localeCompare(a.trace.timestamp ?? '') ||
           a.subject.traceUid.localeCompare(b.subject.traceUid)

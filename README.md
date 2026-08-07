@@ -145,9 +145,16 @@ deployment) instead of committing received traces.
 IPv4 address, and binds only the Vite frontend to that address on port `5173`. It prints the exact
 Tailnet-only IP URL and, when MagicDNS is enabled, a stable machine-name URL at startup. The
 detected MagicDNS host is added to Vite's allowlist without opening the listener beyond the
-Tailscale interface. Use a service manager such as a macOS LaunchAgent when the process
-must survive terminal closure or login restarts; the supervisor exits if either child fails so the
-service manager can restart the complete pair.
+Tailscale interface. An optional `TRACE_VIEWER_TAILSCALE_IP` override must exactly match an IPv4
+address reported for this node by `tailscale status`; wildcard, LAN, loopback, and other non-Self
+addresses are rejected. Use a service manager such as a macOS LaunchAgent when the process must
+survive terminal closure or login restarts; the supervisor exits if either child fails so the service
+manager can restart the complete pair.
+
+The launcher enables its access-token gate by default. Only on a single-person Tailnet with trusted
+ACLs may you explicitly set `TRACE_VIEWER_REQUIRE_ACCESS_TOKEN=0`; doing so gives every Tailnet
+peer allowed to reach this device access to the Viewer API. Shared Tailnets, including Tailnets with
+tagged devices, must keep the token gate enabled.
 
 The status bar's **data roots** menu shows each root's scan state, file/trace counts, and warning
 count. The same aggregate-only diagnostics are available from `GET /api/meta`; paths are shown

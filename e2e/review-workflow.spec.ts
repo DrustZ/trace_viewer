@@ -207,6 +207,10 @@ test('review pagination is shareable, clamps stale offsets, and keyboard-next cr
   const removedTraceUids = new Set<string>()
   let liveTraceInserted = false
   let failNextDraftSave = false
+  let holdNextDraftSave = false
+  let draftSaveStarted: (() => void) | undefined
+  let releaseDraftSave: (() => void) | undefined
+  let lastSavedNote: string | undefined
   await page.addInitScript(() => {
     class QuietEventSource {
       addEventListener() {}
@@ -279,6 +283,14 @@ test('review pagination is shareable, clamps stale offsets, and keyboard-next cr
           return
         }
         const body = request.postDataJSON()
+        lastSavedNote = body.review.note
+        if (holdNextDraftSave) {
+          holdNextDraftSave = false
+          draftSaveStarted?.()
+          await new Promise<void>((resolve) => {
+            releaseDraftSave = resolve
+          })
+        }
         removedTraceUids.add(traceUid)
         await fulfillJson(route, {
           ...body.subject,
@@ -350,12 +362,12 @@ test('review pagination is shareable, clamps stale offsets, and keyboard-next cr
   await page.getByText('Case 200', { exact: true }).click()
   await page.getByLabel('Overall note').fill('Move this trace into the draft queue.')
   await page.getByRole('heading', { name: 'Human review', exact: true }).click()
+  liveTraceInserted = true
   await page.keyboard.press('Alt+ArrowDown')
-  await expect(page).not.toHaveURL(/offset=/)
-  await expect(page.getByText('Showing 1–200 of 204')).toBeVisible()
+  await expect(page).toHaveURL(/offset=200/)
+  await expect(page.getByText('Showing 201–205 of 205')).toBeVisible()
   await expect(page.getByText('Transcript for page-trace-201')).toBeVisible()
 
-  liveTraceInserted = true
   await page.keyboard.press('Alt+ArrowDown')
   await expect(page).toHaveURL(/offset=200/)
   await expect(page.getByText('Showing 201–205 of 205')).toBeVisible()
@@ -373,8 +385,38 @@ test('review pagination is shareable, clamps stale offsets, and keyboard-next cr
   await expect(page.getByText('Showing 1–200 of 204')).toBeVisible()
   await expect(page.getByText('Select a trace to start human review.')).toBeVisible()
 
-  await page.goBack()
+  await page.getByText('Case 2', { exact: true }).click()
+  await page.getByLabel('Overall note').fill('Only this frozen version may be persisted.')
+  const draftStartedPromise = new Promise<void>((resolve) => {
+    draftSaveStarted = resolve
+  })
+  holdNextDraftSave = true
+  const guardedNextClick = page.getByLabel('Next review page').click()
+  await draftStartedPromise
+  await expect(
+    page.getByText('Saving the current draft before changing the review queue…'),
+  ).toBeVisible()
+  await expect(page.getByLabel('Overall note')).toHaveCount(0)
+  releaseDraftSave?.()
+  await guardedNextClick
   await expect(page).toHaveURL(/offset=200/)
-  await expect(page.getByText('Select a trace to start human review.')).toBeVisible()
-  await expect(page.getByText('Transcript for page-trace-202')).toHaveCount(0)
+  expect(lastSavedNote).toBe('Only this frozen version may be persisted.')
+
+  await page.getByText('Case 201', { exact: true }).click()
+  await page.getByLabel('Overall note').fill('Keep this workspace across a quick back-forward.')
+  const historySaveStarted = new Promise<void>((resolve) => {
+    draftSaveStarted = resolve
+  })
+  holdNextDraftSave = true
+  const backNavigation = page.goBack()
+  await historySaveStarted
+  await expect(page).not.toHaveURL(/offset=200/)
+  await page.goForward()
+  await expect(page).toHaveURL(/offset=200/)
+  await expect(page.getByLabel('Overall note')).toHaveValue(
+    'Keep this workspace across a quick back-forward.',
+  )
+  releaseDraftSave?.()
+  await backNavigation
+  await expect(page.getByText('Transcript for page-trace-203')).toBeVisible()
 })

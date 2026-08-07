@@ -167,6 +167,65 @@ describe('ACE artifacts', () => {
         sourceFile: 'episode-s7.json',
       }).meta.pairKey,
     ).toBeUndefined()
+
+    const malformedExplicitSeed = parseAceBatchManifest({
+      schema_version: 3,
+      batch_id: 'malformed-explicit-seed',
+      schedule_digest: 'schedule-a',
+      episodes: [
+        {
+          scenario_id: 'scenario-a',
+          environment_seed: '7',
+          seed: 7,
+          file: 'episode-s7.json',
+          status: 'completed',
+          grade: { passed: true },
+        },
+      ],
+    })
+    expect(malformedExplicitSeed?.episodes).toEqual([
+      expect.objectContaining({
+        environmentSeed: 7,
+        environmentSeedRecorded: false,
+        identityConflicts: ['invalid_environment_seed'],
+      }),
+    ])
+    const malformedTrace = applyAceArtifacts(parsed(), undefined, {
+      batch: malformedExplicitSeed,
+      sourceFile: 'episode-s7.json',
+    })
+    expect(malformedTrace.meta.pairKey).toBeUndefined()
+    expect(malformedTrace.evaluation?.outcome).toBe('ungraded')
+    expect(malformedTrace.evaluation?.failures).toContainEqual(
+      expect.objectContaining({ code: 'ace_identity_conflict' }),
+    )
+
+    const conflictingAliases = parseAceBatchManifest({
+      schema_version: 3,
+      batch_id: 'conflicting-seed-aliases',
+      schedule_digest: 'schedule-a',
+      episodes: [
+        {
+          scenario_id: 'scenario-a',
+          environment_seed: 7,
+          environmentSeed: 8,
+          file: 'episode-s7.json',
+          status: 'completed',
+          grade: { passed: true },
+        },
+      ],
+    })
+    expect(conflictingAliases?.episodes[0]).toMatchObject({
+      environmentSeed: 7,
+      environmentSeedRecorded: true,
+      identityConflicts: ['environment_seed'],
+    })
+    expect(
+      applyAceArtifacts(parsed(), undefined, {
+        batch: conflictingAliases,
+        sourceFile: 'episode-s7.json',
+      }).evaluation?.outcome,
+    ).toBe('ungraded')
   })
 
   it('retains an explicit state seed when the completed row only repeats a legacy seed', () => {

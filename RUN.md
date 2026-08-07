@@ -227,7 +227,7 @@ npm run build && npm start  # serves the built app + API on a single port (8787)
 
 ## Optional — protect a Tailscale/shared server
 
-`serve:tailscale` automatically creates a stable random token at
+By default, `serve:tailscale` automatically creates a stable random token at
 `~/.trace-viewer/access-token` (mode `0600`, outside the served project) and protects all API/SSE
 routes. Vite also denies direct access to the repository's private `.trace-viewer/` state and
 `data/` corpus; traces are available only through the authenticated API. You may override the token:
@@ -243,8 +243,14 @@ the plaintext token is not stored in the cookie or local storage. Avoid sharing 
 in chat or screenshots.
 
 When `TRACE_VIEWER_ACCESS_TOKEN` is empty or unset, the current unauthenticated localhost workflow
-is unchanged for the normal local dev command; the Tailscale launcher always generates one. The
-health probe remains available at `GET /api/health` in either mode. Set
+is unchanged for the normal local dev command; the Tailscale launcher generates a token unless the
+operator explicitly sets `TRACE_VIEWER_REQUIRE_ACCESS_TOKEN=0`. That opt-out is only appropriate
+for a single-person Tailnet with trusted ACLs: every Tailnet peer allowed to reach the device can use
+the API. Shared Tailnets, including Tailnets with tagged devices, must keep the token gate enabled.
+Even with the gate disabled, the frontend binds only to an IPv4 address listed for the current node
+by `tailscale status`, and the API remains on `127.0.0.1`. A `TRACE_VIEWER_TAILSCALE_IP` override
+must exactly match one of those Self addresses; wildcard, LAN, loopback, and non-Self addresses are
+rejected. The health probe remains available at `GET /api/health` in either mode. Set
 `TRACE_VIEWER_ACCESS_TOKEN_FILE` to choose a different machine-local token path outside the
 repository; paths inside the served project are rejected.
 
