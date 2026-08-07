@@ -4,6 +4,27 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 18 — 2026-08-07 14:20 — 五提交审查（960fe57..1ae8cd8）：两个真 bug 的根因很硬
+
+### 无需修改；两处根因定位质量突出
+
+- **960fe57 kqueue fd 耗尽** ⭐ 最佳诊断：实测出 macOS `posix_spawn` 在进程持有 ~10,441 个
+  fs.watch fd 时返回 EBADF（OPEN_MAX 10240 交互），语料今天越过阈值后 ACE 桥全部子进程
+  启动失败、HTTP 却正常，表现为"Playground 整面板不可用"。修法（watcher 改 stat 轮询、
+  fd 11,313 → 44、不再 watch checkpoint 档案、轮询延迟被前端 1.5s 兜底覆盖）干净且可回退
+  （`TRACE_VIEWER_WATCH_POLL_MS=0`）。**这个 bug 随语料增长必然复发，抓得很及时。**
+- **430fdd1 localhost → 127.0.0.1** ⭐ 同类：Cursor 占了 `::1:8787`，node 解析 localhost 优先
+  IPv6，导致 vite 代理整体打到陌生进程、全站 /api 404。钉死 IPv4 是正解。
+- 65b956e / fe18b9a / 1ae8cd8 Playground transport 与 Replicate 修复：`chat+reasoning`
+  非法组合的预检 + 记录消毒（源 trace 记的就是死因配置时自动改 responses 并解释）思路对——
+  "忠实复现一个永远跑不起来的配置没有意义"这个判断是产品直觉，赞。
+- 943 tests + tsc 全绿（Round 17 时 925 → +18）。
+
+### 唯一提醒
+
+- 工作区历史草稿脚本 `.{autorun,quickrun,sse,replicate}_repro.mjs` / `.verify_replicate.mjs`
+  仍在，建议 .gitignore 或删除。
+
 ## Round 17 — 2026-08-07 13:05 — Playground 三提交审查（b5c84de..07b2ae5）
 
 ### 审查结论：三个提交质量都很高，无需修改
