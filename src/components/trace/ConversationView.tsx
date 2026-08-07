@@ -2,8 +2,8 @@ import type { Trace } from '@shared/schema/types'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CompactMode } from './CompactMode'
-import { type RoleFilter, visibleUnitIndices } from './conversationFilter'
 import { ConversationToolbar } from './ConversationToolbar'
+import { type RoleFilter, visibleUnitIndices } from './conversationFilter'
 import { failuresByMessage } from './failureSource'
 import { buildCallNameMap, MessageCard } from './MessageCard'
 import {
@@ -145,7 +145,9 @@ export function ConversationView({
   )
   const visiblePosByUnit = useMemo(() => {
     const map = new Map<number, number>()
-    visibleUnits.forEach((unitIndex, pos) => map.set(unitIndex, pos))
+    visibleUnits.forEach((unitIndex, pos) => {
+      map.set(unitIndex, pos)
+    })
     return map
   }, [visibleUnits])
 

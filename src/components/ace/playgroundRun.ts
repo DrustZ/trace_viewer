@@ -59,7 +59,7 @@ export function initialPlaygroundConfig(
     ...(params.scenarioId?.trim() ? { scenarioId: params.scenarioId.trim() } : {}),
     ...(params.seed?.trim() ? { seed: params.seed.trim() } : {}),
   }
-  if (!sourceTrace || sourceTrace.meta.corpusId !== 'simulation') return base
+  if (sourceTrace?.meta.corpusId !== 'simulation') return base
   const overrides = traceRunFormOverrides(sourceTrace)
   const recordedSeed = traceEnvironmentSeed(sourceTrace)
   return {

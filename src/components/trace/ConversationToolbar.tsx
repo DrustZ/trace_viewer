@@ -273,7 +273,9 @@ export function ConversationToolbar({
           onClick={onToggleTimeline}
           testId="toggle-timeline"
           disabled={compact}
-          title={compact ? 'Turn off Compact mode first — the two focus modes are exclusive' : undefined}
+          title={
+            compact ? 'Turn off Compact mode first — the two focus modes are exclusive' : undefined
+          }
         >
           Timeline
         </ToggleButton>
@@ -282,7 +284,11 @@ export function ConversationToolbar({
           onClick={onToggleCompact}
           testId="toggle-compact"
           disabled={timelineOpen}
-          title={timelineOpen ? 'Turn off Timeline mode first — the two focus modes are exclusive' : undefined}
+          title={
+            timelineOpen
+              ? 'Turn off Timeline mode first — the two focus modes are exclusive'
+              : undefined
+          }
         >
           Compact
         </ToggleButton>

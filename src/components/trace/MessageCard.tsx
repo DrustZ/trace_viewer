@@ -153,9 +153,9 @@ export function FailureChips({ failures }: { failures?: readonly UnifiedFailure[
   if (failures === undefined || failures.length === 0) return null
   return (
     <div className="mt-1 flex flex-wrap gap-1" data-testid="ace-failure-chips">
-      {failures.map((failure, index) => (
+      {failures.map((failure) => (
         <span
-          key={`${failure.code}-${failure.messageId ?? ''}-${index}`}
+          key={`${failure.origin}:${failure.code}:${failure.messageId ?? failure.anchorLabel}:${failure.source}`}
           title={[
             failure.origin,
             failure.severity,

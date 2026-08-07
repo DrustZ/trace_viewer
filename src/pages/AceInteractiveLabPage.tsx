@@ -17,15 +17,15 @@ import { useAceTasks } from '../api/aceTasks'
 import { useTrace, useTraces } from '../api/hooks'
 import { traceEnvironmentSeed } from '../components/ace/interactiveLab'
 import {
-  buildPlaygroundRunRequest,
-  initialPlaygroundConfig,
-  type PlaygroundRunConfig,
-} from '../components/ace/playgroundRun'
-import {
   EpisodeConversation,
   EpisodeResultCard,
   PlaygroundActions,
 } from '../components/ace/PlaygroundSession'
+import {
+  buildPlaygroundRunRequest,
+  initialPlaygroundConfig,
+  type PlaygroundRunConfig,
+} from '../components/ace/playgroundRun'
 import { ErrorState, LoadingState } from '../components/common/EmptyState'
 import { formatNumber, formatPercent } from '../components/common/format'
 
@@ -257,14 +257,21 @@ const BOT_HINTS: Record<string, string> = {
 }
 
 /** Episode session: bubbles from the run's single trace, then grade + actions. */
-function EpisodeSession({ runId, onChildRun }: { runId: string; onChildRun: (id: string) => void }) {
+function EpisodeSession({
+  runId,
+  onChildRun,
+}: {
+  runId: string
+  onChildRun: (id: string) => void
+}) {
   const run = useAceRun(runId)
   const filters = useMemo(
     () => encodeFilterSet({ conditions: [{ key: 'run', op: 'eq', value: runId }] }),
     [runId],
   )
   const traces = useTraces({ filters, sort: 'timestamp', order: 'asc', limit: 5 })
-  const items = traces.data && 'items' in traces.data ? (traces.data as TracesListResponse).items : []
+  const items =
+    traces.data && 'items' in traces.data ? (traces.data as TracesListResponse).items : []
   const episodeUid = items[0] ? (items[0].meta.traceUid ?? items[0].meta.traceId) : undefined
   const episode = useTrace(episodeUid)
   return (
@@ -337,9 +344,36 @@ function PlaygroundWorkbench({
     setValidationError(null)
   }
 
-  // Same double-submit + idempotent-batchId discipline as the batch launcher.
+  // Same double-submit + idempotent-batchId discipline as the batch launcher:
+  // the id persists in sessionStorage so a remount (e.g. source-trace change
+  // mid-retry) cannot mint a fresh id and start a second paid episode.
   const submitInFlight = useRef(false)
-  const pendingBatchId = useRef<string | null>(null)
+  const pendingBatchIdKey = `ace-playground-pending-batch:${requestedTraceUid ?? 'blank'}`
+  const pendingBatchIdFallback = useRef<string | null>(null)
+  const takePendingBatchId = (): string => {
+    let stored: string | null = null
+    try {
+      stored = window.sessionStorage.getItem(pendingBatchIdKey)
+    } catch {
+      stored = pendingBatchIdFallback.current
+    }
+    const batchId = stored ?? `viewer-${crypto.randomUUID()}`
+    pendingBatchIdFallback.current = batchId
+    try {
+      window.sessionStorage.setItem(pendingBatchIdKey, batchId)
+    } catch {
+      // sessionStorage unavailable: the in-memory fallback still guards retries.
+    }
+    return batchId
+  }
+  const clearPendingBatchId = () => {
+    pendingBatchIdFallback.current = null
+    try {
+      window.sessionStorage.removeItem(pendingBatchIdKey)
+    } catch {
+      // Already cleared in memory.
+    }
+  }
   const runEpisode = async () => {
     if (!available || submitInFlight.current) return
     const result = buildPlaygroundRunRequest({
@@ -351,10 +385,10 @@ function PlaygroundWorkbench({
       return
     }
     submitInFlight.current = true
-    const batchId = (pendingBatchId.current ??= `viewer-${crypto.randomUUID()}`)
+    const batchId = takePendingBatchId()
     try {
       const response = await start.mutateAsync({ ...result.request, batchId })
-      pendingBatchId.current = null
+      clearPendingBatchId()
       onRunSelected(response.runId)
     } catch {
       // React Query exposes the server error below the button.
@@ -559,8 +593,8 @@ function PlaygroundWorkbench({
                 ))}
               </select>
               <span className="mt-0.5 block text-[10px] text-slate-400">
-                One scenario × one seed; the full ACE harness (world, tools, user simulator,
-                grader) runs fresh.
+                One scenario × one seed; the full ACE harness (world, tools, user simulator, grader)
+                runs fresh.
               </span>
             </label>
             <div className="grid grid-cols-2 gap-2">

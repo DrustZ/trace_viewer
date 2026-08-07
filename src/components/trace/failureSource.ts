@@ -71,9 +71,8 @@ function flagMessageId(trace: Trace, flag: DetectorFlag): string | undefined {
     return trace.messages.find((message) => message.rawIndex === flag.rawIndex)?.id
   }
   if (flag.indexSpace === 'chronological' && flag.chronologicalIndex !== undefined) {
-    return trace.messages.find(
-      (message) => message.chronologicalIndex === flag.chronologicalIndex,
-    )?.id
+    return trace.messages.find((message) => message.chronologicalIndex === flag.chronologicalIndex)
+      ?.id
   }
   return undefined
 }

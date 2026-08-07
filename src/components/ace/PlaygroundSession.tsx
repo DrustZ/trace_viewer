@@ -161,13 +161,7 @@ export function EpisodeConversation({ trace }: { trace: Trace }) {
 // Judge / grade result card
 // ---------------------------------------------------------------------------
 
-export function EpisodeResultCard({
-  trace,
-  costUsd,
-}: {
-  trace: Trace
-  costUsd?: number | null
-}) {
+export function EpisodeResultCard({ trace, costUsd }: { trace: Trace; costUsd?: number | null }) {
   const evaluation = trace.evaluation
   if (!evaluation) return null
   const outcome = evaluation.outcome
@@ -246,8 +240,7 @@ export function PlaygroundActions({
   const [checkpointId, setCheckpointId] = useState<number | undefined>()
   const forkInFlight = useRef(false)
 
-  const selected =
-    rows.find((row) => row.id === checkpointId) ?? branchable[branchable.length - 1]
+  const selected = rows.find((row) => row.id === checkpointId) ?? branchable[branchable.length - 1]
   const forkMessageId = checkpointForkMessageId(selected, trace.messages)
   const forkAvailable = Boolean(checkpoints.data?.forkAvailable) && branchable.length > 0
 

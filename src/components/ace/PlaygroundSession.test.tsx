@@ -92,9 +92,9 @@ function episode(): Trace {
 describe('bubbleStyle role coloring', () => {
   it('separates user / beta / human / tool with distinct colors and sides', () => {
     expect(bubbleStyle(message('m', 'user'))).toMatchObject({ label: 'USER', align: 'start' })
-    expect(bubbleStyle(message('m', 'assistant', { metadata: { agentType: 'beta' } }))).toMatchObject(
-      { label: 'BETA', align: 'end' },
-    )
+    expect(
+      bubbleStyle(message('m', 'assistant', { metadata: { agentType: 'beta' } })),
+    ).toMatchObject({ label: 'BETA', align: 'end' })
     expect(
       bubbleStyle(message('m', 'assistant', { metadata: { agentType: 'human' } })),
     ).toMatchObject({ label: 'HUMAN', align: 'end' })
@@ -106,8 +106,9 @@ describe('bubbleStyle role coloring', () => {
     expect(
       bubbleStyle(message('m', 'tool', { toolResult: { toolCallId: 'c', isError: true } })),
     ).toMatchObject({ label: 'TOOL · ERROR' })
-    const chips = ['user', 'assistant', 'tool']
-      .map((role) => bubbleStyle(message('m', role as Message['role'])).chip)
+    const chips = ['user', 'assistant', 'tool'].map(
+      (role) => bubbleStyle(message('m', role as Message['role'])).chip,
+    )
     expect(new Set(chips).size).toBe(chips.length)
   })
 })
