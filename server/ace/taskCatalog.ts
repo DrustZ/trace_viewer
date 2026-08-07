@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { type Dirent, promises as fs } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type {
   AceTaskDetail,
   AceTaskFacets,
@@ -32,6 +33,8 @@ const GRADER_FILE = 'src/ace/evaluation/grading/atomic.py' as const
 const GRADER_SYMBOL = `${GRADER_FILE}::grade_atomic` as const
 const SPLIT_FILE = 'src/ace/simulation/environment/database.py' as const
 const SPLIT_SYMBOL = `${SPLIT_FILE}::Database.split_of` as const
+const PYTHON_SOURCE_DIRECTORY = 'src/ace' as const
+const SCORING_PROBE_FILE = fileURLToPath(new URL('./task_scoring_export.py', import.meta.url))
 
 type UnknownRecord = Record<string, unknown>
 
@@ -126,6 +129,37 @@ interface ScoringLoadResult {
   scenarios: Map<string, AceTaskScoringProbeScenario>
 }
 
+interface ShadowRubricSnapshot {
+  file: string
+  digest: string
+  available: true
+  kind: 'semantic' | 'judge'
+  gating: false
+  content: string
+}
+
+interface ScoringSourceSnapshot {
+  fingerprint: string
+  graderSource: string | null
+  splitSource: string | null
+  probeInputs: AceTaskScoringProbeInput[]
+  shadowRubrics: ShadowRubricSnapshot[]
+}
+
+interface ScoringCacheBucket {
+  successful?: {
+    fingerprint: string
+    result: ScoringLoadResult
+  }
+  inFlight: Map<string, Promise<ScoringLoadResult>>
+}
+
+// Exporters are part of the authority boundary: an injected fixture/exporter
+// must never reuse output produced by the fixed Python bridge (or vice versa).
+// Each project keeps only its most recent successful snapshot, while in-flight
+// probes are keyed independently so a live source edit cannot join stale work.
+const scoringCache = new WeakMap<AceTaskScoringExporter, Map<string, ScoringCacheBucket>>()
+
 export interface LoadAceTaskCatalogOptions {
   scoringExporter?: AceTaskScoringExporter
 }
@@ -138,15 +172,53 @@ async function sourceText(projectRoot: string, file: string): Promise<string | n
   }
 }
 
-async function loadScoringContract(
+async function absoluteSourceText(file: string): Promise<string | null> {
+  try {
+    return await fs.readFile(file, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+async function pythonSourceFiles(
+  projectRoot: string,
+  directory: string = PYTHON_SOURCE_DIRECTORY,
+): Promise<string[]> {
+  let entries: Dirent[]
+  try {
+    entries = await fs.readdir(path.join(projectRoot, directory), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const files: string[] = []
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const relative = path.posix.join(directory, entry.name)
+    if (entry.isDirectory()) files.push(...(await pythonSourceFiles(projectRoot, relative)))
+    else if (entry.isFile() && entry.name.endsWith('.py')) files.push(relative)
+  }
+  return files
+}
+
+function canonicalProbeInputs(
+  probeInputs: readonly AceTaskScoringProbeInput[],
+): AceTaskScoringProbeInput[] {
+  return [...probeInputs]
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map(({ key, scenario }) => ({ key, scenario }))
+}
+
+async function scoringSourceSnapshot(
   projectRoot: string,
   probeInputs: readonly AceTaskScoringProbeInput[],
-  exporter: AceTaskScoringExporter,
-): Promise<ScoringLoadResult> {
-  const graderFile = GRADER_FILE
-  const splitFile = SPLIT_FILE
-  const graderBefore = await sourceText(projectRoot, graderFile)
-  const splitBefore = await sourceText(projectRoot, splitFile)
+): Promise<ScoringSourceSnapshot> {
+  const sourceFiles = await pythonSourceFiles(projectRoot)
+  const sourceEntries = await Promise.all(
+    sourceFiles.map(async (file) => {
+      const content = await sourceText(projectRoot, file)
+      return { file, digest: content === null ? null : fullDigest(content), content }
+    }),
+  )
+  const sources = new Map(sourceEntries.map(({ file, content }) => [file, content]))
   const rubricRoot = path.join(projectRoot, 'configs', 'rubrics')
   let rubricFiles: string[] = []
   try {
@@ -157,30 +229,78 @@ async function loadScoringContract(
     // Optional shadow channels may be absent in a minimal local fixture.
   }
   const shadowRubrics = await Promise.all(
-    rubricFiles.map(async (file) => {
+    rubricFiles.map(async (file): Promise<ShadowRubricSnapshot> => {
       const content = await fs.readFile(path.join(rubricRoot, file), 'utf8')
       return {
         file: `configs/rubrics/${file}`,
         digest: fullDigest(content),
         available: true,
-        kind: file.startsWith('semantic') ? ('semantic' as const) : ('judge' as const),
-        gating: false as const,
+        kind: file.startsWith('semantic') ? 'semantic' : 'judge',
+        gating: false,
         content,
       }
     }),
   )
+  const canonicalInputs = canonicalProbeInputs(probeInputs)
+  const probeImplementation = await absoluteSourceText(SCORING_PROBE_FILE)
+  return {
+    fingerprint: fullDigest(
+      JSON.stringify(
+        stableValue({
+          schemaVersion: 1,
+          probeInputs: canonicalInputs,
+          pythonSources: sourceEntries.map(({ file, digest }) => ({ file, digest })),
+          probeImplementationDigest:
+            probeImplementation === null ? null : fullDigest(probeImplementation),
+          shadowRubrics: shadowRubrics.map(({ file, digest }) => ({ file, digest })),
+        }),
+      ),
+    ),
+    graderSource: sources.get(GRADER_FILE) ?? null,
+    splitSource: sources.get(SPLIT_FILE) ?? null,
+    probeInputs: canonicalInputs,
+    shadowRubrics,
+  }
+}
+
+function scoringCacheBucket(
+  projectRoot: string,
+  exporter: AceTaskScoringExporter,
+): ScoringCacheBucket {
+  let projects = scoringCache.get(exporter)
+  if (!projects) {
+    projects = new Map()
+    scoringCache.set(exporter, projects)
+  }
+  const resolvedRoot = path.resolve(projectRoot)
+  let bucket = projects.get(resolvedRoot)
+  if (!bucket) {
+    bucket = { inFlight: new Map() }
+    projects.set(resolvedRoot, bucket)
+  }
+  return bucket
+}
+
+async function probeScoringContract(
+  projectRoot: string,
+  before: ScoringSourceSnapshot,
+  exporter: AceTaskScoringExporter,
+): Promise<ScoringLoadResult> {
+  const graderFile = GRADER_FILE
+  const splitFile = SPLIT_FILE
   let exported: Awaited<ReturnType<AceTaskScoringExporter>> | null = null
   try {
-    exported = await exporter(projectRoot, probeInputs)
+    exported = await exporter(projectRoot, before.probeInputs)
   } catch {
     // Import/probe failures are expected while the sibling worktree is
     // incomplete. Never fall back to copied TypeScript scoring rules.
   }
   // Re-read after the subprocess. A concurrent edit must not let an output
   // derived from an older source revision retain a green "verified" badge.
-  const graderAfter = await sourceText(projectRoot, graderFile)
-  const splitAfter = await sourceText(projectRoot, splitFile)
-  const sourcesStable = graderBefore === graderAfter && splitBefore === splitAfter
+  const after = await scoringSourceSnapshot(projectRoot, before.probeInputs)
+  const graderAfter = after.graderSource
+  const splitAfter = after.splitSource
+  const sourcesStable = before.fingerprint === after.fingerprint
   const exportMatches =
     exported !== null &&
     graderAfter !== null &&
@@ -234,9 +354,40 @@ async function loadScoringContract(
       invalidUserSimPolicy:
         'Invalid user-simulator episodes are void: grade and metrics are null and they are excluded from pass/fail denominators.',
       sourceContract: verifiedExport?.grader.sourceContract ?? null,
-      shadowRubrics,
+      shadowRubrics: after.shadowRubrics,
     },
   }
+}
+
+async function loadScoringContract(
+  projectRoot: string,
+  probeInputs: readonly AceTaskScoringProbeInput[],
+  exporter: AceTaskScoringExporter,
+): Promise<ScoringLoadResult> {
+  const snapshot = await scoringSourceSnapshot(projectRoot, probeInputs)
+  const bucket = scoringCacheBucket(projectRoot, exporter)
+  if (bucket.successful?.fingerprint === snapshot.fingerprint) {
+    return bucket.successful.result
+  }
+  const existing = bucket.inFlight.get(snapshot.fingerprint)
+  if (existing) return existing
+
+  const pending = probeScoringContract(projectRoot, snapshot, exporter)
+    .then((result) => {
+      // Unavailable and mismatch results are useful for this response, but
+      // never sticky. A repaired runtime/source must be retried next request.
+      if (result.authority.status === 'verified') {
+        bucket.successful = { fingerprint: snapshot.fingerprint, result }
+      }
+      return result
+    })
+    .finally(() => {
+      if (bucket.inFlight.get(snapshot.fingerprint) === pending) {
+        bucket.inFlight.delete(snapshot.fingerprint)
+      }
+    })
+  bucket.inFlight.set(snapshot.fingerprint, pending)
+  return pending
 }
 
 function normalizeVariant(row: UnknownRecord, source: AceTaskSource): AceTaskVariant {

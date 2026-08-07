@@ -641,4 +641,161 @@ def grade_atomic():
     })
     expect(catalog.scoring?.primaryGrader.available).toBe(false)
   })
+
+  it('single-flights concurrent probes and reuses only the scoring snapshot', async () => {
+    await writePack('graded.json', [complete])
+    let calls = 0
+    let releaseFirst: (() => void) | undefined
+    let markStarted: (() => void) | undefined
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const exporter: AceTaskScoringExporter = async (projectRoot, scenarios) => {
+      calls += 1
+      markStarted?.()
+      await blocked
+      return verifiedExporter(projectRoot, scenarios)
+    }
+
+    const first = loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    await started
+    const second = loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    releaseFirst?.()
+    const [firstCatalog, secondCatalog] = await Promise.all([first, second])
+
+    expect(calls).toBe(1)
+    expect(firstCatalog.scoring?.primaryGrader.available).toBe(true)
+    expect(secondCatalog.scoring?.primaryGrader.available).toBe(true)
+
+    const withFreshTraceAggregation = await loadAceTaskCatalog(
+      root,
+      [
+        evaluatedTrace({
+          runId: 'new-run',
+          outcome: 'pass',
+          timestamp: '2026-08-06T03:00:00.000Z',
+          checks: [],
+        }),
+      ],
+      { scoringExporter: exporter },
+    )
+    expect(calls).toBe(1)
+    expect(withFreshTraceAggregation.tasks[0]?.traceCoverage.traceCount).toBe(1)
+  })
+
+  it('invalidates the probe after relevant Python source or scenario config changes', async () => {
+    await writePack('graded.json', [complete])
+    let calls = 0
+    const exporter: AceTaskScoringExporter = async (projectRoot, scenarios) => {
+      calls += 1
+      return verifiedExporter(projectRoot, scenarios)
+    }
+
+    await loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    await loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    expect(calls).toBe(1)
+
+    await fs.writeFile(
+      path.join(root, 'src', 'ace', 'evaluation', 'scenarios.py'),
+      '# scenario schema revision\n',
+    )
+    await loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    expect(calls).toBe(2)
+
+    await writePack('graded.json', [
+      { ...complete, card: { ...complete.card, goal: 'A revised task goal.' } },
+    ])
+    const revised = await loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    expect(calls).toBe(3)
+    expect(revised.tasks[0]?.taskBrief).toBe('A revised task goal.')
+  })
+
+  it('does not join a changed source snapshot to an older in-flight probe', async () => {
+    await writePack('graded.json', [complete])
+    let calls = 0
+    let releaseFirst: (() => void) | undefined
+    let markStarted: (() => void) | undefined
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const exporter: AceTaskScoringExporter = async (projectRoot, scenarios) => {
+      calls += 1
+      if (calls === 1) {
+        markStarted?.()
+        await blocked
+      }
+      return verifiedExporter(projectRoot, scenarios)
+    }
+
+    const oldSnapshot = loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    await started
+    await fs.appendFile(
+      path.join(root, 'src', 'ace', 'evaluation', 'grading', 'atomic.py'),
+      '\n# changed while the first probe is running\n',
+    )
+    const currentSnapshot = await loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    expect(calls).toBe(2)
+    expect(currentSnapshot.scoring?.primaryGrader.authority).toMatchObject({
+      status: 'verified',
+    })
+
+    releaseFirst?.()
+    const stale = await oldSnapshot
+    expect(stale.scoring?.primaryGrader.authority).toMatchObject({
+      status: 'mismatch',
+      reason: 'source_digest_mismatch',
+    })
+    await loadAceTaskCatalog(root, [], { scoringExporter: exporter })
+    expect(calls).toBe(2)
+  })
+
+  it('retries unavailable and digest-mismatch probes instead of caching failures', async () => {
+    await writePack('graded.json', [complete])
+    let unavailableCalls = 0
+    const recoveringExporter: AceTaskScoringExporter = async (projectRoot, scenarios) => {
+      unavailableCalls += 1
+      if (unavailableCalls === 1) throw new Error('temporary interpreter failure')
+      return verifiedExporter(projectRoot, scenarios)
+    }
+
+    const unavailable = await loadAceTaskCatalog(root, [], {
+      scoringExporter: recoveringExporter,
+    })
+    const recovered = await loadAceTaskCatalog(root, [], {
+      scoringExporter: recoveringExporter,
+    })
+    expect(unavailableCalls).toBe(2)
+    expect(unavailable.scoring?.primaryGrader.authority).toMatchObject({
+      status: 'unavailable',
+      reason: 'python_probe_failed',
+    })
+    expect(recovered.scoring?.primaryGrader.authority).toMatchObject({ status: 'verified' })
+
+    let mismatchCalls = 0
+    const correctingExporter: AceTaskScoringExporter = async (projectRoot, scenarios) => {
+      mismatchCalls += 1
+      const result = await verifiedExporter(projectRoot, scenarios)
+      return mismatchCalls === 1
+        ? { ...result, grader: { ...result.grader, digest: '0'.repeat(64) } }
+        : result
+    }
+    const mismatch = await loadAceTaskCatalog(root, [], {
+      scoringExporter: correctingExporter,
+    })
+    const corrected = await loadAceTaskCatalog(root, [], {
+      scoringExporter: correctingExporter,
+    })
+    expect(mismatchCalls).toBe(2)
+    expect(mismatch.scoring?.primaryGrader.authority).toMatchObject({
+      status: 'mismatch',
+      reason: 'source_digest_mismatch',
+    })
+    expect(corrected.scoring?.primaryGrader.authority).toMatchObject({ status: 'verified' })
+  })
 })
