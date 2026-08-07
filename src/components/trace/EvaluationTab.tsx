@@ -1,4 +1,11 @@
-import type { FailureV1, Trace } from '@shared/schema/types'
+import type { Trace } from '@shared/schema/types'
+import { useMemo } from 'react'
+import { type UnifiedFailure, unifiedFailures } from './failureSource'
+import { failureChipLabel } from './MessageCard'
+
+// Re-exported so existing imports keep resolving; the implementation moved to
+// the unified failure source module.
+export { failureMessageId } from './failureSource'
 
 function OutcomeBadge({ outcome }: { outcome: string }) {
   const cls =
@@ -16,45 +23,15 @@ function OutcomeBadge({ outcome }: { outcome: string }) {
   )
 }
 
-export function failureMessageId(trace: Trace, failure: FailureV1): string | undefined {
-  if (failure.messageId !== undefined) {
-    return trace.messages.some((message) => message.id === failure.messageId)
-      ? failure.messageId
-      : undefined
-  }
-  if (failure.indexSpace === 'raw' && failure.rawIndex !== undefined) {
-    return trace.messages.find((message) => message.rawIndex === failure.rawIndex)?.id
-  }
-  if (failure.indexSpace === 'chronological' && failure.chronologicalIndex !== undefined) {
-    return trace.messages.find(
-      (message) => message.chronologicalIndex === failure.chronologicalIndex,
-    )?.id
-  }
-  return undefined
-}
-
-function failureAnchorLabel(failure: FailureV1): string {
-  if (failure.messageId !== undefined) return failure.messageId
-  if (failure.indexSpace === 'raw' && failure.rawIndex !== undefined) {
-    return `raw #${failure.rawIndex + 1}`
-  }
-  if (failure.indexSpace === 'chronological' && failure.chronologicalIndex !== undefined) {
-    return `chronological #${failure.chronologicalIndex + 1}`
-  }
-  return '—'
-}
-
 function FailureRow({
   failure,
-  trace,
   onJumpToMessage,
 }: {
-  failure: FailureV1
-  trace: Trace
+  failure: UnifiedFailure
   onJumpToMessage?: (messageId: string) => void
 }) {
-  const targetMessageId = failureMessageId(trace, failure)
-  const anchorLabel = failureAnchorLabel(failure)
+  const targetMessageId = failure.messageId
+  const anchorLabel = failure.anchorLabel
   return (
     <tr className="border-t border-slate-100 align-top">
       <td className="px-3 py-2">
@@ -65,7 +42,17 @@ function FailureRow({
         </span>
       </td>
       <td className="px-3 py-2 text-xs text-slate-500">{failure.origin}</td>
-      <td className="px-3 py-2 font-mono text-xs text-slate-800">{failure.code}</td>
+      <td className="px-3 py-2 font-mono text-xs text-slate-800">
+        {failureChipLabel(failure)}
+        {failure.metadataOnly && (
+          <span
+            className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[9px] font-medium text-slate-500"
+            title="Present only in message metadata; missing from the normalized evaluation layer"
+          >
+            metadata fill-in
+          </span>
+        )}
+      </td>
       <td className="px-3 py-2 text-xs text-slate-600">
         {targetMessageId !== undefined && onJumpToMessage !== undefined ? (
           <button
@@ -96,16 +83,14 @@ function FailureRow({
   )
 }
 
-function failureKey(failure: FailureV1): string {
+function failureKey(failure: UnifiedFailure, index: number): string {
   return JSON.stringify([
+    index,
     failure.origin,
     failure.code,
     failure.source,
     failure.messageId,
-    failure.toolCallId,
-    failure.indexSpace,
-    failure.rawIndex,
-    failure.chronologicalIndex,
+    failure.anchorLabel,
     failure.evidence,
   ])
 }
@@ -129,6 +114,8 @@ export function EvaluationTab({
   onJumpToMessage?: (messageId: string) => void
 }) {
   const evaluation = trace.evaluation
+  // Single failure source: evaluation.failures first, message metadata as fill-in.
+  const failures = useMemo(() => unifiedFailures(trace), [trace])
   if (!evaluation) {
     return (
       <div className="mx-auto max-w-4xl p-6">
@@ -155,7 +142,7 @@ export function EvaluationTab({
           {evaluation.lifecycle.termination ? ` · ${evaluation.lifecycle.termination}` : ''}
         </span>
         <span className="ml-auto text-xs text-slate-500">
-          {evaluation.failures.length} findings ·{' '}
+          {failures.length} findings ·{' '}
           {evaluation.checks.filter((check) => check.gating && !check.ok).length} failed gating
           checks
         </span>
@@ -201,7 +188,7 @@ export function EvaluationTab({
         )}
       </Card>
       <Card title="Normalized failures">
-        {evaluation.failures.length === 0 ? (
+        {failures.length === 0 ? (
           <p className="p-4 text-xs text-emerald-700">No normalized failures.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -217,11 +204,10 @@ export function EvaluationTab({
                 </tr>
               </thead>
               <tbody>
-                {evaluation.failures.map((failure) => (
+                {failures.map((failure, index) => (
                   <FailureRow
-                    key={failureKey(failure)}
+                    key={failureKey(failure, index)}
                     failure={failure}
-                    trace={trace}
                     onJumpToMessage={onJumpToMessage}
                   />
                 ))}

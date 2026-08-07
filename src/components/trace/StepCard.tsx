@@ -2,6 +2,7 @@ import type { Message, ToolCall } from '@shared/schema/types'
 import { messageTokens } from '@shared/stats/computeStats'
 import { FoldSection } from '../common/CollapsibleText'
 import { formatDuration, formatNumber, formatScore, formatTimestamp } from '../common/format'
+import type { UnifiedFailure } from './failureSource'
 import {
   FailureChips,
   FOLD_TONES,
@@ -178,6 +179,7 @@ export function StepCard({
   reasoningOpen,
   onToggleReasoning,
   resultErrorByCallId,
+  failureIndex,
 }: {
   unit: StepUnit
   expanded: boolean
@@ -186,6 +188,8 @@ export function StepCard({
   onToggleReasoning: () => void
   /** From buildResultErrorMap(trace.messages); omitted ⇒ no error dots on calls. */
   resultErrorByCallId?: ReadonlyMap<string, boolean>
+  /** From failuresByMessage(trace); omitted ⇒ no inline failure chips. */
+  failureIndex?: ReadonlyMap<string, readonly UnifiedFailure[]>
 }) {
   const first = unit.messages[0]
   const number = first ? messageNumber(first.id) : undefined
@@ -289,7 +293,9 @@ export function StepCard({
           <CollapsedSummary unit={unit} />
         )}
       </div>
-      <FailureChips messages={unit.messages} />
+      <FailureChips
+        failures={unit.messages.flatMap((message) => failureIndex?.get(message.id) ?? [])}
+      />
     </div>
   )
 }

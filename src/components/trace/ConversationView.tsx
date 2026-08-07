@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CompactMode } from './CompactMode'
 import { ConversationToolbar } from './ConversationToolbar'
+import { failuresByMessage } from './failureSource'
 import { buildCallNameMap, MessageCard } from './MessageCard'
 import {
   orderMessagesByTimestamp,
@@ -115,6 +116,9 @@ export function ConversationView({
   const displayOrderKey = `${traceOrderKey}:${timeOrdered ? 'time' : 'source'}`
 
   const units = useMemo(() => buildUnits(messages), [messages])
+
+  // Unified failure source (evaluation.failures + metadata fill-ins) for inline chips.
+  const failureIndex = useMemo(() => failuresByMessage(trace), [trace])
 
   // callId → tool name, so a standalone tool result can label its chip and pick the
   // highlight language (python/bash/…) for its Rich view.
@@ -422,6 +426,7 @@ export function ConversationView({
                               onToggle={() => toggleStep(unit.id)}
                               reasoningOpen={reasoningOpen.get(unit.id) ?? false}
                               onToggleReasoning={() => toggleReasoning(unit.id)}
+                              failureIndex={failureIndex}
                             />
                           ) : unit.message.role === 'tool' ? (
                             <MessageCard
@@ -432,12 +437,14 @@ export function ConversationView({
                                 callNames.get(unit.message.toolResult?.toolCallId ?? '') ??
                                 carriedToolName(unit.message)
                               }
+                              failures={failureIndex.get(unit.message.id)}
                             />
                           ) : (
                             <MessageCard
                               message={unit.message}
                               bodyExpanded={foldOpen.get(unit.id) ?? foldDefault}
                               onToggleBody={() => toggleFold(unit.id)}
+                              failures={failureIndex.get(unit.message.id)}
                             />
                           )}
                         </div>

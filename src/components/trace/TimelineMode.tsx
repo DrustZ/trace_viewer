@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../common/EmptyState'
 import { formatDuration } from '../common/format'
 import { useResizableWidth } from '../common/useResizableWidth'
+import { failuresByMessage } from './failureSource'
 import { MessageCard } from './MessageCard'
 import { buildSpanTree, flattenVisible, type ProfSpan } from './profSpans'
 import { SpanBar } from './SpanBar'
@@ -40,6 +41,7 @@ export function TimelineMode({ trace }: { trace: Trace }) {
   const root = useMemo(() => spans.find((s) => s.parentId === null) ?? spans[0], [spans])
   const units = useMemo(() => buildUnits(trace.messages), [trace.messages])
   const resultErrorByCallId = useMemo(() => buildResultErrorMap(trace.messages), [trace.messages])
+  const failureIndex = useMemo(() => failuresByMessage(trace), [trace])
 
   const spanById = useMemo(() => new Map(spans.map((s) => [s.id, s])), [spans])
 
@@ -252,12 +254,14 @@ export function TimelineMode({ trace }: { trace: Trace }) {
               reasoningOpen={reasoningOpen.get(unit.id) ?? true}
               onToggleReasoning={() => setReasoningOpen((prev) => toggleIn(prev, unit.id, true))}
               resultErrorByCallId={resultErrorByCallId}
+              failureIndex={failureIndex}
             />
           ) : (
             <MessageCard
               message={unit.message}
               bodyExpanded={foldOpen.get(unit.id) ?? true}
               onToggleBody={() => setFoldOpen((prev) => toggleIn(prev, unit.id, true))}
+              failures={failureIndex.get(unit.message.id)}
             />
           )}
         </div>

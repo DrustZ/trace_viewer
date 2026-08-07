@@ -3,6 +3,7 @@ import { FoldSection, type FoldTone } from '../common/CollapsibleText'
 import { formatDuration, formatTimestamp } from '../common/format'
 import { MarkdownContent } from '../common/MarkdownContent'
 import { ScoreBadge } from '../common/ScoreBadge'
+import type { UnifiedFailure } from './failureSource'
 import {
   MessageViewHeader,
   RawMessageJson,
@@ -136,55 +137,42 @@ export function JudgeCallout({ text }: { text: string }) {
   )
 }
 
-interface AnchoredFailure {
-  id?: string
-  code: string
-  severity?: string
-  origin?: string
-  evidence?: string
+/** Chip label: `code · tier/family` when detector evidence exists. */
+export function failureChipLabel(failure: UnifiedFailure): string {
+  const taxonomy = [failure.tier, failure.family].filter(Boolean).join('/')
+  return taxonomy ? `${failure.code} · ${taxonomy}` : failure.code
 }
 
-function anchoredFailures(message: Message): AnchoredFailure[] {
-  const value = message.metadata?.aceFailures
-  if (!Array.isArray(value)) return []
-  return value.flatMap((candidate) => {
-    if (typeof candidate !== 'object' || candidate === null) return []
-    const item = candidate as Record<string, unknown>
-    if (typeof item.code !== 'string') return []
-    return [
-      {
-        ...(typeof item.id === 'string' ? { id: item.id } : {}),
-        code: item.code,
-        ...(typeof item.severity === 'string' ? { severity: item.severity } : {}),
-        ...(typeof item.origin === 'string' ? { origin: item.origin } : {}),
-        ...(typeof item.evidence === 'string' ? { evidence: item.evidence } : {}),
-      },
-    ]
-  })
-}
-
-/** Normalized ACE detector/grader/tool findings anchored to the exact source message. */
-export function FailureChips({ messages }: { messages: readonly Message[] }) {
-  const failures = messages.flatMap(anchoredFailures)
-  if (failures.length === 0) return null
+/**
+ * Unified failure findings anchored to the exact source message. Fed from
+ * `failuresByMessage(trace)` (single source: evaluation.failures first,
+ * message metadata only as fill-in). Gating failures are red; advisory
+ * (non-gating) findings are amber.
+ */
+export function FailureChips({ failures }: { failures?: readonly UnifiedFailure[] }) {
+  if (failures === undefined || failures.length === 0) return null
   return (
     <div className="mt-1 flex flex-wrap gap-1" data-testid="ace-failure-chips">
-      {failures.map((failure, index) => {
-        const major = ['major', 'hard', 'error', 'critical'].includes(failure.severity ?? '')
-        return (
-          <span
-            key={failure.id ?? `${failure.code}-${index}`}
-            title={[failure.origin, failure.severity, failure.evidence].filter(Boolean).join(' · ')}
-            className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${
-              major
-                ? 'border-red-200 bg-red-50 text-red-700'
-                : 'border-amber-200 bg-amber-50 text-amber-700'
-            }`}
-          >
-            {failure.code}
-          </span>
-        )
-      })}
+      {failures.map((failure, index) => (
+        <span
+          key={`${failure.code}-${failure.messageId ?? ''}-${index}`}
+          title={[
+            failure.origin,
+            failure.severity,
+            failure.gating ? 'gating' : 'non-gating',
+            typeof failure.evidence === 'string' ? failure.evidence : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${
+            failure.gating
+              ? 'border-red-200 bg-red-50 text-red-700'
+              : 'border-amber-200 bg-amber-50 text-amber-700'
+          }`}
+        >
+          {failureChipLabel(failure)}
+        </span>
+      ))}
     </div>
   )
 }
@@ -359,6 +347,7 @@ export function MessageCard({
   bodyExpanded,
   onToggleBody,
   toolName,
+  failures,
 }: {
   message: Message
   bodyExpanded: boolean
@@ -369,6 +358,8 @@ export function MessageCard({
    * Connectors may also preserve an unlinked raw name in message metadata.
    */
   toolName?: string
+  /** Unified failures anchored to this message (from failuresByMessage(trace)). */
+  failures?: readonly UnifiedFailure[]
 }) {
   const kind = kindOf(message)
   return (
@@ -382,7 +373,7 @@ export function MessageCard({
         toolName={toolName}
       />
       {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
-      <FailureChips messages={[message]} />
+      <FailureChips failures={failures} />
       <MessageMeta message={message} />
     </div>
   )

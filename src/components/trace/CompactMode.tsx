@@ -2,6 +2,7 @@ import type { Trace } from '@shared/schema/types'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../common/EmptyState'
 import { useResizableWidth } from '../common/useResizableWidth'
+import { failuresByMessage } from './failureSource'
 import { MessageCard } from './MessageCard'
 import { StepCard } from './StepCard'
 import { TraceMetricsPanel } from './TraceMetricsPanel'
@@ -28,6 +29,7 @@ export function CompactMode({ trace }: { trace: Trace }) {
   })
   const units = useMemo(() => buildUnits(trace.messages), [trace.messages])
   const flags = useMemo(() => units.map((unit) => unitFlags(unit, trace)), [units, trace])
+  const failureIndex = useMemo(() => failuresByMessage(trace), [trace])
   const [selected, setSelected] = useState(0)
   // Expand overrides, keyed by unit id. Compact mode defaults everything OPEN
   // (step body, reasoning, system/developer folds) — cards stay collapsible.
@@ -121,12 +123,14 @@ export function CompactMode({ trace }: { trace: Trace }) {
               onToggle={() => setStepOpen((prev) => toggleIn(prev, unit.id, true))}
               reasoningOpen={reasoningOpen.get(unit.id) ?? true}
               onToggleReasoning={() => setReasoningOpen((prev) => toggleIn(prev, unit.id, true))}
+              failureIndex={failureIndex}
             />
           ) : (
             <MessageCard
               message={unit.message}
               bodyExpanded={foldOpen.get(unit.id) ?? true}
               onToggleBody={() => setFoldOpen((prev) => toggleIn(prev, unit.id, true))}
+              failures={failureIndex.get(unit.message.id)}
             />
           )}
         </div>
