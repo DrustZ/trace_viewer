@@ -4,6 +4,13 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 12 — 2026-08-07 05:05（Round 9-11 为空巡检，未记录）
+
+- 抓到一个 flaky：`server/store/scan.test.ts › watches the resolved path from the same
+  labelled root spec` 在机器高负载时偶发超时（chokidar 事件 3s 内未到）。已把该文件 7 处
+  watcher `waitFor` 超时 3s→10s（`waitFor` 条件满足即返回，绿跑不变慢）。连跑 3 轮套件
+  验证稳定。
+
 ## Round 8 — 2026-08-07 02:55
 
 ### 状态

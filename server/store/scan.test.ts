@@ -229,7 +229,7 @@ describe('trace scanner data roots', () => {
       await new Promise<void>((resolve) => watcher.once('ready', () => resolve()))
       await fs.writeFile(path.join(root, 'live.json'), nativeTrace('live-1'))
 
-      await vi.waitFor(() => expect(store.size).toBe(1), { timeout: 3_000 })
+      await vi.waitFor(() => expect(store.size).toBe(1), { timeout: 10_000 })
       expect(store.getFull('live-1')?.meta.extra?.run).toBe('live-run')
       await vi.waitFor(
         () =>
@@ -240,11 +240,11 @@ describe('trace scanner data roots', () => {
               traces: 1,
             },
           ),
-        { timeout: 3_000 },
+        { timeout: 10_000 },
       )
 
       await fs.rm(path.join(root, 'live.json'))
-      await vi.waitFor(() => expect(store.size).toBe(0), { timeout: 3_000 })
+      await vi.waitFor(() => expect(store.size).toBe(0), { timeout: 10_000 })
       await vi.waitFor(
         () =>
           expect(getScanProgress().scanRoots.find((item) => item.run === 'live-run')).toMatchObject(
@@ -254,7 +254,7 @@ describe('trace scanner data roots', () => {
               traces: 0,
             },
           ),
-        { timeout: 3_000 },
+        { timeout: 10_000 },
       )
     } finally {
       await watcher.close()
@@ -356,7 +356,7 @@ describe('trace scanner data roots', () => {
             traces: 0,
             warnings: 2,
           }),
-        { timeout: 3_000 },
+        { timeout: 10_000 },
       )
       expect(getScanProgress()).toMatchObject({ totalFiles: 1, scannedFiles: 1 })
     } finally {
@@ -382,7 +382,7 @@ describe('trace scanner data roots', () => {
       await fs.rm(second)
 
       await vi.waitFor(() => expect(store.get('duplicate-id')?.sourcePath).toBe(first), {
-        timeout: 3_000,
+        timeout: 10_000,
       })
       expect(getScanProgress().scanRoots.find((item) => item.run === 'duplicates')).toMatchObject({
         files: 1,
@@ -414,7 +414,7 @@ describe('trace scanner data roots', () => {
           expect(store.get('old-duplicate')?.sourcePath).toBe(first)
           expect(store.get('new-identity')?.sourcePath).toBe(second)
         },
-        { timeout: 3_000 },
+        { timeout: 10_000 },
       )
       expect(store.size).toBe(2)
       expect(getScanProgress().scanRoots.find((item) => item.run === 'rewrite')).toMatchObject({
