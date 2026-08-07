@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildPlaygroundRunRequest,
   DEFAULT_PLAYGROUND_CONFIG,
+  EPISODE_POLL_MS,
+  episodePollInterval,
+  episodeSettled,
   initialPlaygroundConfig,
   type PlaygroundRunConfig,
 } from './playgroundRun'
@@ -115,6 +118,60 @@ function sourceTrace(): Trace {
     },
   }
 }
+
+describe('episodePollInterval (SSE fallback)', () => {
+  it('polls while the run is active in any pre-terminal lifecycle', () => {
+    for (const lifecycle of ['queued', 'running', 'paused', 'cancelling']) {
+      expect(episodePollInterval({ lifecycle })).toBe(EPISODE_POLL_MS)
+    }
+  })
+
+  it('polls while the batch manifest has not appeared yet (starting window)', () => {
+    expect(episodePollInterval({})).toBe(EPISODE_POLL_MS)
+    expect(episodePollInterval({ episodeSettled: false })).toBe(EPISODE_POLL_MS)
+  })
+
+  it('stops on terminal lifecycles', () => {
+    for (const lifecycle of ['completed', 'failed', 'cancelled']) {
+      expect(episodePollInterval({ lifecycle })).toBe(false)
+    }
+  })
+
+  it('stops without a manifest once the episode itself has settled', () => {
+    expect(episodePollInterval({ episodeSettled: true })).toBe(false)
+  })
+})
+
+describe('episodeSettled', () => {
+  it('is false without a trace or while the episode is executing', () => {
+    expect(episodeSettled(undefined)).toBe(false)
+    const trace = sourceTrace()
+    trace.meta.status = 'executing'
+    expect(episodeSettled(trace)).toBe(false)
+  })
+
+  it('is false while the grade is still pending', () => {
+    const trace = sourceTrace()
+    trace.meta.status = 'completed'
+    trace.evaluation = {
+      lifecycle: { state: 'executing', pendingPhase: 'grading' },
+      outcome: 'ungraded',
+      checks: [],
+      metrics: {},
+      failures: [],
+      flags: [],
+      worldDiff: [],
+      ledger: [],
+    }
+    expect(episodeSettled(trace)).toBe(false)
+  })
+
+  it('is true for a terminal status with no pending phase', () => {
+    const trace = sourceTrace()
+    trace.meta.status = 'completed'
+    expect(episodeSettled(trace)).toBe(true)
+  })
+})
 
 describe('initialPlaygroundConfig', () => {
   it('prefills prompt/harness/model/sampling plus scenario and seed from a simulation trace', () => {

@@ -124,6 +124,17 @@ describe('EpisodeConversation', () => {
     expect(html).toContain('get_order_details')
     expect(html).toContain('order_1')
   })
+
+  it('renders a still-executing (pending) episode: partial messages, no grade required', () => {
+    const trace = episode()
+    trace.meta.status = 'executing'
+    trace.evaluation = undefined
+    trace.messages = trace.messages.slice(0, 2)
+    const html = renderToStaticMarkup(<EpisodeConversation trace={trace} />)
+    expect(html).toContain('data-role="user"')
+    expect(html).toContain('data-role="beta"')
+    expect(html).not.toContain('Waiting for the first durable message')
+  })
 })
 
 describe('EpisodeResultCard', () => {

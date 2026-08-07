@@ -23,6 +23,8 @@ import {
 } from '../components/ace/PlaygroundSession'
 import {
   buildPlaygroundRunRequest,
+  episodePollInterval,
+  episodeSettled,
   initialPlaygroundConfig,
   type PlaygroundRunConfig,
 } from '../components/ace/playgroundRun'
@@ -52,7 +54,12 @@ function LiveRunMonitor({
     () => encodeFilterSet({ conditions: [{ key: 'run', op: 'eq', value: runId }] }),
     [runId],
   )
-  const traces = useTraces({ filters, sort: 'timestamp', order: 'desc', limit: 50 })
+  // SSE is the fast path; the interval is the fallback that keeps the live
+  // table honest when the event channel silently dies (see episodePollInterval).
+  const traces = useTraces(
+    { filters, sort: 'timestamp', order: 'desc', limit: 50 },
+    { refetchInterval: episodePollInterval({ lifecycle: run.data?.lifecycle }) },
+  )
   const traceItems =
     traces.data && 'items' in traces.data ? (traces.data as TracesListResponse).items : []
   const parentTraceUid = sourceTrace?.meta.traceUid ?? sourceTrace?.meta.traceId
@@ -265,15 +272,32 @@ function EpisodeSession({
   onChildRun: (id: string) => void
 }) {
   const run = useAceRun(runId)
+  const lifecycle = run.data?.lifecycle
   const filters = useMemo(
     () => encodeFilterSet({ conditions: [{ key: 'run', op: 'eq', value: runId }] }),
     [runId],
   )
-  const traces = useTraces({ filters, sort: 'timestamp', order: 'asc', limit: 5 })
+  // Active polling is the safety net under SSE: a starved event channel (dev
+  // proxy restart, browser connection limit) must never freeze the session.
+  // The list polls only until the episode's durable trace exists; from then on
+  // the detail query below carries the live updates.
+  const traces = useTraces(
+    { filters, sort: 'timestamp', order: 'asc', limit: 5 },
+    {
+      refetchInterval: (query) => {
+        const data = query.state.data
+        const found = data !== undefined && 'items' in data && data.items.length > 0
+        return found ? false : episodePollInterval({ lifecycle })
+      },
+    },
+  )
   const items =
     traces.data && 'items' in traces.data ? (traces.data as TracesListResponse).items : []
   const episodeUid = items[0] ? (items[0].meta.traceUid ?? items[0].meta.traceId) : undefined
-  const episode = useTrace(episodeUid)
+  const episode = useTrace(episodeUid, {
+    refetchInterval: (query) =>
+      episodePollInterval({ lifecycle, episodeSettled: episodeSettled(query.state.data) }),
+  })
   return (
     <div className="space-y-3" data-testid="playground-session">
       {episode.data ? (

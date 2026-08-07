@@ -94,20 +94,28 @@ export function useRunInstances(
   })
 }
 
-export function useTraces(params: ListParams) {
+export function useTraces(
+  params: ListParams,
+  options?: Pick<UseQueryOptions<TracesListResponse | GroupedTracesResponse>, 'refetchInterval'>,
+) {
   const qs = listQueryString(params)
   return useQuery({
     queryKey: ['traces', qs],
     queryFn: () => apiGet<TracesListResponse | GroupedTracesResponse>(`/api/traces${qs}`),
     placeholderData: (prev) => prev,
+    ...options,
   })
 }
 
-export function useTrace(traceId: string | undefined) {
+export function useTrace(
+  traceId: string | undefined,
+  options?: Pick<UseQueryOptions<Trace>, 'refetchInterval'>,
+) {
   return useQuery({
     queryKey: ['trace', traceId],
     queryFn: () => apiGet<Trace>(`/api/traces/${encodeURIComponent(traceId ?? '')}`),
     enabled: !!traceId,
+    ...options,
   })
 }
 

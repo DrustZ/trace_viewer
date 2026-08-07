@@ -75,6 +75,40 @@ export function initialPlaygroundConfig(
   }
 }
 
+/** Run lifecycles during which the episode is still being produced or graded. */
+export const ACTIVE_RUN_LIFECYCLES = ['queued', 'running', 'paused', 'cancelling'] as const
+
+export const EPISODE_POLL_MS = 1_500
+
+/**
+ * Poll cadence for the live episode's trace content. SSE stays the fast path;
+ * this fallback keeps the session moving when the event channel is starved
+ * (dev-proxy restart leaving a zombie EventSource, browser per-origin
+ * connection limits) instead of freezing until a manual page reload.
+ *
+ * An `undefined` lifecycle means the batch manifest has not appeared yet —
+ * the run is starting, so keep polling unless the episode itself has already
+ * settled (terminal status and no pending evaluation phase).
+ */
+export function episodePollInterval(state: {
+  lifecycle?: string
+  episodeSettled?: boolean
+}): number | false {
+  if (state.lifecycle !== undefined) {
+    return (ACTIVE_RUN_LIFECYCLES as readonly string[]).includes(state.lifecycle)
+      ? EPISODE_POLL_MS
+      : false
+  }
+  return state.episodeSettled ? false : EPISODE_POLL_MS
+}
+
+/** True once an episode trace needs no further polling: terminal status, no pending grade. */
+export function episodeSettled(trace: Trace | undefined): boolean {
+  if (!trace) return false
+  if (trace.meta.status !== 'completed' && trace.meta.status !== 'failed') return false
+  return trace.evaluation?.lifecycle.pendingPhase === undefined
+}
+
 /** Builds the exact POST /api/ace/runs payload for one interactive episode. */
 export function buildPlaygroundRunRequest(config: PlaygroundRunConfig): AceRunFormResult {
   if (config.scenarioId.trim() === '') {
