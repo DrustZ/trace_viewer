@@ -26,6 +26,7 @@ interface SuccessfulAnalysis {
   sourceFingerprint: string
   bundle: AppliedAnalysisBundle
   appliedTraceUids: ReadonlySet<string>
+  rawBundle: unknown
 }
 
 interface InFlightAnalysis {
@@ -78,7 +79,9 @@ export class AceAnalysisCoordinator implements AceAnalysisLoader {
 
       // applyAceAnalysisBundleDetailed is synchronous. Once the post-bridge
       // fingerprint matches, no source mutation can interleave before apply.
-      const applied = applyAceAnalysisBundleDetailed(this.store, response.bundle)
+      const applied = applyAceAnalysisBundleDetailed(this.store, response.bundle, {
+        analysisToken: expectedFingerprint,
+      })
       // Detector overlays increment dataVersion but are deliberately excluded
       // from the source fingerprint. Preserve that verified fingerprint cheaply.
       this.fingerprintCache = {
@@ -89,16 +92,43 @@ export class AceAnalysisCoordinator implements AceAnalysisLoader {
         sourceFingerprint: expectedFingerprint,
         bundle: applied.summary,
         appliedTraceUids: applied.appliedTraceUids,
+        rawBundle: response.bundle,
       }
       return applied.summary
     }
+  }
+
+  private overlayIsApplied(successful: SuccessfulAnalysis): boolean {
+    return [...successful.appliedTraceUids].every(
+      (traceUid) =>
+        this.store.getFull(traceUid)?.meta.extra?.detectorAnalysisToken ===
+        successful.sourceFingerprint,
+    )
+  }
+
+  private reapplyCachedBundle(successful: SuccessfulAnalysis): AppliedAnalysisBundle {
+    const applied = applyAceAnalysisBundleDetailed(this.store, successful.rawBundle, {
+      analysisToken: successful.sourceFingerprint,
+    })
+    this.fingerprintCache = {
+      dataVersion: this.store.dataVersion,
+      sourceFingerprint: successful.sourceFingerprint,
+    }
+    this.successful = {
+      ...successful,
+      bundle: applied.summary,
+      appliedTraceUids: applied.appliedTraceUids,
+    }
+    return applied.summary
   }
 
   async load(force = false): Promise<AppliedAnalysisBundle> {
     await this.waitForStableScan()
     const sourceFingerprint = this.currentSourceFingerprint()
     if (!force && this.successful?.sourceFingerprint === sourceFingerprint) {
-      return this.successful.bundle
+      return this.overlayIsApplied(this.successful)
+        ? this.successful.bundle
+        : this.reapplyCachedBundle(this.successful)
     }
 
     const existing = this.inFlight
@@ -133,8 +163,11 @@ export class AceAnalysisCoordinator implements AceAnalysisLoader {
     if (!this.successful || this.successful.sourceFingerprint !== currentFingerprint) {
       return { status: 'unavailable', reason: 'not_loaded_for_current_source' }
     }
-    return this.successful.appliedTraceUids.has(traceUid)
+    if (!this.successful.appliedTraceUids.has(traceUid)) {
+      return { status: 'unavailable', reason: 'trace_not_covered' }
+    }
+    return this.store.getFull(traceUid)?.meta.extra?.detectorAnalysisToken === currentFingerprint
       ? { status: 'available' }
-      : { status: 'unavailable', reason: 'trace_not_covered' }
+      : { status: 'unavailable', reason: 'not_loaded_for_current_source' }
   }
 }

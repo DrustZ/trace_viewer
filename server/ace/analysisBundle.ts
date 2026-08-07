@@ -46,10 +46,16 @@ export interface AppliedAnalysisBundleDetails {
   appliedTraceUids: ReadonlySet<string>
 }
 
+export interface ApplyAnalysisBundleOptions {
+  /** Source-bound marker used by the coordinator to detect a watcher rescan that removed overlays. */
+  analysisToken?: string
+}
+
 /** Maps canonical Python detector output into FailureV1 without reimplementing detectors. */
 export function applyAceAnalysisBundleDetailed(
   store: TraceStore,
   value: unknown,
+  options: ApplyAnalysisBundleOptions = {},
 ): AppliedAnalysisBundleDetails {
   const bundle = record(value)
   const traceEntries = record(bundle.traces)
@@ -145,6 +151,7 @@ export function applyAceAnalysisBundleDetailed(
       issues,
       ...(issues.length > 0 ? { issue: issues.join(', ') } : {}),
       detectorBundleSchemaVersion: numberValue(bundle.schema_version) ?? 1,
+      ...(options.analysisToken ? { detectorAnalysisToken: options.analysisToken } : {}),
     })
     appliedTraces += 1
     appliedTraceUids.add(traceUid)

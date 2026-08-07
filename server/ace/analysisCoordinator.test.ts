@@ -148,4 +148,31 @@ describe('AceAnalysisCoordinator', () => {
       expect.objectContaining({ code: 'FORCED_REFRESH_FINDING' }),
     ])
   })
+
+  it('reapplies the cached bundle when a watcher rescan removes detector overlays', async () => {
+    const store = new TraceStore()
+    const sourcePath = '/production/production-1.json'
+    const trace = store.upsert(productionTrace(), sourcePath)
+    const traceUid = trace.meta.traceUid as string
+    const bridge = new SequenceBridge([bundle('RESCAN_STABLE_FINDING')])
+    const coordinator = new AceAnalysisCoordinator(store, bridge)
+
+    await coordinator.load()
+    expect(coordinator.statusForTrace(traceUid)).toEqual({ status: 'available' })
+    expect(store.getFull(traceUid)?.evaluation?.failures).toHaveLength(1)
+
+    store.replaceSource([productionTrace()], sourcePath)
+    expect(store.getFull(traceUid)?.evaluation?.failures ?? []).toHaveLength(0)
+    expect(coordinator.statusForTrace(traceUid)).toEqual({
+      status: 'unavailable',
+      reason: 'not_loaded_for_current_source',
+    })
+
+    await coordinator.load()
+    expect(bridge.calls).toBe(1)
+    expect(coordinator.statusForTrace(traceUid)).toEqual({ status: 'available' })
+    expect(store.getFull(traceUid)?.evaluation?.failures).toEqual([
+      expect.objectContaining({ code: 'RESCAN_STABLE_FINDING' }),
+    ])
+  })
 })
