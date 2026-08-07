@@ -241,10 +241,11 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
         if (agentType === 'human') escalated = true
       }
       const base: Message = {
-        id: '',
+        id: `m-${index}`,
         role: 'assistant',
         channel: 'final',
         content,
+        rawIndex: index,
         ...(timestamp !== undefined ? { timestamp } : {}),
         ...(agentType !== undefined || sourceTimestampSeconds !== undefined
           ? {
@@ -305,9 +306,10 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
         metadata.sourceToolCallId = resolved.sourceToolCallId
       }
       messages.push({
-        id: '',
+        id: `m-${index}`,
         role: 'tool',
         content,
+        rawIndex: index,
         toolResult: {
           toolCallId: resolved.toolCallId,
           isError,
@@ -317,18 +319,20 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
       })
     } else if (role === 'system' || role === 'developer' || role === 'user') {
       messages.push({
-        id: '',
+        id: `m-${index}`,
         role,
         content,
+        rawIndex: index,
         ...(timestamp !== undefined ? { timestamp } : {}),
         ...(sourceTimestampSeconds !== undefined ? { metadata: { sourceTimestampSeconds } } : {}),
       })
     } else {
       warnings.push(`message ${index + 1}: unknown role '${String(role)}', treated as user`)
       messages.push({
-        id: '',
+        id: `m-${index}`,
         role: 'user',
         content,
+        rawIndex: index,
         ...(timestamp !== undefined ? { timestamp } : {}),
         ...(sourceTimestampSeconds !== undefined ? { metadata: { sourceTimestampSeconds } } : {}),
       })
@@ -339,9 +343,24 @@ function parseAgentConversation(text: string, ctx: ParseContext): ParseResult {
     return { traces: [], warnings: [...warnings, 'no messages found'] }
   }
 
+  // ACE records the producer position and timestamp independently.  Preserve
+  // the former as rawIndex, but display a fully timestamped conversation in
+  // chronological order.  A partially timestamped trace stays in source order
+  // because guessing where unstamped messages belong would corrupt tool/turn
+  // causality.
+  if (messages.every((message) => message.timestamp !== undefined)) {
+    messages.sort((a, b) => {
+      const byTime = Date.parse(a.timestamp as string) - Date.parse(b.timestamp as string)
+      return byTime !== 0 ? byTime : (a.rawIndex ?? 0) - (b.rawIndex ?? 0)
+    })
+  }
+  messages.forEach((message, chronologicalIndex) => {
+    message.chronologicalIndex = chronologicalIndex
+  })
+
   if (timestampRegressions > 0) {
     warnings.push(
-      `${timestampRegressions} timestamp regression(s) found in source order; normalized source sequence was retained`,
+      `${timestampRegressions} timestamp regression(s) found in source order; chronological display order was applied`,
     )
   }
 

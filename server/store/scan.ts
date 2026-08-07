@@ -3,10 +3,11 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { setTimeout as delay, setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
+import { applyAceArtifacts, parseAceBatchManifest } from '../../shared/connectors/aceSidecar'
 import { connectors, parseAny } from '../../shared/connectors/registry'
 import type { ParsedTrace } from '../../shared/connectors/types'
 import type { ScanRootMode, ScanRootState, ScanRootStatus } from '../../shared/schema/api'
-import type { TraceMeta, TraceStats } from '../../shared/schema/types'
+import type { BatchSummary } from '../../shared/schema/types'
 import {
   type DataRoot,
   DEFAULT_DATA_ROOTS,
@@ -19,12 +20,16 @@ export const DEFAULT_ROOTS = [...DEFAULT_DATA_ROOTS]
 
 /** Basename of the per-run corpus root: the folder right after it names the run. */
 const RUNS_ROOT_NAME = 'runs'
+/** ACE stores batch directories immediately below runs/episodes/. */
+const EPISODES_ROOT_NAME = 'episodes'
 /** Fallback run for traces that carry none (only reached under non-runs roots). */
 const IMPORTED_RUN = 'imported'
 
 const TRACE_EXTENSIONS: ReadonlySet<string> = new Set(connectors.flatMap((c) => c.extensions))
 
 const META_SUFFIX = '.meta.json'
+const CHECKPOINT_SUFFIXES = ['.checkpoints.json', '.checkpoint.json'] as const
+const BATCH_FILE = 'batch.json'
 
 const DEBOUNCE_MS = 300
 
@@ -35,7 +40,12 @@ interface ResolvedRoot extends DataRoot {
 function resolveRoot(spec: string): ResolvedRoot {
   const parsed = parseDataRootSpec(spec)
   if (parsed.run) return { ...parsed, mode: 'fixed' }
-  if (path.basename(parsed.path) === RUNS_ROOT_NAME) return { ...parsed, mode: 'runs' }
+  if (
+    path.basename(parsed.path) === RUNS_ROOT_NAME ||
+    path.basename(parsed.path) === EPISODES_ROOT_NAME
+  ) {
+    return { ...parsed, mode: 'runs' }
+  }
   if (path.basename(parsed.path) === IMPORTED_RUN) return { ...parsed, mode: 'metadata' }
   // A direct external corpus gets its own predictable run instead of silently
   // falling into "imported". Label generic folders explicitly (for example,
@@ -75,16 +85,15 @@ function progressStatusFor(root: ResolvedRoot | undefined): ScanRootStatus | und
   return progress.scanRoots.find((status) => status.id === rootId(root))
 }
 
-/** Sidecar shape: `foo.meta.json` next to `foo.<ext>` enriches every trace parsed from it. */
-interface Sidecar {
-  meta?: Partial<TraceMeta>
-  statsOverrides?: Partial<TraceStats>
-}
-
 export interface ScanFileResult {
   traces: number
   warnings: number
+  /** Legacy producer ids, retained for refresh/import diagnostics. */
   traceIds: string[]
+  /** Store/API primary keys. */
+  traceUids: string[]
+  /** False means an older successfully parsed source was deliberately retained. */
+  committed: boolean
 }
 
 export interface ScanResult {
@@ -116,6 +125,7 @@ interface SourceObservation {
   scanned: boolean
   traces: number
   traceIds: string[]
+  traceUids: string[]
 }
 
 /** Per-file facts behind the currently published progress snapshot. */
@@ -130,10 +140,20 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-/** A file scans as a trace source when a connector claims its extension and it is not a sidecar. */
+function isCheckpointArchive(filePath: string): boolean {
+  return CHECKPOINT_SUFFIXES.some((suffix) => filePath.endsWith(suffix))
+}
+
+function isArtifact(filePath: string): boolean {
+  return path.basename(filePath) === BATCH_FILE || isCheckpointArchive(filePath)
+}
+
+/** A file scans as a trace source when a connector claims its extension and it is not an artifact. */
 function isTraceSource(filePath: string): boolean {
   return (
-    !filePath.endsWith(META_SUFFIX) && TRACE_EXTENSIONS.has(path.extname(filePath).toLowerCase())
+    !filePath.endsWith(META_SUFFIX) &&
+    !isArtifact(filePath) &&
+    TRACE_EXTENSIONS.has(path.extname(filePath).toLowerCase())
   )
 }
 
@@ -143,29 +163,74 @@ function sidecarPath(filePath: string): string {
 
 async function readSidecar(
   filePath: string,
-): Promise<{ sidecar: Sidecar | null; warning?: string }> {
+): Promise<{ sidecar: unknown; state: 'missing' | 'valid' | 'invalid'; warning?: string }> {
   const scPath = sidecarPath(filePath)
   let text: string
   try {
     text = await fs.readFile(scPath, 'utf8')
-  } catch {
-    return { sidecar: null } // no sidecar — the common case
+  } catch (e) {
+    if (typeof e === 'object' && e !== null && 'code' in e && e.code === 'ENOENT') {
+      return { sidecar: undefined, state: 'missing' }
+    }
+    return {
+      sidecar: undefined,
+      state: 'invalid',
+      warning: `${scPath}: could not read sidecar (${errorMessage(e)})`,
+    }
   }
   try {
-    return { sidecar: JSON.parse(text) as Sidecar }
+    const sidecar: unknown = JSON.parse(text)
+    if (typeof sidecar !== 'object' || sidecar === null || Array.isArray(sidecar)) {
+      return {
+        sidecar: undefined,
+        state: 'invalid',
+        warning: `${scPath}: invalid sidecar (expected a JSON object)`,
+      }
+    }
+    return { sidecar, state: 'valid' }
   } catch (e) {
-    return { sidecar: null, warning: `${scPath}: invalid sidecar JSON (${errorMessage(e)})` }
+    return {
+      sidecar: undefined,
+      state: 'invalid',
+      warning: `${scPath}: invalid sidecar JSON (${errorMessage(e)})`,
+    }
   }
 }
 
-function applySidecar(parsed: ParsedTrace, sidecar: Sidecar): ParsedTrace {
-  return {
-    ...parsed,
-    // Sidecar meta fields win over connector-derived ones.
-    meta: { ...parsed.meta, ...sidecar.meta },
-    ...(sidecar.statsOverrides || parsed.statsOverrides
-      ? { statsOverrides: { ...parsed.statsOverrides, ...sidecar.statsOverrides } }
-      : {}),
+async function readBatch(filePath: string): Promise<{
+  batch: BatchSummary | null
+  state: 'missing' | 'valid' | 'invalid'
+  warning?: string
+}> {
+  const batchPath = path.join(path.dirname(filePath), BATCH_FILE)
+  let text: string
+  try {
+    text = await fs.readFile(batchPath, 'utf8')
+  } catch (e) {
+    if (typeof e === 'object' && e !== null && 'code' in e && e.code === 'ENOENT') {
+      return { batch: null, state: 'missing' }
+    }
+    return {
+      batch: null,
+      state: 'invalid',
+      warning: `${batchPath}: could not read batch manifest (${errorMessage(e)})`,
+    }
+  }
+  try {
+    const batch = parseAceBatchManifest(JSON.parse(text))
+    return batch
+      ? { batch, state: 'valid' }
+      : {
+          batch: null,
+          state: 'invalid',
+          warning: `${batchPath}: invalid ACE batch manifest`,
+        }
+  } catch (e) {
+    return {
+      batch: null,
+      state: 'invalid',
+      warning: `${batchPath}: invalid batch JSON (${errorMessage(e)})`,
+    }
   }
 }
 
@@ -196,10 +261,36 @@ function resolveRun(root: ResolvedRoot, filePath: string, parsed: ParsedTrace): 
   return carriedRun(parsed) ?? IMPORTED_RUN
 }
 
-/** Stamps the derived run onto meta.extra.run (no-op when run is undefined). */
-function stampRun(parsed: ParsedTrace, run: string | undefined): ParsedTrace {
-  if (run === undefined) return parsed
-  return { ...parsed, meta: { ...parsed.meta, extra: { ...parsed.meta.extra, run } } }
+/** Adds the filesystem-derived part of viewer identity before TraceStore hashes it. */
+function stampIdentity(
+  parsed: ParsedTrace,
+  root: ResolvedRoot | undefined,
+  filePath: string,
+  run: string | undefined,
+): ParsedTrace {
+  const sourceTraceId = parsed.meta.sourceTraceId ?? parsed.meta.traceId
+  const runId = run ?? parsed.meta.runId ?? carriedRun(parsed) ?? IMPORTED_RUN
+  const rootBase = root ? path.basename(root.path) : undefined
+  const corpusId =
+    parsed.meta.corpusId ??
+    (root
+      ? rootBase === EPISODES_ROOT_NAME
+        ? 'simulation'
+        : root.run === 'production'
+          ? 'production'
+          : (root.run ?? rootBase ?? 'corpus')
+      : `direct-${createHash('sha256').update(path.dirname(filePath)).digest('hex').slice(0, 12)}`)
+  const sourceKey = root ? path.relative(root.path, filePath).split(path.sep).join('/') : filePath
+  return {
+    ...parsed,
+    meta: {
+      ...parsed.meta,
+      sourceTraceId,
+      corpusId,
+      runId,
+      extra: { ...parsed.meta.extra, run: runId, sourceKey },
+    },
+  }
 }
 
 /** The root (from `roots`) that is an ancestor of `filePath`; the longest match wins. */
@@ -232,6 +323,19 @@ async function scanSource(
     warnings += 1
     console.warn(`[scan] ${message}`)
   }
+  const retained = (): ScanFileResult => {
+    const traceUids = store.traceUidsForSource(filePath)
+    return {
+      traces: traceUids.length,
+      warnings,
+      traceIds: traceUids.flatMap((traceUid) => {
+        const trace = store.getFull(traceUid)
+        return trace ? [trace.meta.sourceTraceId ?? trace.meta.traceId] : []
+      }),
+      traceUids,
+      committed: false,
+    }
+  }
   try {
     const [text, stat] = await Promise.all([fs.readFile(filePath, 'utf8'), fs.stat(filePath)])
     const result = parseAny(text, {
@@ -240,30 +344,52 @@ async function scanSource(
     })
     if (result.traces.length === 0) {
       warn(`${filePath}: ${result.warnings[0] ?? 'no traces parsed'}`)
-      return { traces: 0, warnings, traceIds: [] }
+      return retained()
     }
     if (result.warnings.length > 0) warn(`${filePath}: ${result.warnings.join('; ')}`)
-    const { sidecar, warning } = await readSidecar(filePath)
-    if (warning) warn(warning)
-    for (const parsed of result.traces) {
-      // Sidecar first (its run counts as "carried"), then the folder-derived run
-      // wins for runs-root files so the layout is the source of truth.
-      const merged = sidecar ? applySidecar(parsed, sidecar) : parsed
-      const stamped =
-        root !== undefined ? stampRun(merged, resolveRun(root, filePath, merged)) : merged
-      // A full refresh can supersede an in-flight watcher read. Do not let that stale
-      // snapshot overwrite the newer full-scan result after its async file read completes.
-      if (!shouldCommit()) continue
-      store.upsert(stamped, filePath)
+    const [sidecarResult, batchResult] = await Promise.all([
+      readSidecar(filePath),
+      readBatch(filePath),
+    ])
+    if (sidecarResult.warning) warn(sidecarResult.warning)
+    if (batchResult.warning) warn(batchResult.warning)
+    // A sidecar/manifest is part of the trace contract when present. Publishing
+    // a transcript without its temporarily half-written evaluation would be a
+    // misleading downgrade, so retain the last known-good composite.
+    if (sidecarResult.state === 'invalid' || batchResult.state === 'invalid') return retained()
+    if (
+      store.traceUidsForSource(filePath).length > 0 &&
+      result.traces.some((trace) => trace.statsOverrides?.truncated === true)
+    ) {
+      warn(`${filePath}: partial rewrite detected; retained the last successfully parsed trace`)
+      return retained()
     }
+    const stamped = result.traces.map((parsed) => {
+      const enriched = applyAceArtifacts(parsed, sidecarResult.sidecar, {
+        batch: batchResult.batch,
+        sourceFile: path.basename(filePath),
+      })
+      return stampIdentity(
+        enriched,
+        root,
+        filePath,
+        root ? resolveRun(root, filePath, enriched) : undefined,
+      )
+    })
+    // A full refresh can supersede an in-flight watcher read. Do not let that stale
+    // snapshot overwrite the newer full-scan result after its async file read completes.
+    if (!shouldCommit()) return retained()
+    const traces = store.replaceSource(stamped, filePath)
     return {
-      traces: result.traces.length,
+      traces: traces.length,
       warnings,
-      traceIds: result.traces.map((trace) => trace.meta.traceId),
+      traceIds: traces.map((trace) => trace.meta.sourceTraceId ?? trace.meta.traceId),
+      traceUids: traces.map((trace) => trace.meta.traceUid as string),
+      committed: true,
     }
   } catch (e) {
     warn(`${filePath}: ${errorMessage(e)}`)
-    return { traces: 0, warnings, traceIds: [] }
+    return retained()
   }
 }
 
@@ -351,6 +477,7 @@ export async function scanAll(
       scanned: false,
       traces: 0,
       traceIds: [],
+      traceUids: [],
     })
   }
   sourceObservations = observations
@@ -376,6 +503,7 @@ export async function scanAll(
           scanned: true,
           traces: r.traces,
           traceIds: r.traceIds,
+          traceUids: r.traceUids,
         })
       }
       await yieldToEventLoop()
@@ -394,8 +522,14 @@ export async function scanAll(
   }
 }
 
-async function waitForFullScan(): Promise<void> {
-  while (progress.scanning) await delay(25)
+async function waitForFullScan(root?: ResolvedRoot): Promise<void> {
+  while (progress.scanning) {
+    const status = progressStatusFor(root)
+    // An unrelated root must not hold up a live watcher. If this root belongs
+    // to the active scan, wait only until its own snapshot has been processed.
+    if (root && (!status || (status.state !== 'pending' && status.state !== 'scanning'))) return
+    await delay(25)
+  }
 }
 
 /** Watches the roots and keeps the store in sync (300ms debounce per path). */
@@ -437,36 +571,16 @@ export function watch(store: TraceStore, roots: string[] = DEFAULT_ROOTS): FSWat
     )
   }
 
-  async function restoreShadowedSources(
-    traceIds: readonly string[],
-    excludedPath: string,
-    observations: Map<string, SourceObservation>,
-  ): Promise<void> {
-    if (traceIds.length === 0) return
-    const missingIds = new Set(traceIds)
-    const fallbacks = [...observations.entries()]
-      .filter(
-        ([sourcePath, observation]) =>
-          sourcePath !== excludedPath &&
-          observation.traceIds.some((traceId) => missingIds.has(traceId)),
-      )
-      .map(([sourcePath]) => sourcePath)
-    for (const sourcePath of fallbacks) {
-      await enqueue(sourcePath, () => scanWatchedSource(sourcePath))
-    }
-  }
-
   const scanWatchedSource = async (sourcePath: string): Promise<void> => {
     // Boot/refresh scans own the progress ledger while active. Replay the event against their
     // completed snapshot instead of double-counting a file enumerated by both scan and watcher.
-    await waitForFullScan()
+    const root = rootFor(sourcePath, resolvedRoots)
+    await waitForFullScan(root)
     const activeProgress = progress
     const observations = sourceObservations
-    const root = rootFor(sourcePath, resolvedRoots)
     const status = progressStatusFor(root)
     const previous = observations.get(sourcePath)
     if (status) status.state = 'scanning'
-    store.remove(sourcePath)
     const result = await scanSource(
       store,
       sourcePath,
@@ -494,16 +608,39 @@ export function watch(store: TraceStore, roots: string[] = DEFAULT_ROOTS): FSWat
       scanned: true,
       traces: result.traces,
       traceIds: result.traceIds,
+      traceUids: result.traceUids,
     })
-    const currentIds = new Set(result.traceIds)
-    await restoreShadowedSources(
-      previous?.traceIds.filter((traceId) => !currentIds.has(traceId)) ?? [],
-      sourcePath,
-      observations,
-    )
   }
 
   const rescan = async (filePath: string): Promise<void> => {
+    if (path.basename(filePath) === BATCH_FILE) {
+      // The manifest carries schedule_digest and episode lifecycle. Rebuild
+      // each sibling composite when it changes, but never ingest batch.json as
+      // a trace itself.
+      try {
+        const manifest = parseAceBatchManifest(JSON.parse(await fs.readFile(filePath, 'utf8')))
+        if (!manifest) return
+        store.notifyBatchUpdated(manifest.batchId)
+      } catch {
+        // Atomic writers may briefly expose a rename boundary. Keep the last
+        // valid state and publish only after a complete manifest parses.
+        return
+      }
+      let entries: string[] = []
+      try {
+        entries = await fs.readdir(path.dirname(filePath))
+      } catch {
+        return
+      }
+      for (const name of entries) {
+        const sourcePath = path.join(path.dirname(filePath), name)
+        if (isTraceSource(sourcePath)) {
+          await enqueue(sourcePath, () => scanWatchedSource(sourcePath))
+        }
+      }
+      return
+    }
+    if (isCheckpointArchive(filePath)) return
     if (filePath.endsWith(META_SUFFIX)) {
       // A sidecar edit re-parses its trace source so merged meta stays live.
       const base = filePath.slice(0, -META_SUFFIX.length)
@@ -539,13 +676,22 @@ export function watch(store: TraceStore, roots: string[] = DEFAULT_ROOTS): FSWat
     }
     if (!isTraceSource(p)) return
     schedule(p, async () => {
-      await waitForFullScan()
+      const root = rootFor(p, resolvedRoots)
+      await waitForFullScan(root)
+      try {
+        await fs.access(p)
+        // Atomic save: unlink followed by rename/add. The old composite stayed
+        // visible and can now be replaced from the completed file.
+        await scanWatchedSource(p)
+        return
+      } catch {
+        // A real deletion falls through.
+      }
       const activeProgress = progress
       const observations = sourceObservations
-      const root = rootFor(p, resolvedRoots)
       const status = progressStatusFor(root)
       const previous = observations.get(p)
-      const removed = store.remove(p)
+      store.remove(p)
       if (progress !== activeProgress || sourceObservations !== observations) return
       if (status && previous) {
         status.files = Math.max(0, status.files - 1)
@@ -555,12 +701,6 @@ export function watch(store: TraceStore, roots: string[] = DEFAULT_ROOTS): FSWat
         if (previous.scanned) progress.scannedFiles = Math.max(0, progress.scannedFiles - 1)
       }
       observations.delete(p)
-
-      // Trace ids are global. If the removed file had overwritten an identical id from another
-      // source, restore the newest remaining source instead of making that trace disappear.
-      if (removed > 0 && previous?.traceIds.length) {
-        await restoreShadowedSources(previous.traceIds, p, observations)
-      }
     })
   })
   watcher.on('error', (e) => {

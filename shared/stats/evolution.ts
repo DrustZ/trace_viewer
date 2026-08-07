@@ -3,7 +3,7 @@ import type { EvolutionSeries, TraceSummary } from '../schema/types'
 
 /** Run identity: `meta.extra.run` when present, else the default 'run-a'. */
 export function runOf(t: TraceSummary): string {
-  return typeof t.meta.extra?.run === 'string' ? t.meta.extra.run : 'run-a'
+  return t.meta.runId ?? (typeof t.meta.extra?.run === 'string' ? t.meta.extra.run : 'run-a')
 }
 
 /** Score desc with nulls last, then traceId asc — the Evolution panel order. */
@@ -15,7 +15,9 @@ function compareRollouts(a: TraceSummary, b: TraceSummary): number {
     if (sb === null) return -1
     return sb - sa
   }
-  if (a.meta.traceId !== b.meta.traceId) return a.meta.traceId < b.meta.traceId ? -1 : 1
+  const aUid = a.meta.traceUid ?? a.meta.traceId
+  const bUid = b.meta.traceUid ?? b.meta.traceId
+  if (aUid !== bUid) return aUid < bUid ? -1 : 1
   return 0
 }
 

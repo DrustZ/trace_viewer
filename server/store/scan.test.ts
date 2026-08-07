@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getScanProgress, scanAll, watch } from './scan'
+import { getScanProgress, scanAll, scanFile, watch } from './scan'
 import { TraceStore } from './traceStore'
 
 const temporaryRoots: string[] = []
@@ -64,6 +64,116 @@ describe('trace scanner data roots', () => {
     await scanAll(store, [root])
 
     expect(store.getFull('external-2')?.meta.extra?.run).toBe('data')
+  })
+
+  it('stamps production corpus/run identity from an explicit production root', async () => {
+    const root = await temporaryRoot()
+    await fs.writeFile(path.join(root, 'same-id.json'), nativeTrace('same-id'))
+    const store = new TraceStore()
+
+    await scanAll(store, [`production=${root}`])
+
+    const trace = store.getFull('same-id')
+    expect(trace?.meta).toMatchObject({
+      sourceTraceId: 'same-id',
+      corpusId: 'production',
+      runId: 'production',
+    })
+    expect(trace?.meta.traceUid).toMatch(/^trace_[0-9a-f]{24}$/)
+  })
+
+  it('treats episodes as a runs root and excludes batch/checkpoint artifacts', async () => {
+    const parent = await temporaryRoot()
+    const episodes = path.join(parent, 'episodes')
+    const batch = path.join(episodes, 'run-one')
+    await fs.mkdir(batch, { recursive: true })
+    await fs.writeFile(path.join(batch, 'episode.json'), nativeTrace('shared-source-id'))
+    await fs.writeFile(
+      path.join(batch, 'episode.meta.json'),
+      JSON.stringify({
+        meta: { extra: { scenario_id: 'scenario-a', environment_seed: 7 } },
+        evaluation: {
+          grade: { passed: true, checks: [] },
+          metrics: { status: 'completed' },
+          flags: [],
+        },
+      }),
+    )
+    await fs.writeFile(
+      path.join(batch, 'batch.json'),
+      JSON.stringify({
+        schema_version: 2,
+        batch_id: 'run-one',
+        schedule_digest: 'schedule123',
+        episodes: [
+          {
+            scenario_id: 'scenario-a',
+            environment_seed: 7,
+            file: 'episode.json',
+            status: 'completed',
+            split: 'holdout',
+            grade: { passed: true },
+          },
+        ],
+      }),
+    )
+    await fs.writeFile(
+      path.join(batch, 'episode.checkpoints.json'),
+      JSON.stringify({ entries: [] }),
+    )
+    const store = new TraceStore()
+
+    const result = await scanAll(store, [episodes])
+
+    expect(result).toMatchObject({ files: 1, traces: 1, warnings: 0 })
+    const trace = store.getFull('shared-source-id')
+    expect(trace?.meta).toMatchObject({
+      corpusId: 'simulation',
+      runId: 'run-one',
+      instanceId: 'scenario-a',
+      pairKey: 'schedule123:scenario-a:7',
+      split: 'test',
+    })
+    expect(trace?.evaluation?.outcome).toBe('pass')
+  })
+
+  it('retains the last good trace across corrupt, partial, and invalid-sidecar rescans', async () => {
+    const root = await temporaryRoot()
+    const source = path.join(root, 'live.json')
+    const sidecar = path.join(root, 'live.meta.json')
+    const complete = JSON.stringify({
+      conversation: [
+        { role: 'user', agent_type: 'user', content: 'original question', timestamp: 1 },
+        { role: 'assistant', agent_type: 'beta', content: 'original answer', timestamp: 2 },
+      ],
+    })
+    await fs.writeFile(source, complete)
+    await fs.writeFile(sidecar, JSON.stringify({ meta: { component: 'ace/good' } }))
+    const store = new TraceStore()
+    await scanAll(store, [`live=${root}`])
+    const uid = store.getFull('live')?.meta.traceUid as string
+
+    await fs.writeFile(sidecar, '{half written')
+    const invalidSidecar = await scanFile(store, source, `live=${root}`)
+    expect(invalidSidecar.committed).toBe(false)
+    expect(store.getFull(uid)?.meta.component).toBe('ace/good')
+
+    await fs.writeFile(sidecar, JSON.stringify({ meta: { component: 'ace/new' } }))
+    await fs.writeFile(
+      source,
+      '{"conversation":[{"role":"user","agent_type":"user","content":"partial","timestamp":1},{"role":"assistant"',
+    )
+    const partial = await scanFile(store, source, `live=${root}`)
+    expect(partial.committed).toBe(false)
+    expect(store.getFull(uid)?.messages.map((message) => message.content)).toEqual([
+      'original question',
+      'original answer',
+    ])
+
+    await fs.writeFile(source, '{not json')
+    const corrupt = await scanFile(store, source, `live=${root}`)
+    expect(corrupt.committed).toBe(false)
+    expect(store.getFull(uid)?.meta.component).toBe('ace/good')
   })
 
   it('assigns overlapping roots to the most-specific configured ancestor', async () => {
@@ -151,6 +261,35 @@ describe('trace scanner data roots', () => {
     }
   })
 
+  it('publishes batch.updated only after a complete manifest parses', async () => {
+    const root = await temporaryRoot()
+    const store = new TraceStore()
+    const events: Array<{ type: string; runId?: string }> = []
+    store.subscribe((event) => events.push(event))
+    const watcher = watch(store, [`live-batch=${root}`])
+    const manifestPath = path.join(root, 'batch.json')
+    try {
+      await new Promise<void>((resolve) => watcher.once('ready', () => resolve()))
+      await fs.writeFile(manifestPath, '{partial')
+      await new Promise((resolve) => setTimeout(resolve, 450))
+      expect(events).toEqual([])
+
+      await fs.writeFile(
+        manifestPath,
+        JSON.stringify({ schema_version: 3, batch_id: 'run-live', episodes: [] }),
+      )
+      await vi.waitFor(
+        () =>
+          expect(events).toContainEqual(
+            expect.objectContaining({ type: 'batch.updated', runId: 'run-live' }),
+          ),
+        { timeout: 2_000, interval: 25 },
+      )
+    } finally {
+      await watcher.close()
+    }
+  })
+
   it('does not double-count an atomic-save add event for an already-known corrupt source', async () => {
     const root = await temporaryRoot()
     const sourcePath = path.join(root, 'bad.json')
@@ -181,7 +320,7 @@ describe('trace scanner data roots', () => {
     }
   })
 
-  it('restores a duplicate trace id from a remaining source after unlink', async () => {
+  it('keeps duplicate producer ids independent and legacy lookup becomes unique after unlink', async () => {
     const root = await temporaryRoot()
     const first = path.join(root, 'a.json')
     const second = path.join(root, 'b.json')
@@ -189,7 +328,10 @@ describe('trace scanner data roots', () => {
     await fs.writeFile(second, nativeTrace('duplicate-id'))
     const store = new TraceStore()
     await scanAll(store, [`duplicates=${root}`])
-    expect(store.get('duplicate-id')?.sourcePath).toBe(second)
+    expect(store.size).toBe(2)
+    expect(store.lookup('duplicate-id').kind).toBe('ambiguous')
+    expect(store.traceUidsForSource(first)).toHaveLength(1)
+    expect(store.traceUidsForSource(second)).toHaveLength(1)
     const watcher = watch(store, [`duplicates=${root}`])
     try {
       await new Promise<void>((resolve) => watcher.once('ready', () => resolve()))
@@ -208,7 +350,7 @@ describe('trace scanner data roots', () => {
     }
   })
 
-  it('restores a shadowed trace id when the winning source changes identity', async () => {
+  it('removes only the rewritten source identity when a duplicate changes producer id', async () => {
     const root = await temporaryRoot()
     const first = path.join(root, 'a.json')
     const second = path.join(root, 'b.json')
@@ -216,7 +358,8 @@ describe('trace scanner data roots', () => {
     await fs.writeFile(second, nativeTrace('old-duplicate'))
     const store = new TraceStore()
     await scanAll(store, [`rewrite=${root}`])
-    expect(store.get('old-duplicate')?.sourcePath).toBe(second)
+    expect(store.size).toBe(2)
+    expect(store.lookup('old-duplicate').kind).toBe('ambiguous')
     const watcher = watch(store, [`rewrite=${root}`])
     try {
       await new Promise<void>((resolve) => watcher.once('ready', () => resolve()))

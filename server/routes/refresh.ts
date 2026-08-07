@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { RefreshResponse } from '../../shared/schema/api'
-import { scanAll } from '../store/scan'
+import { type ScanResult, scanAll } from '../store/scan'
 import { asyncHandler, type RouteCtx } from './context'
 
 export function refreshRoutes(ctx: RouteCtx): Router {
@@ -9,8 +9,13 @@ export function refreshRoutes(ctx: RouteCtx): Router {
   router.post(
     '/api/refresh',
     asyncHandler(async (_req, res) => {
-      ctx.store.clear()
-      const result = await scanAll(ctx.store, ctx.dataRoots)
+      let result: ScanResult
+      if (ctx.dataRootManager) {
+        result = await ctx.dataRootManager.refresh()
+      } else {
+        ctx.store.clear()
+        result = await scanAll(ctx.store, ctx.dataRoots)
+      }
       console.log(
         `[api] ${result.traces} traces from ${result.files} files (${result.warnings} warnings) in ${result.ms}ms`,
       )

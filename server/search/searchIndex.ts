@@ -13,6 +13,7 @@ interface SearchDoc {
   /** `<traceId>#<msgIdx>` */
   id: string
   traceId: string
+  traceUid: string
   msgIdx: number
   component: string
   text: string
@@ -50,16 +51,18 @@ export class SearchIndex {
     if (this.mini && this.builtVersion === this.store.dataVersion) return this.mini
     const mini = new MiniSearch<SearchDoc>({
       fields: ['traceId', 'component', 'text'],
-      storeFields: ['traceId', 'msgIdx'],
+      storeFields: ['traceId', 'traceUid', 'msgIdx'],
     })
     const docs: SearchDoc[] = []
     for (const summary of this.store.list()) {
-      const trace = this.store.getFull(summary.meta.traceId)
+      const traceUid = summary.meta.traceUid ?? summary.meta.traceId
+      const trace = this.store.getFull(traceUid)
       if (!trace) continue
       trace.messages.forEach((message, msgIdx) => {
         docs.push({
-          id: `${trace.meta.traceId}#${msgIdx}`,
-          traceId: trace.meta.traceId,
+          id: `${traceUid}#${msgIdx}`,
+          traceId: trace.meta.sourceTraceId ?? trace.meta.traceId,
+          traceUid,
           msgIdx,
           component: trace.meta.component,
           text: messageText(message),
@@ -68,8 +71,9 @@ export class SearchIndex {
       // Message-less traces still get one empty doc, so id/component search finds them.
       if (trace.messages.length === 0) {
         docs.push({
-          id: `${trace.meta.traceId}#0`,
-          traceId: trace.meta.traceId,
+          id: `${traceUid}#0`,
+          traceId: trace.meta.sourceTraceId ?? trace.meta.traceId,
+          traceUid,
           msgIdx: 0,
           component: trace.meta.component,
           text: '',
@@ -85,7 +89,7 @@ export class SearchIndex {
   /** All matching trace ids (unique) — used for the list endpoints' `q=` membership check. */
   matchingIds(q: string): Set<string> {
     const ids = new Set<string>()
-    for (const hit of this.ensureBuilt().search(q, { prefix: true })) ids.add(String(hit.traceId))
+    for (const hit of this.ensureBuilt().search(q, { prefix: true })) ids.add(String(hit.traceUid))
     return ids
   }
 
@@ -94,14 +98,15 @@ export class SearchIndex {
     const hits: SearchHit[] = []
     const seen = new Set<string>()
     for (const hit of this.ensureBuilt().search(q, { prefix: true })) {
-      const traceId = String(hit.traceId)
-      if (seen.has(traceId)) continue
-      seen.add(traceId)
-      const trace = this.store.getFull(traceId)
+      const traceUid = String(hit.traceUid)
+      if (seen.has(traceUid)) continue
+      seen.add(traceUid)
+      const trace = this.store.getFull(traceUid)
       const component = trace?.meta.component ?? ''
       const message = trace?.messages[Number(hit.msgIdx)]
       hits.push({
-        traceId,
+        traceId: String(hit.traceId),
+        traceUid,
         component,
         score: trace?.stats.score ?? null,
         snippet: (message && buildSnippet(messageText(message), q)) || component,

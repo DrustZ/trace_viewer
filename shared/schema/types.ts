@@ -16,6 +16,221 @@ export type Split = 'train' | 'test' | 'unknown'
 
 export type TraceStatus = 'completed' | 'failed' | 'executing' | 'unknown'
 
+/**
+ * A trace has two identities: the id written by the producer and an opaque,
+ * corpus-qualified uid used by the viewer.  `traceUid` deliberately includes
+ * the source location in its digest, so two files with the same producer id
+ * remain independently addressable.
+ */
+export interface TraceIdentity {
+  traceUid: string
+  sourceTraceId: string
+  corpusId: string
+  runId: string
+  instanceId: string
+  /** Matched-seed A/B key: schedule_digest + scenario_id + environment_seed. */
+  pairKey?: string
+}
+
+export type FailureOrigin =
+  | 'integrity'
+  | 'runtime'
+  | 'tool'
+  | 'user_sim'
+  | 'grader'
+  | 'detector'
+  | 'judge'
+  | 'semantic'
+  | 'replay'
+
+export type FailureSeverity = 'info' | 'minor' | 'major' | 'critical'
+
+/** One normalized diagnostic, regardless of which ACE evaluation layer emitted it. */
+export interface FailureV1 {
+  origin: FailureOrigin
+  code: string
+  severity: FailureSeverity
+  /** Only programmatic grade checks may gate the task outcome. */
+  gating: boolean
+  messageId?: string
+  toolCallId?: string
+  /** The producer index is always declared; no caller has to guess its coordinate space. */
+  indexSpace?: 'raw' | 'chronological'
+  rawIndex?: number
+  chronologicalIndex?: number
+  evidence?: string | Record<string, unknown> | unknown[]
+  source: string
+}
+
+export interface GradeCheck {
+  name: string
+  ok: boolean
+  gating: boolean
+  detail?: string
+}
+
+export interface DetectorFlag {
+  detector: string
+  severity: FailureSeverity
+  tier?: string
+  family?: string
+  note?: string
+  verdict?: string
+  evidence?: string
+  messageId?: string
+  indexSpace: 'raw' | 'chronological'
+  rawIndex?: number
+  chronologicalIndex?: number
+}
+
+export interface UserSimViolation {
+  rule: string
+  severity?: FailureSeverity
+  note?: string
+  messageId?: string
+  indexSpace: 'raw' | 'chronological'
+  rawIndex?: number
+  chronologicalIndex?: number
+}
+
+export interface UserSimGate {
+  invalid: boolean
+  attempt?: number
+  seed?: number
+  environmentSeed?: number
+  userSampleNonce?: number
+  violations: UserSimViolation[]
+}
+
+export interface WorldDiffEntry {
+  orderId?: string
+  field: string
+  before?: unknown
+  after?: unknown
+  legal?: boolean
+}
+
+export interface ToolLedgerEntry {
+  tier?: string
+  name: string
+  args?: unknown
+  ok?: boolean
+  result?: unknown
+  resultHead?: string
+  executed?: boolean
+  outcomeKnown?: boolean
+  actualResult?: unknown
+  actualResultHead?: string
+  timestamp?: string
+  sourceTimestampSeconds?: number
+  toolCallId?: string
+}
+
+export interface JudgeDimension {
+  verdict: 'pass' | 'fail' | 'unknown' | string
+  evidence?: string
+}
+
+export interface JudgeEvaluation {
+  model?: string
+  rubricVersion?: string
+  dimensions: Record<string, JudgeDimension>
+  outcomeSecondOpinion?: JudgeDimension
+  disagreement?: boolean
+  error?: string
+}
+
+export interface SemanticClaim {
+  kind?: string
+  value?: unknown
+  verdict?: 'supported' | 'contradicted' | 'unverified' | string
+  basis?: string
+  messageId?: string
+  indexSpace?: 'raw' | 'chronological'
+  rawIndex?: number
+  chronologicalIndex?: number
+  span?: [number, number]
+  quote?: string
+}
+
+export interface SemanticVerification {
+  schemaVersion?: number
+  mode?: string
+  engine?: string
+  model?: string | null
+  claims: SemanticClaim[]
+  supportedCount?: number
+  contradictedCount?: number
+  unverifiedCount?: number
+  findings: DetectorFlag[]
+  consent?: unknown
+  disclosures?: unknown[]
+  error?: string
+}
+
+export type TraceOutcome = 'pass' | 'fail' | 'invalid' | 'runtime_error' | 'ungraded'
+
+export interface ReplayLineage {
+  parentTrace?: string
+  parentTraceUid?: string
+  checkpointId?: string
+  forkMessageId?: string
+  forkMessageCount?: number
+  configDigest?: string
+  fidelity?: 'historical_tool' | 'state_exact' | 'counterfactual' | 'synthetic' | string
+  runKind?: 'scored' | 'debug' | 'counterfactual' | string
+  mode?: 'exact' | 'counterfactual' | string
+  policyChanged?: boolean
+}
+
+export interface TraceEvaluation {
+  lifecycle: {
+    state: TraceStatus | 'cancelled'
+    termination?: string
+    pendingPhase?: string
+  }
+  outcome: TraceOutcome
+  checks: GradeCheck[]
+  metrics: Record<string, unknown>
+  failures: FailureV1[]
+  flags: DetectorFlag[]
+  userSimGate?: UserSimGate
+  judge?: JudgeEvaluation
+  semanticVerify?: SemanticVerification
+  worldDiff: WorldDiffEntry[]
+  ledger: ToolLedgerEntry[]
+  lineage?: ReplayLineage
+}
+
+export interface BatchEpisode {
+  scenarioId: string
+  environmentSeed: number
+  sourceFile?: string
+  status?: string
+  phase?: string
+  toolName?: string
+  messageCount?: number
+  updatedAt?: string
+  termination?: string
+  invalidUserSim?: boolean
+  gradePassed?: boolean | null
+  [key: string]: unknown
+}
+
+export interface BatchSummary {
+  schemaVersion?: number
+  batchId: string
+  lifecycle?: string
+  heartbeat?: string
+  configDigest?: string
+  scheduleDigest?: string
+  spec?: Record<string, unknown>
+  configSnapshot?: Record<string, unknown>
+  scenarioSnapshots?: Record<string, unknown>[]
+  totals?: Record<string, unknown>
+  episodes: BatchEpisode[]
+}
+
 export interface TokenLogprob {
   token: string
   /** Natural log probability, <= 0. */
@@ -70,6 +285,10 @@ export interface Message {
   score?: number
   /** LLM-as-judge explanation attached to this message. */
   judgeOutput?: string
+  /** Zero-based position in the producer's array, before timestamp normalization. */
+  rawIndex?: number
+  /** Zero-based position used for display after chronological normalization. */
+  chronologicalIndex?: number
   metadata?: Record<string, unknown>
 }
 
@@ -101,7 +320,17 @@ export interface TraceStats {
 }
 
 export interface TraceMeta {
+  /** Legacy producer id. New APIs address traces by traceUid. */
   traceId: string
+  /**
+   * Populated by TraceStore for every stored trace. Optional here so older
+   * native connector payloads remain a valid import contract during migration.
+   */
+  traceUid?: string
+  sourceTraceId?: string
+  corpusId?: string
+  runId?: string
+  pairKey?: string
   /** The task identity. Same instance across checkpoints — the Evolution join key. */
   instanceId: string
   /** Dataset/component name, e.g. 'swe/swebench-verified-mini'. Imports default to 'imported/<format>'. */
@@ -126,6 +355,8 @@ export interface Trace {
   meta: TraceMeta
   stats: TraceStats
   messages: Message[]
+  /** ACE evaluation is absent only before store normalization. */
+  evaluation?: TraceEvaluation
   /** Non-fatal parse/normalization issues, surfaced in the UI. */
   warnings?: string[]
 }
@@ -134,6 +365,7 @@ export interface Trace {
 export interface TraceSummary {
   meta: TraceMeta
   stats: TraceStats
+  evaluation?: TraceEvaluation
 }
 
 // ---------------------------------------------------------------------------

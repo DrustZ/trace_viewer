@@ -70,6 +70,10 @@ function rolloutLabel(traceId: string): string {
   return m?.[1] ?? traceId
 }
 
+function traceAddress(trace: TraceSummary): string {
+  return trace.meta.traceUid ?? trace.meta.traceId
+}
+
 /** Variant-aware jump: drawer swaps the previewed trace, page navigates keeping the query. */
 function TraceLink({
   traceId,
@@ -144,7 +148,8 @@ function RolloutRow({
   onNavigate?: (traceId: string) => void
 }) {
   const { meta, stats } = rollout
-  const isCurrent = meta.traceId === currentTraceId
+  const traceUid = traceAddress(rollout)
+  const isCurrent = traceUid === currentTraceId
   const body = (
     <>
       <span className="truncate font-mono text-sm text-slate-800">{meta.traceId}</span>
@@ -185,7 +190,7 @@ function RolloutRow({
   return (
     <li>
       <TraceLink
-        traceId={meta.traceId}
+        traceId={traceUid}
         onNavigate={onNavigate}
         testId={`evolution-rollout-${meta.traceId}`}
         className={`${base} border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50`}
@@ -222,15 +227,17 @@ export function EvolutionTab(props: EvolutionTabProps) {
 
 function RecordedCheckpointEvolutionTab({ trace, onNavigate }: EvolutionTabProps) {
   const { traceId, instanceId, checkpointStep } = trace.meta
+  const traceUid = trace.meta.traceUid ?? traceId
   const evolution = useEvolution(
     instanceId,
-    typeof trace.meta.extra?.run === 'string' ? trace.meta.extra.run : 'run-a',
+    trace.meta.runId ??
+      (typeof trace.meta.extra?.run === 'string' ? trace.meta.extra.run : 'run-a'),
   )
-  const siblings = useSiblings(traceId)
+  const siblings = useSiblings(traceUid)
   // Tagging the selection with its trace lets a stale selection from a previous trace
   // fall back to the new trace's own checkpoint without an effect.
   const [selection, setSelection] = useState<{ traceId: string; step: number } | null>(null)
-  const selectedStep = selection?.traceId === traceId ? selection.step : checkpointStep
+  const selectedStep = selection?.traceId === traceUid ? selection.step : checkpointStep
 
   const rows = useMemo<ChartRow[]>(
     () =>
@@ -425,7 +432,7 @@ function RecordedCheckpointEvolutionTab({ trace, onNavigate }: EvolutionTabProps
                       step = r.step
                     }
                   }
-                  if (step !== undefined) setSelection({ traceId, step })
+                  if (step !== undefined) setSelection({ traceId: traceUid, step })
                 }}
               >
                 <CartesianGrid stroke="#e2e8f0" vertical={false} />
@@ -523,9 +530,9 @@ function RecordedCheckpointEvolutionTab({ trace, onNavigate }: EvolutionTabProps
           <ul className="mt-3 space-y-2">
             {selectedPoint.rollouts.map((rollout) => (
               <RolloutRow
-                key={rollout.meta.traceId}
+                key={traceAddress(rollout)}
                 rollout={rollout}
-                currentTraceId={traceId}
+                currentTraceId={traceUid}
                 onNavigate={onNavigate}
               />
             ))}
@@ -546,8 +553,8 @@ function RecordedCheckpointEvolutionTab({ trace, onNavigate }: EvolutionTabProps
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {siblings.data.map((sibling) => (
               <TraceLink
-                key={sibling.meta.traceId}
-                traceId={sibling.meta.traceId}
+                key={traceAddress(sibling)}
+                traceId={traceAddress(sibling)}
                 onNavigate={onNavigate}
                 testId={`evolution-sibling-${sibling.meta.traceId}`}
                 className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs hover:border-slate-300 hover:bg-slate-50"

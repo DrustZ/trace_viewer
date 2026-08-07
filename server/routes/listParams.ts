@@ -51,9 +51,10 @@ export function applyListParams(
     items = items.filter(
       (s) =>
         s.meta.traceId.toLowerCase().includes(needle) ||
+        (s.meta.traceUid?.toLowerCase().includes(needle) ?? false) ||
         s.meta.instanceId.toLowerCase().includes(needle) ||
         s.meta.component.toLowerCase().includes(needle) ||
-        indexIds.has(s.meta.traceId),
+        indexIds.has(s.meta.traceUid ?? s.meta.traceId),
     )
   }
 
@@ -74,13 +75,27 @@ export function applyListParams(
       if (desc) cmp = -cmp
     }
     if (cmp !== 0) return cmp
-    return a.meta.traceId < b.meta.traceId ? -1 : a.meta.traceId > b.meta.traceId ? 1 : 0
+    const aSource = a.meta.sourceTraceId ?? a.meta.traceId
+    const bSource = b.meta.sourceTraceId ?? b.meta.traceId
+    if (aSource !== bSource) return aSource < bSource ? -1 : 1
+    const aUid = a.meta.traceUid ?? aSource
+    const bUid = b.meta.traceUid ?? bSource
+    return aUid < bUid ? -1 : aUid > bUid ? 1 : 0
   })
 }
 
 /** applyListParams over the whole store with the search index wired in. */
 export function appliedSummaries(ctx: RouteCtx, query: Record<string, unknown>): TraceSummary[] {
-  return applyListParams(ctx.store.list(), query, {
+  return appliedTraceSummaries(ctx, ctx.store.list(), query)
+}
+
+/** Apply the canonical list pipeline to a request-local summary projection. */
+export function appliedTraceSummaries(
+  ctx: RouteCtx,
+  summaries: TraceSummary[],
+  query: Record<string, unknown>,
+): TraceSummary[] {
+  return applyListParams(summaries, query, {
     matchingIds: (q) => ctx.searchIndex.matchingIds(q),
   })
 }

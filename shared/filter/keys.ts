@@ -29,6 +29,11 @@ function extraString(s: TraceSummary, key: string): string | undefined {
   return typeof v === 'string' ? v : undefined
 }
 
+function metricNumber(s: TraceSummary, key: string): number | undefined {
+  const value = s.evaluation?.metrics[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 const ENTRIES: KeyEntry[] = [
   {
     def: {
@@ -189,6 +194,150 @@ const ENTRIES: KeyEntry[] = [
   },
   {
     def: {
+      id: 'traceUid',
+      label: 'Trace UID',
+      type: 'string',
+      description: 'Corpus-qualified viewer identity used for unambiguous navigation',
+    },
+    get: (s) => s.meta.traceUid,
+  },
+  {
+    def: {
+      id: 'corpus',
+      label: 'Corpus',
+      type: 'string',
+      description: "ACE corpus boundary, for example 'production' or 'simulation'",
+    },
+    get: (s) => s.meta.corpusId,
+  },
+  {
+    def: {
+      id: 'outcome',
+      label: 'ACE outcome',
+      type: 'string',
+      description: 'ACE four-state result: pass, fail, invalid, runtime_error, or ungraded',
+    },
+    get: (s) => s.evaluation?.outcome,
+  },
+  {
+    def: {
+      id: 'termination',
+      label: 'Termination',
+      type: 'string',
+      description: 'ACE termination reason, separate from grader outcome',
+    },
+    get: (s) => s.evaluation?.lifecycle.termination,
+  },
+  {
+    def: {
+      id: 'failureCode',
+      label: 'Failure code',
+      type: 'string',
+      description: 'Any normalized ACE FailureV1 code; use contains for partial matches',
+    },
+    get: (s) => s.evaluation?.failures.map((failure) => failure.code).join('\n'),
+  },
+  {
+    def: {
+      id: 'failureOrigin',
+      label: 'Failure origin',
+      type: 'string',
+      description:
+        'Any failure layer: runtime, tool, user_sim, grader, detector, judge, semantic, or replay',
+    },
+    get: (s) => s.evaluation?.failures.map((failure) => failure.origin).join('\n'),
+  },
+  {
+    def: {
+      id: 'failureSeverity',
+      label: 'Failure severity',
+      type: 'string',
+      description: 'Any normalized failure severity on the trace',
+    },
+    get: (s) => s.evaluation?.failures.map((failure) => failure.severity).join('\n'),
+  },
+  {
+    def: {
+      id: 'detectorTier',
+      label: 'Detector tier',
+      type: 'string',
+      description: 'ACE detector evidence tier, kept separate from grader outcome',
+    },
+    get: (s) =>
+      s.evaluation?.flags
+        .map((flag) => flag.tier)
+        .filter(Boolean)
+        .join('\n'),
+  },
+  {
+    def: {
+      id: 'detectorFamily',
+      label: 'Detector family',
+      type: 'string',
+      description: 'ACE detector family (log, env, or agent)',
+    },
+    get: (s) =>
+      s.evaluation?.flags
+        .map((flag) => flag.family)
+        .filter(Boolean)
+        .join('\n'),
+  },
+  {
+    def: {
+      id: 'invalidUserSim',
+      label: 'Invalid user simulator',
+      type: 'boolean',
+      description: 'True only when the hard user-simulator validity gate fired',
+    },
+    get: (s) => s.evaluation?.userSimGate?.invalid,
+  },
+  {
+    def: {
+      id: 'toolErrors',
+      label: 'ACE tool errors',
+      type: 'number',
+      description: 'Number of tool errors reported by ACE episode metrics',
+    },
+    get: (s) => metricNumber(s, 'tool_errors'),
+  },
+  {
+    def: {
+      id: 'issue',
+      label: 'Issue',
+      type: 'string',
+      description: 'ACE scenario or production-corpus issue label',
+    },
+    get: (s) => extraString(s, 'issue'),
+  },
+  {
+    def: {
+      id: 'language',
+      label: 'Language',
+      type: 'string',
+      description: 'ACE scenario or detected conversation language',
+    },
+    get: (s) => extraString(s, 'language'),
+  },
+  {
+    def: {
+      id: 'prompt',
+      label: 'ACE prompt',
+      type: 'string',
+      description: 'ACE prompt preset/alias recorded for the episode',
+    },
+    get: (s) => extraString(s, 'prompt') ?? extraString(s, 'prompt_alias'),
+  },
+  {
+    def: {
+      id: 'transport',
+      label: 'ACE transport',
+      type: 'string',
+      description: 'ACE model transport, for example responses or chat_completions',
+    },
+    get: (s) => extraString(s, 'transport') ?? extraString(s, 'agent_transport'),
+  },
+  {
+    def: {
       id: 'sourceFormat',
       label: 'Source format',
       type: 'string',
@@ -278,7 +427,8 @@ const ENTRIES: KeyEntry[] = [
       type: 'string',
       description: "Training run name (meta.extra.run), e.g. 'run-a'; absent ⇒ 'run-a'",
     },
-    get: (s) => (typeof s.meta.extra?.run === 'string' ? s.meta.extra.run : 'run-a'),
+    get: (s) =>
+      s.meta.runId ?? (typeof s.meta.extra?.run === 'string' ? s.meta.extra.run : 'run-a'),
   },
 ]
 

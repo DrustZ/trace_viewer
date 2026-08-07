@@ -7,10 +7,8 @@ import { MarkdownContent } from '../common/MarkdownContent'
 import { ScoreBadge } from '../common/ScoreBadge'
 
 /**
- * Checkpoint playground: pick a cut point in the recorded conversation,
- * optionally override the last user message and the checkpoint step, and
- * replay the prefix against a stand-in model. The recorded final answer sits
- * next to the simulated reply for comparison.
+ * LLM-only continuation playground: send a recorded prefix to a stand-in
+ * model. This never restores ACE tools, world state, RNG, or a checkpoint.
  */
 
 interface PlaygroundResponse {
@@ -28,7 +26,7 @@ function errorText(err: unknown): string {
         const msg = (parsed as { error: unknown }).error
         if (typeof msg === 'string') {
           return err.status === 503
-            ? `${msg}. Set it in the server environment to enable replay.`
+            ? `${msg}. Set it in the server environment to enable continuation.`
             : msg
         }
       }
@@ -47,7 +45,7 @@ function optionLabel(index: number, role: string, content: string): string {
 
 export function PlaygroundTab({ trace }: { trace: Trace }) {
   const sourceCheckpoint = recordedCheckpoint(trace.meta)
-  // Cut candidates: user/tool messages (replaying makes the model answer what follows them).
+  // Cut candidates: user/tool messages after which the stand-in model can continue.
   const cutOptions = useMemo(
     () =>
       trace.messages
@@ -85,7 +83,7 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
       const stepText = step.trim()
       const stepNum = stepText === '' ? undefined : Number(stepText)
       const response = await apiPost<PlaygroundResponse>('/api/playground', {
-        traceId: trace.meta.traceId,
+        traceId: trace.meta.traceUid ?? trace.meta.traceId,
         uptoMessageId,
         ...(override.trim() !== '' ? { userOverride: override } : {}),
         ...(stepNum !== undefined && Number.isFinite(stepNum) ? { checkpointStep: stepNum } : {}),
@@ -100,12 +98,17 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
 
   return (
     <div className="mx-auto grid max-w-7xl gap-6 p-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-      {/* Replay controls */}
+      {/* Continuation controls */}
       <div className="space-y-4 self-start rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-800">Replay controls</h2>
+        <h2 className="text-sm font-semibold text-slate-800">LLM-only continuation controls</h2>
+
+        <p className="text-xs text-amber-700">
+          Stand-in model only. No checkpoint, database, tools, evaluator, or exact replay is
+          restored.
+        </p>
 
         <label className="block text-xs text-slate-600">
-          <span className="mb-1 block font-medium">Replay up to message (inclusive)</span>
+          <span className="mb-1 block font-medium">Continue after message (inclusive)</span>
           <select
             data-testid="playground-cut"
             value={uptoMessageId ?? ''}
@@ -127,7 +130,7 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
             value={override}
             onChange={(e) => setOverride(e.target.value)}
             rows={4}
-            placeholder="Replaces the last user message in the replay prefix…"
+            placeholder="Replaces the last user message in the continuation prefix…"
             className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-slate-400"
           />
         </label>
@@ -136,7 +139,7 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
           <span className="mb-1 block font-medium">
             {sourceCheckpoint === null
               ? 'Hypothetical checkpoint override (optional)'
-              : 'Checkpoint step'}
+              : 'Checkpoint metadata (prompt context only)'}
           </span>
           <input
             data-testid="playground-step"
@@ -158,12 +161,12 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
           {pending && (
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-white" />
           )}
-          {pending ? 'Replaying…' : 'Run replay'}
+          {pending ? 'Generating…' : 'Generate continuation'}
         </button>
 
         {cutOptions.length === 0 && (
           <p className="text-xs text-slate-400">
-            This trace has no user or tool messages to replay from.
+            This trace has no user or tool messages to continue from.
           </p>
         )}
         {error && (
@@ -191,7 +194,9 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
           className="rounded-lg border border-slate-200 bg-white p-4"
           data-testid="playground-replay-panel"
         >
-          <h2 className="mb-2 text-sm font-semibold text-slate-800">Replay (simulated)</h2>
+          <h2 className="mb-2 text-sm font-semibold text-slate-800">
+            LLM-only continuation (simulated)
+          </h2>
           <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
             SIMULATION — stand-in model, not the real checkpoint
           </div>
@@ -206,7 +211,7 @@ export function PlaygroundTab({ trace }: { trace: Trace }) {
             <p className="text-xs text-slate-400">
               {pending
                 ? 'Waiting for the simulated reply…'
-                : 'Run a replay to see the simulated response.'}
+                : 'Generate a continuation to see the simulated response.'}
             </p>
           )}
         </section>

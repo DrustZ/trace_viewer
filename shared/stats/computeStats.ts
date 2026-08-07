@@ -1,4 +1,4 @@
-import type { Message, Trace, TraceMeta, TraceStats } from '../schema/types'
+import type { Message, Trace, TraceEvaluation, TraceMeta, TraceStats } from '../schema/types'
 
 /**
  * Tool names whose results count as sandbox executions. Exported so the
@@ -55,7 +55,13 @@ function annotateMessages(messages: Message[]): Message[] {
     } else {
       inAssistantBlock = false
     }
-    return { ...m, id: m.id || `m-${idx}`, stepIndex }
+    return {
+      ...m,
+      id: m.id || `m-${m.rawIndex ?? idx}`,
+      rawIndex: m.rawIndex ?? idx,
+      chronologicalIndex: m.chronologicalIndex ?? idx,
+      stepIndex,
+    }
   })
 }
 
@@ -183,12 +189,14 @@ export function finalizeTrace(
   messages: Message[],
   overrides?: Partial<TraceStats>,
   warnings?: string[],
+  evaluation?: TraceEvaluation,
 ): Trace {
   const annotated = annotateMessages(messages)
   return {
     meta,
     stats: computeStats(meta, annotated, overrides),
     messages: annotated,
+    ...(evaluation ? { evaluation } : {}),
     ...(warnings && warnings.length > 0 ? { warnings } : {}),
   }
 }

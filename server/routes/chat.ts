@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { type ChatMessage, TraceChatError, traceChat } from '../ai/traceChat'
+import { maySendTraceToExternalAi } from '../privacy'
 import { asyncHandler, isRecord, type RouteCtx } from './context'
 
 const MAX_HISTORY = 20
@@ -27,6 +28,13 @@ export function chatRoutes(ctx: RouteCtx): Router {
       const trace = ctx.store.getFull(String(req.params.id))
       if (!trace) {
         res.status(404).json({ error: 'trace not found' })
+        return
+      }
+      if (!maySendTraceToExternalAi(trace)) {
+        res.status(403).json({
+          error:
+            'external AI is disabled for production traces; set ACE_ALLOW_EXTERNAL_AI=1 to opt in',
+        })
         return
       }
       const messages = parseMessages(req.body)

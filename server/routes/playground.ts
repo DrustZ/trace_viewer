@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { PlaygroundError, type PlaygroundParams, runPlayground } from '../ai/playground'
+import { maySendTraceToExternalAi } from '../privacy'
 import { asyncHandler, isRecord, type RouteCtx } from './context'
 
 /** Validates the request body; null when malformed. */
@@ -21,7 +22,7 @@ function parseBody(body: unknown): ({ traceId: string } & PlaygroundParams) | nu
   }
 }
 
-/** POST /api/playground — checkpoint replay simulation against a stand-in model. */
+/** POST /api/playground — LLM-only prefix continuation against a stand-in model. */
 export function playgroundRoutes(ctx: RouteCtx): Router {
   const router = Router()
 
@@ -40,6 +41,13 @@ export function playgroundRoutes(ctx: RouteCtx): Router {
       const trace = ctx.store.getFull(body.traceId)
       if (!trace) {
         res.status(404).json({ error: 'trace not found' })
+        return
+      }
+      if (!maySendTraceToExternalAi(trace)) {
+        res.status(403).json({
+          error:
+            'external AI is disabled for production traces; set ACE_ALLOW_EXTERNAL_AI=1 to opt in',
+        })
         return
       }
       try {

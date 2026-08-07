@@ -99,7 +99,7 @@ export function GlobalSearchBox() {
                 key={hit.traceId}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => selectHit(hit.traceId)}
+                onClick={() => selectHit(hit.traceUid ?? hit.traceId)}
                 className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-slate-50"
               >
                 <span className="flex items-center gap-2">

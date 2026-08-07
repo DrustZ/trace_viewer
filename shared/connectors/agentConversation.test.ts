@@ -273,7 +273,7 @@ describe('agentConversationConnector.parse', () => {
     expect(trace.messages[0].metadata).toMatchObject({ toolCallMatch: 'exact' })
   })
 
-  it('preserves source order and reports timestamp regressions', () => {
+  it('sorts for display while preserving raw indices and reports timestamp regressions', () => {
     const input = JSON.stringify({
       conversation: [
         { role: 'user', agent_type: 'user', content: 'first', timestamp: 20 },
@@ -281,7 +281,13 @@ describe('agentConversationConnector.parse', () => {
       ],
     })
     const trace = agentConversationConnector.parse(input, ctx).traces[0]
-    expect(trace.messages.map((message) => message.content)).toEqual(['first', 'second'])
+    expect(trace.messages.map((message) => message.content)).toEqual(['second', 'first'])
+    expect(trace.messages.map((message) => [message.rawIndex, message.chronologicalIndex])).toEqual(
+      [
+        [1, 0],
+        [0, 1],
+      ],
+    )
     expect(trace.meta.extra?.dataQuality).toMatchObject({ timestampRegressions: 1 })
     expect(trace.warnings.some((warning) => warning.includes('timestamp regression'))).toBe(true)
   })

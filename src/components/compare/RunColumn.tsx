@@ -20,6 +20,10 @@ interface StepGroup {
   rollouts: TraceSummary[]
 }
 
+function traceAddress(trace: TraceSummary): string {
+  return trace.meta.traceUid ?? trace.meta.traceId
+}
+
 /** A direct trace deep link is safe to render only under its own run and instance header. */
 export function traceMatchesSelection(
   trace: TraceSummary,
@@ -74,12 +78,13 @@ function RolloutRow({
   onSelect: (id: string) => void
 }) {
   const { meta, stats } = rollout
+  const traceUid = meta.traceUid ?? meta.traceId
   return (
     <button
       type="button"
       data-testid={`rollout-${run}-${meta.traceId}`}
       aria-current={selected}
-      onClick={() => onSelect(meta.traceId)}
+      onClick={() => onSelect(traceUid)}
       className={`flex w-full flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs ${
         selected
           ? 'border-blue-300 bg-blue-50'
@@ -122,7 +127,7 @@ export function RunColumn({
   const total = totalOf(query.data)
   const groups = useMemo(() => groupByStep(items), [items])
 
-  const selected = items.find((s) => s.meta.traceId === selectedTraceId)
+  const selected = items.find((s) => traceAddress(s) === selectedTraceId)
   const selectedStep = selected === undefined ? undefined : recordedCheckpoint(selected.meta)
   const [open, setOpen] = useState<Set<number | null>>(() => new Set())
   // Auto-expand the group holding the current selection (default: all collapsed).
@@ -215,10 +220,10 @@ export function RunColumn({
                     <div className="flex flex-col gap-1 border-t border-slate-100 p-1.5">
                       {g.rollouts.map((r) => (
                         <RolloutRow
-                          key={r.meta.traceId}
+                          key={traceAddress(r)}
                           rollout={r}
                           run={run}
-                          selected={r.meta.traceId === selectedTraceId}
+                          selected={traceAddress(r) === selectedTraceId}
                           onSelect={onSelect}
                         />
                       ))}

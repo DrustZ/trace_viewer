@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 /** Repository root, used so relative data paths do not depend on the launch directory. */
 export const PROJECT_ROOT = path.resolve(import.meta.dirname, '../..')
+export const LOCAL_DATA_ROOTS_FILE = path.join(PROJECT_ROOT, '.trace-viewer', 'data-roots.json')
 
 export interface DataRoot {
   /** Absolute filesystem path watched and scanned by the server. */
@@ -12,6 +15,13 @@ export interface DataRoot {
 }
 
 const RUN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+
+export const MAX_DATA_ROOT_LABEL_LENGTH = 64
+
+/** Labels become run ids, so keep them short and filename/URL friendly. */
+export function isValidDataRootLabel(value: string): boolean {
+  return value.length <= MAX_DATA_ROOT_LABEL_LENGTH && RUN_NAME.test(value)
+}
 
 /** Built-in roots are always enabled; TRACE_DATA_ROOTS only adds to (or labels) them. */
 export const DEFAULT_DATA_ROOTS = [
@@ -42,6 +52,11 @@ export function formatDataRootSpec(root: DataRoot): string {
   return root.run ? `${root.run}=${root.path}` : root.path
 }
 
+/** Stable opaque id suitable for UI/API use without returning an absolute path. */
+export function dataRootId(rootPath: string): string {
+  return createHash('sha256').update(path.resolve(rootPath)).digest('hex').slice(0, 12)
+}
+
 /** A UI/API-safe locator that never contains the current account name or arbitrary parents. */
 export function displayDataRootPath(rootPath: string): string {
   const projectRelative = path.relative(PROJECT_ROOT, rootPath)
@@ -67,9 +82,18 @@ export function displayDataRootPath(rootPath: string): string {
 export function resolveDataRoots(
   value = process.env.TRACE_DATA_ROOTS,
   baseDir = PROJECT_ROOT,
+  discovery: {
+    aceProjectRoot?: string
+    aceRunRoot?: string
+    persistedRoots?: readonly string[]
+  } = {},
 ): string[] {
   const roots = new Map<string, DataRoot>()
   for (const spec of DEFAULT_DATA_ROOTS) {
+    const root = parseDataRootSpec(spec, baseDir)
+    roots.set(root.path, root)
+  }
+  for (const spec of discovery.persistedRoots ?? []) {
     const root = parseDataRootSpec(spec, baseDir)
     roots.set(root.path, root)
   }
@@ -78,5 +102,45 @@ export function resolveDataRoots(
     const root = parseDataRootSpec(spec, baseDir)
     roots.set(root.path, root)
   }
+  // Local ACE cockpit convention. An explicit TRACE_DATA_ROOTS entry still wins by path.
+  // Auto-discovery is intentionally limited to the sibling project used by this workspace;
+  // no arbitrary directory walking or upload occurs.
+  const aceProject = path.resolve(
+    discovery.aceProjectRoot ??
+      process.env.ACE_PROJECT_ROOT ??
+      path.join(PROJECT_ROOT, '..', 'ac_express'),
+  )
+  const aceCorpus = path.join(aceProject, 'data')
+  const aceRuns = path.resolve(
+    discovery.aceRunRoot ?? process.env.ACE_RUN_ROOT ?? path.join(aceProject, 'runs', 'episodes'),
+  )
+  if (existsSync(aceCorpus)) {
+    const root = parseDataRootSpec(`production=${aceCorpus}`, baseDir)
+    if (!roots.has(root.path)) roots.set(root.path, root)
+  }
+  if (existsSync(aceRuns)) {
+    const root = parseDataRootSpec(aceRuns, baseDir)
+    if (!roots.has(root.path)) roots.set(root.path, root)
+  }
   return [...roots.values()].map(formatDataRootSpec)
+}
+
+/** Read the ignored, machine-local root registry. Invalid content fails closed at startup. */
+export function loadLocalDataRoots(filePath = LOCAL_DATA_ROOTS_FILE): string[] {
+  if (!existsSync(filePath)) return []
+  const parsed: unknown = JSON.parse(readFileSync(filePath, 'utf8'))
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !('schemaVersion' in parsed) ||
+    (parsed as { schemaVersion?: unknown }).schemaVersion !== 1 ||
+    !('roots' in parsed) ||
+    !Array.isArray((parsed as { roots?: unknown }).roots) ||
+    !(parsed as { roots: unknown[] }).roots.every((item) => typeof item === 'string')
+  ) {
+    throw new Error('local data-root registry must be schemaVersion 1 with a string roots array')
+  }
+  const roots = (parsed as { roots: string[] }).roots
+  for (const spec of roots) parseDataRootSpec(spec)
+  return roots
 }

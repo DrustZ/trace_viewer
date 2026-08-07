@@ -7,14 +7,28 @@ import { formatDuration, formatNumber, formatPercent } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { StatusPill } from '../common/StatusPill'
 
-export const TRACE_TABS = ['conversation', 'metadata', 'evolution', 'playground', 'raw'] as const
+export const TRACE_TABS = [
+  'conversation',
+  'evaluation',
+  'review',
+  'state',
+  'replay',
+  'metadata',
+  'evolution',
+  'playground',
+  'raw',
+] as const
 export type TraceTab = (typeof TRACE_TABS)[number]
 
 const TAB_LABELS: Record<TraceTab, string> = {
   conversation: 'Conversation',
+  evaluation: 'Evaluation',
+  review: 'Human Review',
+  state: 'State & Tools',
+  replay: 'Replay & Fork',
   metadata: 'Metadata',
   evolution: 'Evolution',
-  playground: 'Playground',
+  playground: 'LLM-only continuation',
   raw: 'Raw',
 }
 
@@ -34,6 +48,7 @@ export function TraceHeader({
   listSearch = '',
   onNavigate,
   onClose,
+  blindReview = false,
 }: {
   trace: Trace
   activeTab: TraceTab
@@ -44,11 +59,15 @@ export function TraceHeader({
   /** Drawer only: Prev/Next switch the previewed trace instead of navigating. */
   onNavigate?: (traceId: string) => void
   onClose?: () => void
+  /** Prevent automatic evaluation summaries leaking into an unlocked calibration review. */
+  blindReview?: boolean
 }) {
   const navigate = useNavigate()
   const { meta, stats } = trace
+  const traceUid = meta.traceUid ?? meta.traceId
+  const taskScenarioId = meta.corpusId === 'simulation' ? meta.instanceId : undefined
 
-  const isImported = meta.extra?.run === 'imported'
+  const isImported = meta.runId === 'imported' || meta.extra?.run === 'imported'
   // Chat/message imports have no RL run/checkpoint/split — drop the synthetic
   // default badges (step 0, train) so they don't read as real metadata. (The
   // trace views themselves stay consistent with loaded-run traces.)
@@ -59,6 +78,10 @@ export function TraceHeader({
   // inside the Conversation view's Timeline sub-mode, not a standalone tab.)
   const tabCounts: Partial<Record<TraceTab, number>> = {
     conversation: trace.messages.length,
+    evaluation: trace.evaluation?.failures.length,
+    state: trace.evaluation
+      ? trace.evaluation.worldDiff.length + trace.evaluation.ledger.length
+      : undefined,
   }
 
   const backSearch = useMemo(() => {
@@ -79,14 +102,14 @@ export function TraceHeader({
     return params
   }, [listSearch])
 
-  const neighbors = useNeighbors(meta.traceId, listParams)
+  const neighbors = useNeighbors(traceUid, listParams)
 
   const expandTo = useMemo(() => {
     const p = new URLSearchParams(listSearch)
     p.delete('peek') // drawer-only param — stale on the full trace page
     p.set('tab', activeTab)
-    return { pathname: `/trace/${encodeURIComponent(meta.traceId)}`, search: `?${p.toString()}` }
-  }, [listSearch, activeTab, meta.traceId])
+    return { pathname: `/trace/${encodeURIComponent(traceUid)}`, search: `?${p.toString()}` }
+  }, [listSearch, activeTab, traceUid])
 
   const goTo = (id: string | null) => {
     if (!id) return
@@ -127,14 +150,39 @@ export function TraceHeader({
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h1 className="truncate font-mono text-lg font-semibold text-slate-900">
-              {meta.traceId}
+              {meta.sourceTraceId ?? meta.traceId}
             </h1>
-            <StatusPill status={meta.status} />
-            <ScoreBadge score={stats.score} />
+            {blindReview ? (
+              <Badge>blind calibration · automatic outcome hidden</Badge>
+            ) : (
+              <>
+                <StatusPill status={meta.status} />
+                {trace.evaluation?.lifecycle.pendingPhase && (
+                  <Badge>pending · {trace.evaluation.lifecycle.pendingPhase}</Badge>
+                )}
+                <ScoreBadge score={stats.score} />
+              </>
+            )}
             <Badge>{meta.component}</Badge>
             {showStep && <Badge>step {meta.checkpointStep}</Badge>}
             {showSplit && <Badge>{meta.split}</Badge>}
             <Badge>{meta.sourceFormat}</Badge>
+            {taskScenarioId && (
+              <>
+                <Link
+                  to={`/ace/tasks/${encodeURIComponent(taskScenarioId)}`}
+                  className="text-xs font-medium text-blue-600 hover:underline"
+                >
+                  View task definition
+                </Link>
+                <Link
+                  to={`/ace/lab?${new URLSearchParams({ trace: traceUid }).toString()}`}
+                  className="text-xs font-medium text-violet-600 hover:underline"
+                >
+                  Open in lab
+                </Link>
+              </>
+            )}
           </div>
           {/* Prev/Next walk the loaded list — meaningless for a one-off import. */}
           {!isImported && (
@@ -181,7 +229,7 @@ export function TraceHeader({
               }`}
             >
               {TAB_LABELS[tab]}
-              {tabCounts[tab] !== undefined && (
+              {!blindReview && tabCounts[tab] !== undefined && (
                 <span className="ml-1 font-normal text-slate-400">
                   ({formatNumber(tabCounts[tab])})
                 </span>

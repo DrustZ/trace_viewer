@@ -167,14 +167,15 @@ export function importRoutes(ctx: RouteCtx): Router {
       const first = result.traces[0]
       const sourceFormat = first.meta.sourceFormat
       const rawLabel = source === 'pasted' ? 'imported (pasted)' : source
-      for (const parsed of result.traces) {
+      const imported = result.traces.map((parsed) => {
         parsed.meta.extra = { ...(parsed.meta.extra ?? {}), run: 'imported' }
         // Keep the original text in memory so the Raw view works (no file on disk).
-        ctx.store.upsert(parsed, rawLabel, text)
-      }
+        return ctx.store.upsert(parsed, rawLabel, text)
+      })
 
       res.json({
-        traceIds: result.traces.map((t) => t.meta.traceId),
+        traceIds: result.traces.map((trace) => trace.meta.traceId),
+        traceUids: imported.map((trace) => trace.meta.traceUid ?? trace.meta.traceId),
         format: sourceFormat,
         warnings: [...result.warnings, ...result.traces.flatMap((t) => t.warnings)],
       } satisfies ImportResponse)

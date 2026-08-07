@@ -136,6 +136,59 @@ export function JudgeCallout({ text }: { text: string }) {
   )
 }
 
+interface AnchoredFailure {
+  id?: string
+  code: string
+  severity?: string
+  origin?: string
+  evidence?: string
+}
+
+function anchoredFailures(message: Message): AnchoredFailure[] {
+  const value = message.metadata?.aceFailures
+  if (!Array.isArray(value)) return []
+  return value.flatMap((candidate) => {
+    if (typeof candidate !== 'object' || candidate === null) return []
+    const item = candidate as Record<string, unknown>
+    if (typeof item.code !== 'string') return []
+    return [
+      {
+        ...(typeof item.id === 'string' ? { id: item.id } : {}),
+        code: item.code,
+        ...(typeof item.severity === 'string' ? { severity: item.severity } : {}),
+        ...(typeof item.origin === 'string' ? { origin: item.origin } : {}),
+        ...(typeof item.evidence === 'string' ? { evidence: item.evidence } : {}),
+      },
+    ]
+  })
+}
+
+/** Normalized ACE detector/grader/tool findings anchored to the exact source message. */
+export function FailureChips({ messages }: { messages: readonly Message[] }) {
+  const failures = messages.flatMap(anchoredFailures)
+  if (failures.length === 0) return null
+  return (
+    <div className="mt-1 flex flex-wrap gap-1" data-testid="ace-failure-chips">
+      {failures.map((failure, index) => {
+        const major = ['major', 'hard', 'error', 'critical'].includes(failure.severity ?? '')
+        return (
+          <span
+            key={failure.id ?? `${failure.code}-${index}`}
+            title={[failure.origin, failure.severity, failure.evidence].filter(Boolean).join(' · ')}
+            className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${
+              major
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-amber-200 bg-amber-50 text-amber-700'
+            }`}
+          >
+            {failure.code}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 /** Per-message meta row: timestamp, duration, score. */
 export function MessageMeta({
   message,
@@ -329,6 +382,7 @@ export function MessageCard({
         toolName={toolName}
       />
       {message.judgeOutput && <JudgeCallout text={message.judgeOutput} />}
+      <FailureChips messages={[message]} />
       <MessageMeta message={message} />
     </div>
   )

@@ -1,4 +1,4 @@
-import type { Message, TraceMeta, TraceStats } from '../schema/types'
+import type { Message, TraceEvaluation, TraceMeta, TraceStats } from '../schema/types'
 
 /**
  * What a connector extracts from raw text. Stats are always recomputed
@@ -9,6 +9,7 @@ import type { Message, TraceMeta, TraceStats } from '../schema/types'
 export interface ParsedTrace {
   meta: TraceMeta
   messages: Message[]
+  evaluation?: TraceEvaluation
   statsOverrides?: Partial<TraceStats>
   warnings: string[]
 }

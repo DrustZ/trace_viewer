@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ParsedTrace } from '../../shared/connectors/types'
-import type { TraceMeta } from '../../shared/schema/types'
+import type { TraceEvaluation, TraceMeta } from '../../shared/schema/types'
 import { TraceStore } from './traceStore'
 
 function fixture(opts: {
@@ -42,15 +42,134 @@ describe('TraceStore', () => {
     expect(trace?.stats.totalTokens).toBeGreaterThan(0)
   })
 
-  it('upsert replaces by traceId and bumps dataVersion', () => {
+  it('upsert replaces the same source identity and bumps dataVersion', () => {
     const store = new TraceStore()
     store.upsert(fixture({ traceId: 't1' }), '/a.json')
     const v1 = store.dataVersion
-    store.upsert(fixture({ traceId: 't1', score: 1 }), '/b.json')
+    store.upsert(fixture({ traceId: 't1', score: 1 }), '/a.json')
     expect(store.size).toBe(1)
     expect(store.dataVersion).toBeGreaterThan(v1)
-    expect(store.get('t1')?.sourcePath).toBe('/b.json')
+    expect(store.get('t1')?.sourcePath).toBe('/a.json')
     expect(store.getFull('t1')?.stats.score).toBe(1)
+  })
+
+  it('keeps duplicate producer ids addressable by uid and rejects ambiguous legacy lookup', () => {
+    const store = new TraceStore()
+    const first = store.upsert(fixture({ traceId: 'same' }), '/run-a/same.json')
+    const second = store.upsert(fixture({ traceId: 'same' }), '/run-b/same.json')
+
+    expect(store.size).toBe(2)
+    expect(first.meta.traceUid).not.toBe(second.meta.traceUid)
+    expect(store.get('same')).toBeUndefined()
+    expect(store.lookup('same')).toEqual({
+      kind: 'ambiguous',
+      sourceTraceId: 'same',
+      candidates: [first.meta.traceUid, second.meta.traceUid].sort(),
+    })
+    expect(store.getFull(first.meta.traceUid as string)?.meta.sourceTraceId).toBe('same')
+  })
+
+  it('publishes committed mutations and supports unsubscribe', () => {
+    const store = new TraceStore()
+    const events: Array<{ type: string; traceUid?: string; dataVersion: number }> = []
+    const unsubscribe = store.subscribe((event) => events.push(event))
+    const trace = store.upsert(fixture({ traceId: 'events' }), '/events.json')
+    store.remove('/events.json')
+    store.upsert(fixture({ traceId: 'reset' }), '/reset.json')
+    store.clear()
+    unsubscribe()
+    store.upsert(fixture({ traceId: 'ignored' }), '/ignored.json')
+
+    expect(events.map((event) => event.type)).toEqual([
+      'trace.upserted',
+      'trace.removed',
+      'trace.upserted',
+      'store.reset',
+    ])
+    expect(events[0]).toMatchObject({ traceUid: trace.meta.traceUid, dataVersion: 1 })
+    expect(events[1]).toMatchObject({ traceUid: trace.meta.traceUid, dataVersion: 2 })
+    expect(events[3].dataVersion).toBe(4)
+  })
+
+  it('immutably overlays detector evaluation without losing source or raw data', () => {
+    const store = new TraceStore()
+    const initial = store.upsert(fixture({ traceId: 'overlay' }), '/overlay.json', 'raw transcript')
+    const traceUid = initial.meta.traceUid as string
+    const originalMessages = initial.messages
+    const events: string[] = []
+    store.subscribe((event) => events.push(`${event.type}:${event.traceUid}`))
+    const evaluation: TraceEvaluation = {
+      lifecycle: { state: 'completed' },
+      outcome: 'ungraded',
+      checks: [],
+      metrics: {},
+      failures: [
+        {
+          origin: 'detector',
+          code: 'canonical_detector',
+          severity: 'major',
+          gating: false,
+          source: 'ace.detector.bundle',
+        },
+      ],
+      flags: [],
+      worldDiff: [],
+      ledger: [],
+    }
+
+    const enriched = store.updateEvaluation(traceUid, evaluation, {
+      detector_bundle_digest: 'bundle-1',
+    })
+
+    expect(enriched?.messages).toBe(originalMessages)
+    expect(enriched?.evaluation).toBe(evaluation)
+    expect(enriched?.meta.extra?.detector_bundle_digest).toBe('bundle-1')
+    expect(store.get(traceUid)).toMatchObject({
+      sourcePath: '/overlay.json',
+      rawText: 'raw transcript',
+    })
+    expect(events).toEqual([`trace.upserted:${traceUid}`])
+  })
+
+  it('re-anchors indexed failures when detector evaluation is overlaid', () => {
+    const store = new TraceStore()
+    const initial = store.upsert(fixture({ traceId: 'anchored-overlay' }), '/anchored.json')
+    const traceUid = initial.meta.traceUid as string
+    const evaluation: TraceEvaluation = {
+      lifecycle: { state: 'completed' },
+      outcome: 'ungraded',
+      checks: [],
+      metrics: {},
+      failures: [
+        {
+          origin: 'detector',
+          code: 'bad_turn',
+          severity: 'major',
+          gating: false,
+          source: 'ace.detector.bundle',
+          rawIndex: 0,
+          indexSpace: 'raw',
+          evidence: { reason: 'fixture' },
+        },
+      ],
+      flags: [],
+      worldDiff: [],
+      ledger: [],
+    }
+
+    const enriched = store.updateEvaluation(traceUid, evaluation)
+
+    expect(enriched?.messages).not.toBe(initial.messages)
+    expect(initial.messages[0].metadata?.aceFailures).toBeUndefined()
+    expect(enriched?.messages[0].metadata?.aceFailures).toEqual([
+      {
+        id: 'detector:bad_turn:0',
+        code: 'bad_turn',
+        severity: 'major',
+        origin: 'detector',
+        evidence: { reason: 'fixture' },
+      },
+    ])
   })
 
   it('remove deletes every trace from a source path', () => {

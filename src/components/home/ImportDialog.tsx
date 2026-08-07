@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useImportTrace } from '../../api/hooks'
+import { LocalFolderForm } from './LocalFolderForm'
 
-type Tab = 'paste' | 'file' | 'url'
+type Tab = 'paste' | 'file' | 'url' | 'folder'
 
-const TABS: Array<{ id: Tab; label: string }> = [
+export const IMPORT_TABS: Array<{ id: Tab; label: string }> = [
   { id: 'paste', label: 'Paste' },
   { id: 'file', label: 'File' },
   { id: 'url', label: 'URL' },
+  { id: 'folder', label: 'Folder' },
 ]
 
 const FORMATS = ['auto', 'native', 'harmony', 'openai-chat'] as const
@@ -72,7 +74,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   // runs. (The drawer's Expand button goes to the full trace page.)
   useEffect(() => {
     if (!importTrace.isSuccess || openedRef.current) return
-    const first = importTrace.data.traceIds[0]
+    const first = importTrace.data.traceUids?.[0] ?? importTrace.data.traceIds[0]
     if (!first) return
     openedRef.current = true
     setSearchParams(
@@ -174,7 +176,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <div className="flex gap-1 rounded-md bg-slate-100 p-0.5">
-              {TABS.map((t) => (
+              {IMPORT_TABS.map((t) => (
                 <button
                   key={t.id}
                   type="button"
@@ -190,74 +192,82 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               ))}
             </div>
 
-            {tab === 'paste' && (
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={8}
-                placeholder="Paste a trace: native JSON, harmony text, or an OpenAI chat payload"
-                className={`${INPUT_CLASS} resize-y font-mono text-xs`}
-              />
-            )}
-            {tab === 'file' && (
-              <div className="flex flex-col gap-1.5">
-                <input
-                  type="file"
-                  accept=".json,.jsonl,.txt"
-                  onChange={(e) => onFileChange(e.target.files?.[0])}
-                  className="text-xs text-slate-600 file:mr-2 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-2 file:py-1 file:text-xs file:text-slate-700"
-                />
-                {fileName !== '' && <p className="text-xs text-slate-500">Selected: {fileName}</p>}
-              </div>
-            )}
-            {tab === 'url' && (
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submit()
-                }}
-                placeholder="https://example.com/trace.json"
-                className={INPUT_CLASS}
-              />
-            )}
+            {tab === 'folder' ? (
+              <LocalFolderForm />
+            ) : (
+              <>
+                {tab === 'paste' && (
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    rows={8}
+                    placeholder="Paste a trace: native JSON, harmony text, or an OpenAI chat payload"
+                    className={`${INPUT_CLASS} resize-y font-mono text-xs`}
+                  />
+                )}
+                {tab === 'file' && (
+                  <div className="flex flex-col gap-1.5">
+                    <input
+                      type="file"
+                      accept=".json,.jsonl,.txt"
+                      onChange={(e) => onFileChange(e.target.files?.[0])}
+                      className="text-xs text-slate-600 file:mr-2 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-2 file:py-1 file:text-xs file:text-slate-700"
+                    />
+                    {fileName !== '' && (
+                      <p className="text-xs text-slate-500">Selected: {fileName}</p>
+                    )}
+                  </div>
+                )}
+                {tab === 'url' && (
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submit()
+                    }}
+                    placeholder="https://example.com/trace.json"
+                    className={INPUT_CLASS}
+                  />
+                )}
 
-            <div className="flex items-center justify-between gap-2">
-              {tab !== 'url' ? (
-                <label className="flex items-center gap-1.5 text-xs text-slate-500">
-                  Format
-                  <select
-                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value as (typeof FORMATS)[number])}
+                <div className="flex items-center justify-between gap-2">
+                  {tab !== 'url' ? (
+                    <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                      Format
+                      <select
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                        value={format}
+                        onChange={(e) => setFormat(e.target.value as (typeof FORMATS)[number])}
+                      >
+                        {FORMATS.map((f) => (
+                          <option key={f} value={f}>
+                            {f}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    type="button"
+                    data-testid="import-submit"
+                    onClick={submit}
+                    disabled={!canSubmit || importTrace.isPending}
+                    className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {FORMATS.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <span />
-              )}
-              <button
-                type="button"
-                data-testid="import-submit"
-                onClick={submit}
-                disabled={!canSubmit || importTrace.isPending}
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {importTrace.isPending ? 'Importing…' : 'Import'}
-              </button>
-            </div>
+                    {importTrace.isPending ? 'Importing…' : 'Import'}
+                  </button>
+                </div>
 
-            {error && (
-              <div className="flex flex-col gap-1">
-                <p className="text-xs text-red-600">{error.message}</p>
-                <WarningList warnings={error.warnings} />
-              </div>
+                {error && (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs text-red-600">{error.message}</p>
+                    <WarningList warnings={error.warnings} />
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

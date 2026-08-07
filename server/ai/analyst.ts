@@ -8,6 +8,7 @@ import { FILTER_KEYS } from '../../shared/filter/keys'
 import { recordedCheckpoint } from '../../shared/schema/provenance'
 import type { Trace, TraceSummary } from '../../shared/schema/types'
 import { runOf } from '../../shared/stats/evolution'
+import { maySendTraceToExternalAi } from '../privacy'
 import { firstParam, type RouteCtx } from '../routes/context'
 import { appliedSummaries } from '../routes/listParams'
 
@@ -211,7 +212,7 @@ The filter DSL is strictly per-trace: 'score.lt.0.5' matches individual rollouts
 Filter DSL (for list_traces filters and suggestedFilter): 'key.op.value' segments joined by ';'. Ops: eq, neq, lt, lte, gt, gte, contains, in ('in' values joined by '|'). Keys:
 ${keyLines}
 
-Plan briefly, gather evidence with a few tool calls, then answer by calling emit_report with: a concise markdown summary, findings citing traceIds you actually observed, and (when a filter would help the user see the evidence) a suggested filter DSL string.`
+Plan briefly, gather evidence with a few tool calls, then answer by calling emit_report with: a concise markdown summary, findings whose traceId value is the canonical traceUid you actually observed, and (when a filter would help the user see the evidence) a suggested filter DSL string.`
 }
 
 // ---------------------------------------------------------------------------
@@ -228,7 +229,8 @@ function toNumber(value: unknown, fallback: number, max: number): number {
 function condenseSummary(s: TraceSummary): Record<string, unknown> {
   const step = recordedCheckpoint(s.meta)
   const row: Record<string, unknown> = {
-    traceId: s.meta.traceId,
+    traceId: s.meta.sourceTraceId ?? s.meta.traceId,
+    traceUid: s.meta.traceUid ?? s.meta.traceId,
     component: s.meta.component,
     step,
     checkpointRecorded: step !== null,
@@ -252,7 +254,7 @@ function listTraces(ctx: RouteCtx, input: Record<string, unknown>): unknown {
     const value = firstParam(input[key])
     if (value) query[key] = value
   }
-  const items = appliedSummaries(ctx, query)
+  const items = appliedSummaries(ctx, query).filter(maySendTraceToExternalAi)
   const limit = toNumber(input.limit, LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT)
   return { total: items.length, items: items.slice(0, limit).map(condenseSummary) }
 }
@@ -269,7 +271,7 @@ function aggregate(ctx: RouteCtx, input: Record<string, unknown>): unknown {
         ? String(recordedCheckpoint(s.meta) ?? 'unknown')
         : s.meta.status
   const groups = new Map<string, TraceSummary[]>()
-  for (const s of ctx.store.list()) {
+  for (const s of ctx.store.list().filter(maySendTraceToExternalAi)) {
     const key = keyOf(s)
     const at = groups.get(key)
     if (at) at.push(s)
@@ -299,7 +301,7 @@ function aggregate(ctx: RouteCtx, input: Record<string, unknown>): unknown {
  * avgScore are excluded by either bound.
  */
 function aggregateInstances(ctx: RouteCtx, input: Record<string, unknown>): unknown {
-  let items = ctx.store.list()
+  let items = ctx.store.list().filter(maySendTraceToExternalAi)
   const step =
     typeof input.step === 'number' ? input.step : Number(firstParam(input.step) ?? Number.NaN)
   if (Number.isFinite(step)) items = items.filter((s) => recordedCheckpoint(s.meta) === step)
@@ -388,6 +390,9 @@ export function condenseTrace(trace: Trace, maxChars: number): unknown {
 function getTrace(ctx: RouteCtx, input: Record<string, unknown>): unknown {
   const trace = ctx.store.getFull(String(input.traceId ?? ''))
   if (!trace) return { error: `trace not found: ${String(input.traceId ?? '')}` }
+  if (!maySendTraceToExternalAi(trace)) {
+    return { error: 'production trace egress is disabled' }
+  }
   const maxChars = toNumber(input.maxChars, GET_TRACE_DEFAULT_CHARS, GET_TRACE_MAX_CHARS)
   return condenseTrace(trace, maxChars)
 }
@@ -396,7 +401,15 @@ function searchTraces(ctx: RouteCtx, input: Record<string, unknown>): unknown {
   const q = typeof input.q === 'string' ? input.q.trim() : ''
   if (q.length < 2) return { error: 'q must be at least 2 characters' }
   const limit = toNumber(input.limit, SEARCH_MAX_LIMIT, SEARCH_MAX_LIMIT)
-  return { hits: ctx.searchIndex.search(q, limit) }
+  return {
+    hits: ctx.searchIndex
+      .search(q, limit * 5)
+      .filter((hit) => {
+        const trace = ctx.store.getFull(hit.traceUid ?? hit.traceId)
+        return trace !== undefined && maySendTraceToExternalAi(trace)
+      })
+      .slice(0, limit),
+  }
 }
 
 /** Dispatches one tool call against the store. Never throws — errors become result payloads. */

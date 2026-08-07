@@ -276,12 +276,16 @@ describe('api', () => {
     const perTrace = await request(groupApp).get(
       '/api/traces?groupBy=instance&step=125&filters=score.lt.0.5',
     )
+    expect(perTrace.status, JSON.stringify(perTrace.body)).toBe(200)
+    expect(perTrace.body.groups).toBeInstanceOf(Array)
     const distorted = perTrace.body.groups.find(
       (g: { instanceId: string }) => g.instanceId === 'g-third',
     )
     expect(distorted).toMatchObject({ count: 2, avgScore: 0 })
 
     const atLeast = await request(groupApp).get('/api/traces?groupBy=instance&groupAvgGte=0.5')
+    expect(atLeast.status, JSON.stringify(atLeast.body)).toBe(200)
+    expect(atLeast.body.groups).toBeInstanceOf(Array)
     expect((atLeast.body.groups as Array<{ instanceId: string }>).map((g) => g.instanceId)).toEqual(
       ['g-high'],
     )
@@ -297,7 +301,7 @@ describe('api', () => {
 
   it('GET /api/traces/:id returns the full trace, 404 for unknown', async () => {
     const res = await request(app).get('/api/traces/lc-i01-s100-r01')
-    expect(res.status).toBe(200)
+    expect(res.status, JSON.stringify(res.body)).toBe(200)
     expect(res.body.meta.traceId).toBe('lc-i01-s100-r01')
     expect(res.body.messages).toHaveLength(2)
     expect(res.body.stats.score).toBe(0.8)

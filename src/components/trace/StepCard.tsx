@@ -2,7 +2,14 @@ import type { Message, ToolCall } from '@shared/schema/types'
 import { messageTokens } from '@shared/stats/computeStats'
 import { FoldSection } from '../common/CollapsibleText'
 import { formatDuration, formatNumber, formatScore, formatTimestamp } from '../common/format'
-import { FOLD_TONES, JudgeCallout, MessageMeta, messageNumber, RichTextBlock } from './MessageCard'
+import {
+  FailureChips,
+  FOLD_TONES,
+  JudgeCallout,
+  MessageMeta,
+  messageNumber,
+  RichTextBlock,
+} from './MessageCard'
 import {
   MessageViewHeader,
   RawMessageJson,
@@ -282,6 +289,7 @@ export function StepCard({
           <CollapsedSummary unit={unit} />
         )}
       </div>
+      <FailureChips messages={unit.messages} />
     </div>
   )
 }

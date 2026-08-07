@@ -35,6 +35,28 @@ Production mode (single port):
 npm run build && npm start   # serves the built SPA + API on :8787
 ```
 
+### ACE cockpit
+
+When a sibling `../ac_express` checkout exists, the server automatically adds
+`ac_express/data` as the `production` corpus and `ac_express/runs/episodes` as simulation runs.
+No copy or manual import is required. The ACE-specific entry points are:
+
+- `/ace` — launch/control runs and inspect batch failures;
+- `/ace/analysis` — aggregate one or multiple exact run IDs with a shareable URL;
+- `/ace/tasks` — browse the current scenario goals and constraints with source digests;
+- `/ace/lab` — rerun one task with explicit model/prompt/harness/fault settings and monitor it live;
+- `/reviews` — blind Calibration or Assisted human labeling;
+- any simulation trace → `Replay & Fork` for checkpoint restore/fork, when its archive exists;
+- any ACE trace/prefix → save an immutable regression artifact (runnable only when the trace
+  carries its own scenario snapshot; otherwise an explicit non-runnable draft).
+
+Calibration treats only a trace-bound scenario snapshot as authoritative ground truth. Older
+runs without one show that ground truth is unavailable; the current Task Explorer definition is
+never silently substituted for a historical contract.
+
+Production transcripts are not sent to external AI features unless
+`ACE_ALLOW_EXTERNAL_AI=1` is explicitly set. The server binds to `127.0.0.1` by default.
+
 ## 30-second tour
 
 1. **Home** — left sidebar holds selection stats, the *Categories & datasets* tree
@@ -49,7 +71,8 @@ npm run build && npm start   # serves the built SPA + API on :8787
    duration bars, exceptions in red) on the left and the selected span's message on the right.
 4. **Ask why** — the home **AI analysis** panel runs an agent over the corpus
    ("why do swe traces time out?"), and every trace page has **Ask AI** chat plus a
-   **Playground** tab that replays a prompt prefix against a stand-in model.
+   **LLM-only continuation** tab that sends a prompt prefix to a stand-in model. It is deliberately
+   separate from ACE checkpoint replay.
 5. **Inspect tokens** — in any assistant message switch to the **Tokens** view: confidence-
    colored token chips, per-token id / logprob / top-k alternatives.
 6. **Share** — every view state (filters, sort, tab, selected trace, peek drawer) lives in the
@@ -87,7 +110,14 @@ files into `data/runs/<run>/` and the server watches + rescans.
 
 ### Load a corpus outside the repository
 
-Keep large or private traces where they already live and add the directory in `.env`:
+Keep large or private traces where they already live. While the viewer is running, open
+**Import → Folder**, enter an absolute directory (plus an optional run label), and choose
+**Add & watch**. Existing files are indexed immediately and later changes are watched without a
+restart. The folder is restored after a server restart from the private local registry below.
+
+Folders added through the UI are saved in the git-ignored machine-local
+`.trace-viewer/data-roots.json` registry and restored on startup. You can also manage startup
+folders explicitly in `.env`:
 
 ```bash
 TRACE_DATA_ROOTS=work-trial=/Users/you/Downloads/data
@@ -101,11 +131,23 @@ watched with the same live-reload behavior. Multiple roots use the platform path
 The `work-trial=` prefix is an explicit run label. It is recommended for generic directory
 names such as `data`; without a label, a direct external corpus uses its directory basename as
 the run name instead of silently appearing under `imported`. Relative paths are resolved from
-the repository root, regardless of the directory from which the server was launched.
+the repository root, regardless of the directory from which the server was launched. If two
+folders have the same basename, the second must be given a unique label so their trace identities
+cannot collide.
 
 Private `data/runs/work-trial` files remain intentionally ignored by Git and are not included in
 a push or a fresh clone. Configure `TRACE_DATA_ROOTS` on each machine (or mount the corpus in a
 deployment) instead of committing received traces.
+
+### Tailnet access
+
+`npm run serve:tailscale` keeps the API private on `127.0.0.1`, detects this machine's Tailscale
+IPv4 address, and binds only the Vite frontend to that address on port `5173`. It prints the exact
+Tailnet-only IP URL and, when MagicDNS is enabled, a stable machine-name URL at startup. The
+detected MagicDNS host is added to Vite's allowlist without opening the listener beyond the
+Tailscale interface. Use a service manager such as a macOS LaunchAgent when the process
+must survive terminal closure or login restarts; the supervisor exits if either child fails so the
+service manager can restart the complete pair.
 
 The status bar's **data roots** menu shows each root's scan state, file/trace counts, and warning
 count. The same aggregate-only diagnostics are available from `GET /api/meta`; paths are shown
@@ -131,16 +173,18 @@ cp .env.example .env    # set ANTHROPIC_API_KEY
 | Natural-language filter | claude-sonnet-5 → filter DSL ("AI" badge) | deterministic rule parser ("rules" badge) |
 | Trace chat ("Ask AI") | full-trace Q&A | clear 503 hint |
 | AI analysis agent | tool-use loop over the corpus | clear 503 hint |
-| Playground replay | stand-in model simulation | clear 503 hint |
+| LLM-only continuation | stand-in model simulation | clear 503 hint |
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | tsx watch API (:8787) + Vite (:5173, `/api` proxied) |
+| `npm run serve:tailscale` | supervised dev API + frontend bound only to this machine's Tailnet IP |
 | `npm run build` / `npm start` | typecheck + build; production single-port serve |
 | `npm run generate:all` / `npm run generate` | regenerate the corpus (all runs / run-a), seeded + deterministic |
-| `npm test` / `npm run lint` / `npm run check` | vitest (322 tests) / biome / everything |
+| `npm run test:e2e` | deterministic Playwright cockpit workflows (all APIs mocked; no provider spend) |
+| `npm test` / `npm run lint` / `npm run check` | vitest (598 tests) / biome / everything |
 
 ## Architecture
 
@@ -149,7 +193,7 @@ flowchart LR
   subgraph disk [data/runs/&lt;run&gt;/]
     N[native JSON] --- H[harmony .txt] --- O[openai .json]
   end
-  disk -->|scan + chokidar watch| C[connector registry\n6 formats · detect + parse · never throws]
+  disk -->|scan + chokidar watch| C[connector registry\n7 formats · detect + parse · never throws]
   C --> F[finalizeTrace\none stats definition]
   F --> S[(in-memory TraceStore\n+ minisearch index)]
   S --> API[Express REST API]

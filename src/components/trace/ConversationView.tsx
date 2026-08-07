@@ -77,7 +77,12 @@ export function ConversationView({ trace }: { trace: Trace }) {
   const [matchPos, setMatchPos] = useState(0)
   const [timelineOpen, setTimelineOpen] = useState(readTimelineOpen)
   const [compact, setCompact] = useState(readCompact)
-  const traceOrderKey = `${trace.meta.sourceFormat}:${trace.meta.dataLocation ?? ''}:${trace.meta.traceId}`
+  const [following, setFollowing] = useState(true)
+  const [newUnitCount, setNewUnitCount] = useState(0)
+  const previousUnitCount = useRef(0)
+  const traceOrderKey =
+    trace.meta.traceUid ??
+    `${trace.meta.sourceFormat}:${trace.meta.dataLocation ?? ''}:${trace.meta.traceId}`
   const regressionCount = useMemo(() => recordedRegressionCount(trace), [trace])
   const timestampCount = useMemo(() => timestampedMessageCount(trace.messages), [trace.messages])
   const timeOrderAvailable = timestampCount >= 2
@@ -263,6 +268,31 @@ export function ConversationView({ trace }: { trace: Trace }) {
     scrollMargin: listOffset,
   })
 
+  const jumpToLatest = useCallback(() => {
+    if (units.length > 0) virtualizer.scrollToIndex(units.length - 1, { align: 'end' })
+    setFollowing(true)
+    setNewUnitCount(0)
+  }, [units.length, virtualizer])
+
+  const onConversationScroll = useCallback(() => {
+    const element = parentRef.current
+    if (!element) return
+    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 96
+    setFollowing(atBottom)
+    if (atBottom) setNewUnitCount(0)
+  }, [])
+
+  // Atomic file updates replace the trace with one carrying more completed messages.
+  // Follow only when the reviewer was already at the bottom; never steal their scroll position.
+  useEffect(() => {
+    const previous = previousUnitCount.current
+    previousUnitCount.current = units.length
+    if (previous === 0 || units.length <= previous) return
+    const added = units.length - previous
+    if (following) requestAnimationFrame(jumpToLatest)
+    else setNewUnitCount((count) => count + added)
+  }, [units.length, following, jumpToLatest])
+
   // Scroll a matched message's unit into view. A collapsed step card auto-expands;
   // when the match is inside analysis content, its reasoning widget opens too.
   const revealMatch = useCallback(
@@ -339,7 +369,11 @@ export function ConversationView({ trace }: { trace: Trace }) {
         ) : (
           <>
             {/* relative so listRef.offsetTop measures against the scroll container */}
-            <div ref={parentRef} className="relative h-full overflow-y-auto">
+            <div
+              ref={parentRef}
+              onScroll={onConversationScroll}
+              className="relative h-full overflow-y-auto"
+            >
               <div className="mx-auto max-w-5xl px-4 py-4">
                 <div ref={headRef}>
                   <TraceSummaryPanel trace={trace} />
@@ -401,6 +435,16 @@ export function ConversationView({ trace }: { trace: Trace }) {
                 </div>
               </div>
             </div>
+            {newUnitCount > 0 && (
+              <button
+                type="button"
+                data-testid="jump-to-latest"
+                onClick={jumpToLatest}
+                className="absolute right-5 bottom-5 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-slate-700"
+              >
+                {newUnitCount} new · Jump to latest
+              </button>
+            )}
           </>
         )}
       </div>

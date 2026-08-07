@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
-import { Router } from 'express'
+import { type Response, Router } from 'express'
+import type { AceTaskDetail } from '../../shared/schema/aceTasks'
 import type {
   GroupedTracesResponse,
   InstanceGroup,
@@ -9,12 +10,32 @@ import type {
 import { recordedCheckpoint } from '../../shared/schema/provenance'
 import type { TraceSummary } from '../../shared/schema/types'
 import { runOf } from '../../shared/stats/evolution'
+import { projectAceTraceDimensions } from '../ace/traceDimensions'
 import { asyncHandler, firstParam, type RouteCtx } from './context'
-import { appliedSummaries } from './listParams'
+import { appliedSummaries, appliedTraceSummaries } from './listParams'
 import { publicTrace, publicTraceSummary } from './publicView'
 
 const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 5000
+
+function addressOf(summary: TraceSummary): string {
+  return summary.meta.traceUid ?? summary.meta.traceId
+}
+
+function resolveStored(ctx: RouteCtx, id: string, res: Response) {
+  const lookup = ctx.store.lookup(id)
+  if (lookup.kind === 'found') return lookup.stored
+  if (lookup.kind === 'ambiguous') {
+    res.status(409).json({
+      error: 'legacy trace id is ambiguous',
+      sourceTraceId: lookup.sourceTraceId,
+      candidates: lookup.candidates,
+    })
+    return undefined
+  }
+  res.status(404).json({ error: 'trace not found' })
+  return undefined
+}
 
 /** Score desc with nulls last, traceId asc tiebreak — the siblings order. */
 function scoreDescNullsLast(a: TraceSummary, b: TraceSummary): number {
@@ -77,40 +98,63 @@ function applyGroupAvgBounds(
   return out
 }
 
-export function tracesRoutes(ctx: RouteCtx): Router {
+export interface TraceRouteDeps {
+  loadTaskDefinitions?: () => Promise<readonly AceTaskDetail[]>
+}
+
+export function tracesRoutes(ctx: RouteCtx, deps: TraceRouteDeps = {}): Router {
   const router = Router()
 
-  router.get('/api/traces', (req, res) => {
-    const items = appliedSummaries(ctx, req.query)
-    const total = items.length
-    const limitRaw = Number(firstParam(req.query.limit))
-    const limit =
-      Number.isFinite(limitRaw) && limitRaw >= 0 ? Math.min(limitRaw, MAX_LIMIT) : DEFAULT_LIMIT
-    const offsetRaw = Number(firstParam(req.query.offset))
-    const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0
-    const page = items.slice(offset, offset + limit).map(publicTraceSummary)
-    if (firstParam(req.query.groupBy) === 'instance') {
-      const groups = applyGroupAvgBounds(groupByInstance(page), req.query)
-      res.json({ total, groups } satisfies GroupedTracesResponse)
-      return
+  const filteredSummaries = async (query: Record<string, unknown>) => {
+    if (!deps.loadTaskDefinitions) return appliedSummaries(ctx, query)
+    let tasks: readonly AceTaskDetail[] = []
+    try {
+      tasks = await deps.loadTaskDefinitions()
+    } catch {
+      // Generic trace browsing remains available when the optional ACE task
+      // catalog is missing. In that case only trace-recorded metadata filters.
     }
-    res.json({ total, items: page } satisfies TracesListResponse)
-  })
+    return appliedTraceSummaries(ctx, projectAceTraceDimensions(ctx.store.list(), tasks), query)
+  }
+
+  router.get(
+    '/api/traces',
+    asyncHandler(async (req, res) => {
+      const items = await filteredSummaries(req.query)
+      const limitRaw = Number(firstParam(req.query.limit))
+      const limit =
+        Number.isFinite(limitRaw) && limitRaw >= 0 ? Math.min(limitRaw, MAX_LIMIT) : DEFAULT_LIMIT
+      const offsetRaw = Number(firstParam(req.query.offset))
+      const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0
+      if (firstParam(req.query.groupBy) === 'instance') {
+        // Group the complete filtered corpus first. Paginating traces before this
+        // step biased group counts/averages whenever a corpus exceeded the page.
+        const allGroups = applyGroupAvgBounds(groupByInstance(items), req.query)
+        const groups = allGroups.slice(offset, offset + limit).map((group) => ({
+          ...group,
+          items: group.items.map(publicTraceSummary),
+        }))
+        const total = allGroups.reduce((sum, group) => sum + group.count, 0)
+        res.json({ total, groups } satisfies GroupedTracesResponse)
+        return
+      }
+      const total = items.length
+      const page = items.slice(offset, offset + limit).map(publicTraceSummary)
+      res.json({ total, items: page } satisfies TracesListResponse)
+    }),
+  )
 
   router.get('/api/traces/:id', (req, res) => {
-    const trace = ctx.store.getFull(req.params.id)
-    if (!trace) {
-      res.status(404).json({ error: 'trace not found' })
-      return
-    }
-    res.json(publicTrace(trace))
+    const stored = resolveStored(ctx, req.params.id, res)
+    if (stored) res.json(publicTrace(stored.trace))
   })
 
   router.get(
     '/api/traces/:id/raw',
     asyncHandler(async (req, res) => {
       // asyncHandler erases the route-literal param inference; :id is always a string.
-      const stored = ctx.store.get(String(req.params.id))
+      const stored = resolveStored(ctx, String(req.params.id), res)
+      if (!stored) return
       // Ephemeral imports keep their source text in memory (no file on disk).
       if (stored?.rawText !== undefined) {
         res.type('text/plain').send(stored.rawText)
@@ -129,27 +173,43 @@ export function tracesRoutes(ctx: RouteCtx): Router {
     }),
   )
 
-  router.get('/api/traces/:id/neighbors', (req, res) => {
-    const items = appliedSummaries(ctx, req.query)
-    const idx = items.findIndex((s) => s.meta.traceId === req.params.id)
-    const body: NeighborsResponse =
-      idx === -1
-        ? { prevId: null, nextId: null, position: 0, total: items.length }
-        : {
-            prevId: idx > 0 ? items[idx - 1].meta.traceId : null,
-            nextId: idx < items.length - 1 ? items[idx + 1].meta.traceId : null,
-            position: idx + 1,
-            total: items.length,
-          }
-    res.json(body)
-  })
+  router.get(
+    '/api/traces/:id/neighbors',
+    asyncHandler(async (req, res) => {
+      const items = await filteredSummaries(req.query)
+      const requestId = String(req.params.id)
+      const lookup = ctx.store.lookup(requestId)
+      if (lookup.kind === 'ambiguous') {
+        res.status(409).json({
+          error: 'legacy trace id is ambiguous',
+          sourceTraceId: lookup.sourceTraceId,
+          candidates: lookup.candidates,
+        })
+        return
+      }
+      const requestedUid = lookup.kind === 'found' ? lookup.traceUid : requestId
+      const legacyResponse = lookup.kind === 'found' && lookup.via === 'sourceTraceId'
+      const responseId = (summary: TraceSummary) =>
+        legacyResponse ? (summary.meta.sourceTraceId ?? summary.meta.traceId) : addressOf(summary)
+      const idx = items.findIndex((s) => addressOf(s) === requestedUid)
+      const body: NeighborsResponse =
+        idx === -1
+          ? { prevId: null, nextId: null, position: 0, total: items.length }
+          : {
+              prevId: idx > 0 ? responseId(items[idx - 1]) : null,
+              nextId: idx < items.length - 1 ? responseId(items[idx + 1]) : null,
+              position: idx + 1,
+              total: items.length,
+            }
+      res.json(body)
+    }),
+  )
 
   router.get('/api/traces/:id/siblings', (req, res) => {
-    const trace = ctx.store.getFull(req.params.id)
-    if (!trace) {
-      res.status(404).json({ error: 'trace not found' })
-      return
-    }
+    const stored = resolveStored(ctx, req.params.id, res)
+    if (!stored) return
+    const trace = stored.trace
+    const currentUid = trace.meta.traceUid ?? trace.meta.traceId
     // Same instance + step within the SAME RUN only — the same instanceId can
     // exist in several runs and cross-run rollouts are not siblings.
     const checkpoint = recordedCheckpoint(trace.meta)
@@ -162,7 +222,7 @@ export function tracesRoutes(ctx: RouteCtx): Router {
       .list()
       .filter(
         (s) =>
-          s.meta.traceId !== trace.meta.traceId &&
+          addressOf(s) !== currentUid &&
           s.meta.instanceId === trace.meta.instanceId &&
           recordedCheckpoint(s.meta) === checkpoint &&
           runOf(s) === run,

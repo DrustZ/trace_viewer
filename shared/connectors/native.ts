@@ -1,9 +1,9 @@
 import { withDefaultCheckpointProvenance } from '../schema/provenance'
-import type { Message, TraceMeta, TraceStats, TraceStatus } from '../schema/types'
+import type { Message, TraceEvaluation, TraceMeta, TraceStats, TraceStatus } from '../schema/types'
 import type { Connector, ParseContext, ParsedTrace, ParseResult } from './types'
 
 const EPOCH = '1970-01-01T00:00:00.000Z'
-const KNOWN_TOP_LEVEL = new Set(['meta', 'messages', 'stats', 'warnings'])
+const KNOWN_TOP_LEVEL = new Set(['meta', 'messages', 'stats', 'evaluation', 'warnings'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -61,6 +61,9 @@ function buildTrace(entry: Record<string, unknown>, ctx: ParseContext): ParsedTr
   return {
     meta,
     messages: entry.messages as Message[],
+    ...(isRecord(entry.evaluation)
+      ? { evaluation: entry.evaluation as unknown as TraceEvaluation }
+      : {}),
     ...(isRecord(entry.stats) ? { statsOverrides: entry.stats as Partial<TraceStats> } : {}),
     warnings,
   }

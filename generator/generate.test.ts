@@ -185,7 +185,12 @@ describe('generator', () => {
     }
 
     // The same instanceIds appear across every run (unprefixed => shareable).
-    const shared = instanceSets.reduce((acc, set) => new Set([...acc].filter((id) => set.has(id))))
+    const shared = new Set(instanceSets[0])
+    for (const set of instanceSets.slice(1)) {
+      for (const id of shared) {
+        if (!set.has(id)) shared.delete(id)
+      }
+    }
     expect(shared.size).toBeGreaterThan(0)
   })
 })

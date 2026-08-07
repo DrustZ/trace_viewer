@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useRunInstances, useRuns } from '../api/hooks'
 import { EmptyState } from '../components/common/EmptyState'
+import { AcePairedComparison } from '../components/compare/AcePairedComparison'
 import { DualEvolutionChart } from '../components/compare/DualEvolutionChart'
 import { RunColumn } from '../components/compare/RunColumn'
 import { CollapsibleSection } from '../components/home/CollapsibleSection'
@@ -183,6 +184,8 @@ export default function ComparePage() {
             · diff an instance across two runs
           </span>
         </label>
+
+        {runA !== '' && runB !== '' && <AcePairedComparison runA={runA} runB={runB} />}
 
         {runA === '' || runB === '' ? (
           <EmptyState

@@ -105,14 +105,20 @@ export interface NeighborsResponse {
 }
 
 export interface SearchHit {
+  /** Producer-facing display id. */
   traceId: string
+  /** Canonical navigation id; absent only for legacy servers. */
+  traceUid?: string
   component: string
   score: number | null
   snippet: string
 }
 
 export interface ImportResponse {
+  /** Legacy producer ids retained for display/backward compatibility. */
   traceIds: string[]
+  /** Canonical addresses; use these for navigation. */
+  traceUids?: string[]
   format: string
   warnings: string[]
 }

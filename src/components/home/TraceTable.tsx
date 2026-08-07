@@ -563,7 +563,7 @@ export function TraceTable({
                       />
                     )
                   }
-                  const traceId = row.trace.meta.traceId
+                  const traceId = row.trace.meta.traceUid ?? row.trace.meta.traceId
                   return (
                     <TraceRow
                       key={traceId}
