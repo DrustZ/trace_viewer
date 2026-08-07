@@ -181,9 +181,18 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
   const previousTriageOffset = Math.max(0, dashboard.triageOffset - dashboard.triageLimit)
   const nextTriageOffset = dashboard.triageOffset + dashboard.triageLimit
 
+  const informalRunIds = dashboard.scope.informalSelectedRunIds ?? []
+
   return (
     <div className="space-y-4">
       <section>
+        {informalRunIds.length > 0 && (
+          <p className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Informal scope: {informalRunIds.join(', ')}{' '}
+            {informalRunIds.length === 1 ? 'is' : 'are'} debug/counterfactual run(s). The outcome
+            tiles below mix informal episodes and are not comparable to formal metrics.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           <Metric label="ACE traces" value={formatNumber(dashboard.total)} />
           <Metric label="Pass" value={formatNumber(dashboard.pass)} tone="green" />

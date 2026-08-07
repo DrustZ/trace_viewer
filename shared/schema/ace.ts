@@ -343,6 +343,12 @@ export interface AceDashboardScope {
   defaultRunIds: string[]
   /** Requested ids that currently have no trace in the store. */
   unmatchedRunIds: string[]
+  /**
+   * Selected runs outside the default formal scope (debug / counterfactual /
+   * unknown). When non-empty, headline outcome fields (pass, fail,
+   * passRateExecuted, escalation) include informal episodes.
+   */
+  informalSelectedRunIds: string[]
   /** Complete ACE scope, used by the UI's shareable run selector. */
   availableRuns: AceDashboardRunScope[]
 }

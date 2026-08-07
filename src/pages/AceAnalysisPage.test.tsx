@@ -19,6 +19,7 @@ function dashboardFixture(): AceDashboardSummary {
       selectedRunIds: ['run-a', 'run-b'],
       defaultRunIds: ['run-a', 'run-b'],
       unmatchedRunIds: [],
+      informalSelectedRunIds: [],
       availableRuns: [
         {
           runId: 'run-a',

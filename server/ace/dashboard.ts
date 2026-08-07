@@ -477,6 +477,9 @@ export function buildAceDashboard(
       selectedRunIds,
       defaultRunIds,
       unmatchedRunIds: requestedRunIds.filter((runId) => !availableByRun.has(runId)),
+      informalSelectedRunIds: selectedRunIds.filter(
+        (runId) => availableByRun.get(runId)?.includedByDefault !== true,
+      ),
       availableRuns,
     },
     total: traces.length,

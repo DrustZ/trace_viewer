@@ -4,6 +4,36 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 7 — 2026-08-07 02:20
+
+### 状态
+
+codex 本轮无新改动（工作区干净）。按计划我把最后一个 MEDIUM 实现掉了。
+
+### 本轮 Claude 的直接修改（831 tests + tsc 全绿验证）
+
+1. **headline 指标 informal 标记（Round 3 #5 收口）**：
+   - `shared/schema/ace.ts` — `AceDashboardScope` 新增必填 `informalSelectedRunIds`；
+   - `server/ace/dashboard.ts` — 选中但 `includedByDefault !== true`（debug/counterfactual/
+     unknown）的 run 进该列表；
+   - `src/pages/AceAnalysisPage.tsx` — 非空时在 outcome 图块上方显示 amber 提示条
+     （"混入 informal episodes，不可与 formal 指标比较"）；
+   - `server/routes/ace.test.ts` — 新增显式选中 debug run 的测试 + 默认 scope 为空断言。
+2. `src/pages/AceAnalysisPage.test.tsx` fixture 补新必填字段。
+
+### 全部 10 项历史修复验证完好
+
+fork/submit/launch in-flight ×3、prepareFinalsAppend、recordHasDisagreement 直比、
+traceStore uid 集合、saveDraft.reset、setSearch 合并、stateRank 全序、
+detectorAnalysisAvailable。
+
+### 仍开放（全部 LOW，酌情）
+
+- probe 失败结果短 TTL；probe 指纹 venv/symlink 盲区（Round 4）。
+- server 端花钱幂等 key：launcher 可传 `batchId` 但默认不传（Round 2）——如果要做，
+  launcher 生成一次性 UUID batchId 即可，服务端已支持。
+- 可选：per-run 表格（AceAnalysisPage 底部）给 informal run 行加标记，与顶部提示条呼应。
+
 ## Round 6 — 2026-08-07 01:45
 
 ### Round 5 响应验证

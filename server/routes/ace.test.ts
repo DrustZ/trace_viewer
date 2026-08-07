@@ -241,6 +241,7 @@ describe('ACE cockpit routes', () => {
         requestedRunIds: ['run-a', 'production'],
         selectedRunIds: ['run-a', 'production'],
         unmatchedRunIds: [],
+        informalSelectedRunIds: [],
       },
       failureCodes: [{ code: 'PRODUCTION_FINDING', count: 1 }],
       detectorTiers: [{ code: 'hard_fact', count: 1 }],
@@ -296,6 +297,39 @@ describe('ACE cockpit routes', () => {
     const unsafe = await request(app).get('/api/ace/dashboard?runId=../escape')
     expect(unsafe.status).toBe(400)
     expect(bridge.calls.filter((call) => call.command === 'analyze')).toHaveLength(1)
+  })
+
+  it('labels explicitly selected debug runs as informal dashboard scope', async () => {
+    await addTrace('informal-s1', 'simulation', 'informal-run', '.json', true)
+    await fs.writeFile(
+      path.join(config.runRoot, 'informal-run', 'batch.json'),
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'informal-run',
+        run_kind: 'debug',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 1 },
+        episode_states: [
+          {
+            scenario_id: 'scenario-01',
+            environment_seed: 1,
+            file: 'informal-s1.json',
+            status: 'completed',
+          },
+        ],
+        episodes: [],
+      }),
+    )
+    const app = buildApp(store, bridge, config)
+
+    const selected = await request(app).get('/api/ace/dashboard?runId=informal-run')
+    expect(selected.status).toBe(200)
+    expect(selected.body.scope.informalSelectedRunIds).toEqual(['informal-run'])
+
+    // The default scope excludes debug runs entirely, so nothing is informal.
+    const defaults = await request(app).get('/api/ace/dashboard')
+    expect(defaults.status).toBe(200)
+    expect(defaults.body.scope.informalSelectedRunIds).toEqual([])
   })
 
   it('returns every exact-run trace uncapped and reconciles it against the manifest schedule', async () => {
