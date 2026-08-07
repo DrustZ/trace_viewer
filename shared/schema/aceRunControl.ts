@@ -73,6 +73,12 @@ export function aceRunControlDecision(
   if (pending) {
     return { allowed: false, reason: 'A run control request is already in progress.' }
   }
+  // This is an authority boundary, not a display hint. Even if a synthesized
+  // or malformed producer row claims controlsAvailable, no manifest means
+  // there is no durable run state for a safe transition.
+  if (run.manifestAvailable === false) {
+    return { allowed: false, reason: unavailableReason(run) }
+  }
   if (run.controlsAvailable === false) {
     return { allowed: false, reason: unavailableReason(run) }
   }

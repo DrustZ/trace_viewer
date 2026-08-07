@@ -44,6 +44,12 @@ describe('ACE run control policy', () => {
       ),
     ).toMatchObject({ allowed: false, reason: expect.stringContaining('read-only') })
     expect(
+      aceRunControlDecision(
+        { lifecycle: 'queued', controlsAvailable: true, manifestAvailable: false },
+        'cancel',
+      ),
+    ).toMatchObject({ allowed: false, reason: expect.stringContaining('read-only') })
+    expect(
       aceRunControlDecision({ lifecycle: 'unknown', controlsAvailable: false }, 'cancel'),
     ).toMatchObject({ allowed: false, reason: expect.stringContaining('orphan run') })
     expect(

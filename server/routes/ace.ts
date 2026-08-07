@@ -341,7 +341,10 @@ export interface AceRouteBridge {
     params: Record<string, unknown>,
     timeoutMs?: number,
   ): Promise<T>
-  start(runId: string, params: Record<string, unknown>): { runId: string; startedAt: string }
+  start(
+    runId: string,
+    params: Record<string, unknown>,
+  ): Promise<{ runId: string; startedAt: string }>
   active(runId: string): { pid: number | undefined; startedAt: string } | null
   activeRunIds(): string[]
 }
@@ -600,7 +603,10 @@ export function aceRoutes(
       const summaries = byRun.get(runId) ?? []
       batches.push(
         synthesizedRun(runId, summaries, {
-          controlsAvailable: true,
+          // Before READY there is no durable manifest/authoritative control
+          // target. Expose progress, but fail closed instead of writing a
+          // queued cancel that the runner could later overwrite.
+          controlsAvailable: false,
           lifecycle: summaries.length === 0 ? 'queued' : 'running',
           updatedAt: active?.startedAt ?? new Date().toISOString(),
         }),
@@ -820,19 +826,34 @@ export function aceRoutes(
         }
       }
       if (pendingLineage) await launchLineage.assertCompatible(parsed.runId, pendingLineage)
-      const started = bridge.start(parsed.runId, {
+      const started = await bridge.start(parsed.runId, {
         ...parsed.bridgeParams,
         ...(pendingLineage ? { lineage: bridgeFreshRunLineage(pendingLineage) } : {}),
       })
       // Starting the fixed bridge is the commit point. A spawn/duplicate-run
       // failure must never leave immutable ancestry attached to a run that did
       // not launch and may later be retried with a different parent.
-      if (pendingLineage) await launchLineage.append(parsed.runId, pendingLineage)
+      let lineageWarning: string | undefined
+      if (pendingLineage) {
+        try {
+          await launchLineage.append(parsed.runId, pendingLineage)
+        } catch (error) {
+          // READY means ACE already durably recorded the authoritative lineage
+          // in batch.json. A local mirror failure must not turn a running batch
+          // into a false HTTP failure that tempts the caller to launch again.
+          lineageWarning =
+            'ACE run started, but the Viewer lineage mirror could not be updated; batch.json remains authoritative.'
+          console.error(
+            `[ace lineage] ${parsed.runId}: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+      }
       res.status(202).json({
         runId: started.runId,
         lifecycle: 'queued',
         startedAt: started.startedAt,
         checkpoints: true,
+        ...(lineageWarning ? { warnings: [lineageWarning] } : {}),
       })
     }),
   )

@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import express, { type ErrorRequestHandler } from 'express'
 import request from 'supertest'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedTrace } from '../../shared/connectors/types'
 import { AceLaunchLineageStore } from '../ace/launchLineageStore'
 import { SearchIndex } from '../search/searchIndex'
@@ -47,7 +47,7 @@ class FakeBridge implements AceRouteBridge {
     return Promise.resolve((this.responses.get(command) ?? fallback) as T)
   }
 
-  start(runId: string, params: Record<string, unknown>) {
+  async start(runId: string, params: Record<string, unknown>) {
     this.starts.push({ runId, params })
     return { runId, startedAt: '2026-08-06T20:00:00.000Z' }
   }
@@ -425,6 +425,36 @@ describe('ACE cockpit routes', () => {
     expect(bridge.calls.filter((call) => call.command === 'control')).toHaveLength(0)
   })
 
+  it('exposes a pre-READY active child as read-only and rejects queued cancel', async () => {
+    bridge.activeEntries.set('pending-ready', {
+      pid: 123,
+      startedAt: '2026-08-06T20:00:00.000Z',
+    })
+    const app = buildApp(store, bridge, config)
+
+    const catalog = await request(app).get('/api/ace/runs')
+    expect(catalog.status).toBe(200)
+    expect(catalog.body.items).toContainEqual(
+      expect.objectContaining({
+        runId: 'pending-ready',
+        lifecycle: 'queued',
+        manifestAvailable: false,
+        controlsAvailable: false,
+      }),
+    )
+
+    const rejected = await request(app)
+      .post('/api/ace/runs/pending-ready/control')
+      .send({ action: 'cancel' })
+    expect(rejected.status).toBe(409)
+    expect(rejected.body).toMatchObject({
+      runId: 'pending-ready',
+      manifestAvailable: false,
+      controlsAvailable: false,
+    })
+    expect(bridge.calls.filter((call) => call.command === 'control')).toHaveLength(0)
+  })
+
   it('exposes a scheduled running run before its first trace without calling it ungraded', async () => {
     const batchDirectory = path.join(config.runRoot, 'batch-only')
     await fs.mkdir(batchDirectory)
@@ -793,7 +823,8 @@ describe('ACE cockpit routes', () => {
     const secondParent = await addTrace('parent-two', 'simulation', 'parent-run-two')
     const launchLineage = new AceLaunchLineageStore(path.join(root, 'lineage-failure.jsonl'))
     const failingBridge = new FakeBridge()
-    failingBridge.start = () => {
+    failingBridge.start = async () => {
+      await Promise.resolve()
       throw new Error('spawn failed')
     }
     const failedApp = buildApp(store, failingBridge, config, launchLineage)
@@ -835,6 +866,40 @@ describe('ACE cockpit routes', () => {
       .send({ ...requestBody, sourceTraceUid: firstParent.traceUid })
     expect(conflicting.status).toBe(500)
     expect(conflictingBridge.starts).toHaveLength(0)
+  })
+
+  it('returns an accepted run with a warning when only the Viewer lineage mirror fails', async () => {
+    const parent = await addTrace('mirror-parent', 'simulation', 'mirror-parent-run')
+    const launchLineage = new AceLaunchLineageStore(path.join(root, 'lineage-mirror.jsonl'))
+    launchLineage.append = async () => {
+      throw new Error('fixture mirror unavailable')
+    }
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const app = buildApp(store, bridge, config, launchLineage)
+
+    const response = await request(app)
+      .post('/api/ace/runs')
+      .send({
+        scenarioFile: 'atomic.json',
+        scenarioIds: ['scenario-01'],
+        seeds: [3],
+        batchId: 'mirror-child',
+        runKind: 'debug',
+        prompt: 'baseline',
+        transport: 'responses',
+        maxMessages: 20,
+        costCapUsd: 5,
+        sourceTraceUid: parent.traceUid,
+      })
+
+    expect(response.status).toBe(202)
+    expect(response.body).toMatchObject({
+      runId: 'mirror-child',
+      warnings: [expect.stringContaining('batch.json remains authoritative')],
+    })
+    expect(bridge.starts).toHaveLength(1)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('fixture mirror unavailable'))
+    error.mockRestore()
   })
 
   it('validates the run id before forwarding pause/resume/cancel', async () => {
