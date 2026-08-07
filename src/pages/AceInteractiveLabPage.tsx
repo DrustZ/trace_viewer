@@ -20,6 +20,8 @@ import {
   EpisodeConversation,
   EpisodeResultCard,
   PlaygroundActions,
+  type SessionPhaseKind,
+  sessionPhase,
 } from '../components/ace/PlaygroundSession'
 import {
   buildPlaygroundRunRequest,
@@ -265,6 +267,14 @@ const BOT_HINTS: Record<string, string> = {
   workflow: 'Structured workflow harness drives each turn.',
 }
 
+const PHASE_PILL_STYLE: Record<SessionPhaseKind, string> = {
+  starting: 'bg-blue-50 text-blue-700',
+  running: 'bg-blue-100 text-blue-800',
+  grading: 'bg-violet-100 text-violet-800',
+  complete: 'bg-emerald-100 text-emerald-800',
+  failed: 'bg-red-100 text-red-800',
+}
+
 /** Episode session: bubbles from the run's single trace, then grade + actions. */
 function EpisodeSession({
   runId,
@@ -274,6 +284,7 @@ function EpisodeSession({
   onChildRun: (id: string) => void
 }) {
   const run = useAceRun(runId)
+  const control = useControlAceRun(runId)
   const lifecycle = run.data?.lifecycle
   const filters = useMemo(
     () => encodeFilterSet({ conditions: [{ key: 'run', op: 'eq', value: runId }] }),
@@ -300,8 +311,44 @@ function EpisodeSession({
     refetchInterval: (query) =>
       episodePollInterval({ lifecycle, episodeSettled: episodeSettled(query.state.data) }),
   })
+
+  const phase = sessionPhase(
+    lifecycle,
+    episode.data?.messages.length ?? 0,
+    episode.data?.evaluation?.lifecycle.pendingPhase,
+  )
+  const stopDecision = run.data
+    ? aceRunControlDecision(run.data, 'cancel', control.isPending)
+    : { allowed: false, reason: 'Waiting for the run manifest before Stop is possible.' }
+
   return (
     <div className="space-y-3" data-testid="playground-session">
+      <div
+        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+        data-testid="playground-session-status"
+      >
+        {phase.active && (
+          <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" aria-hidden="true" />
+        )}
+        <span
+          className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${PHASE_PILL_STYLE[phase.kind]}`}
+          data-testid="playground-session-phase"
+        >
+          {phase.label}
+        </span>
+        {phase.active && (
+          <button
+            type="button"
+            data-testid="playground-stop"
+            onClick={() => control.mutate('cancel')}
+            disabled={!stopDecision.allowed}
+            title={stopDecision.reason}
+            className="ml-auto rounded-md border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-40"
+          >
+            {control.isPending ? 'Stopping…' : 'Stop'}
+          </button>
+        )}
+      </div>
       {episode.data ? (
         <>
           <EpisodeConversation trace={episode.data} />

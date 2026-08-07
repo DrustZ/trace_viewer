@@ -1,5 +1,5 @@
 import type { Message, Trace } from '@shared/schema/types'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   useAceCheckpoints,
@@ -138,9 +138,60 @@ function Bubble({ message }: { message: Message }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Session phase pill
+// ---------------------------------------------------------------------------
+
+export type SessionPhaseKind = 'starting' | 'running' | 'grading' | 'complete' | 'failed'
+
+export interface SessionPhaseInfo {
+  kind: SessionPhaseKind
+  label: string
+  /** Still producing content — keep Stop available and the pulse on. */
+  active: boolean
+}
+
+/**
+ * One status pill for the live session: starting → running · N messages →
+ * grading → complete/failed. `lifecycle` is the batch manifest's word
+ * (authoritative when terminal); `pendingPhase` is the episode's own current
+ * phase and only promotes the label to grading-style states.
+ */
+export function sessionPhase(
+  lifecycle: string | undefined,
+  messageCount: number,
+  pendingPhase?: string,
+): SessionPhaseInfo {
+  if (lifecycle === 'completed') return { kind: 'complete', label: 'complete', active: false }
+  if (lifecycle === 'failed' || lifecycle === 'cancelled') {
+    return { kind: 'failed', label: lifecycle, active: false }
+  }
+  if (messageCount === 0) return { kind: 'starting', label: 'starting', active: true }
+  if (pendingPhase !== undefined && /grad|judge|verif/i.test(pendingPhase)) {
+    return { kind: 'grading', label: pendingPhase, active: true }
+  }
+  return {
+    kind: 'running',
+    label: `running · ${messageCount} ${messageCount === 1 ? 'message' : 'messages'}`,
+    active: true,
+  }
+}
+
+/** How close to the bottom (px) still counts as "following the stream". */
+const AUTOSCROLL_SLACK_PX = 48
+
 /** Chat-style rendering of one episode's messages (chronological order). */
 export function EpisodeConversation({ trace }: { trace: Trace }) {
   const ordered = useMemo(() => chronologicalMessages(trace.messages), [trace.messages])
+  // Standard chat behavior: follow new messages at the bottom, but stop
+  // following the moment the reader scrolls up; resume when they return.
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const followStream = useRef(true)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new content only.
+  useEffect(() => {
+    const el = containerRef.current
+    if (el && followStream.current) el.scrollTop = el.scrollHeight
+  }, [ordered.length])
   if (ordered.length === 0) {
     return (
       <p className="rounded-md bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">
@@ -149,7 +200,17 @@ export function EpisodeConversation({ trace }: { trace: Trace }) {
     )
   }
   return (
-    <div className="space-y-2" data-testid="playground-conversation">
+    <div
+      ref={containerRef}
+      onScroll={() => {
+        const el = containerRef.current
+        if (!el) return
+        followStream.current =
+          el.scrollHeight - el.scrollTop - el.clientHeight < AUTOSCROLL_SLACK_PX
+      }}
+      className="max-h-[65vh] space-y-2 overflow-y-auto pr-1"
+      data-testid="playground-conversation"
+    >
       {ordered.map(({ message }) => (
         <Bubble key={message.id} message={message} />
       ))}
@@ -163,8 +224,17 @@ export function EpisodeConversation({ trace }: { trace: Trace }) {
 
 export function EpisodeResultCard({ trace, costUsd }: { trace: Trace; costUsd?: number | null }) {
   const evaluation = trace.evaluation
-  if (!evaluation) return null
-  const outcome = evaluation.outcome
+  const outcome = evaluation?.outcome
+  // Soft highlight when the grade lands so the eye jumps from the last bubble
+  // to the verdict; keyed on the outcome so a rerender never re-triggers it.
+  const [justGraded, setJustGraded] = useState(false)
+  useEffect(() => {
+    if (outcome === undefined) return
+    setJustGraded(true)
+    const timer = setTimeout(() => setJustGraded(false), 1_600)
+    return () => clearTimeout(timer)
+  }, [outcome])
+  if (!evaluation || outcome === undefined) return null
   const pending = evaluation.lifecycle.pendingPhase !== undefined
   const failedGating = evaluation.checks.filter((check) => check.gating && !check.ok)
   const badge =
@@ -175,7 +245,9 @@ export function EpisodeResultCard({ trace, costUsd }: { trace: Trace; costUsd?: 
         : 'bg-amber-100 text-amber-800'
   return (
     <section
-      className="rounded-lg border border-slate-200 bg-white p-3"
+      className={`rounded-lg border bg-white p-3 transition-all duration-700 ${
+        justGraded ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200 ring-0'
+      }`}
       data-testid="playground-result-card"
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">

@@ -238,6 +238,10 @@ describe('Playground page', () => {
     )
 
     expect(html).toContain('data-testid="playground-session"')
+    // Live status pill + Stop while the run is active.
+    expect(html).toContain('data-testid="playground-session-status"')
+    expect(html).toMatch(/data-testid="playground-session-phase"[^>]*>running · 2 messages</)
+    expect(html).toContain('data-testid="playground-stop"')
     expect(html).toContain('data-role="user"')
     expect(html).toContain('data-role="beta"')
     expect(html).toContain('data-testid="playground-result-card"')

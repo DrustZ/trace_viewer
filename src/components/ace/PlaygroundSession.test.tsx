@@ -22,6 +22,7 @@ import {
   EpisodeConversation,
   EpisodeResultCard,
   PlaygroundActions,
+  sessionPhase,
 } from './PlaygroundSession'
 
 function message(id: string, role: Message['role'], overrides: Partial<Message> = {}): Message {
@@ -134,6 +135,41 @@ describe('EpisodeConversation', () => {
     expect(html).toContain('data-role="user"')
     expect(html).toContain('data-role="beta"')
     expect(html).not.toContain('Waiting for the first durable message')
+  })
+})
+
+describe('sessionPhase', () => {
+  it('reports starting until the first durable message exists', () => {
+    expect(sessionPhase(undefined, 0)).toMatchObject({ kind: 'starting', active: true })
+    expect(sessionPhase('running', 0)).toMatchObject({ kind: 'starting', active: true })
+  })
+
+  it('counts messages while the episode is executing', () => {
+    expect(sessionPhase('running', 1)).toMatchObject({
+      kind: 'running',
+      label: 'running · 1 message',
+      active: true,
+    })
+    expect(sessionPhase('running', 7).label).toBe('running · 7 messages')
+  })
+
+  it('promotes grade-like pending phases to a grading pill', () => {
+    expect(sessionPhase('running', 5, 'grading')).toMatchObject({
+      kind: 'grading',
+      label: 'grading',
+      active: true,
+    })
+    // A tool phase is still "running", not grading.
+    expect(sessionPhase('running', 5, 'await_tool: get_order').kind).toBe('running')
+  })
+
+  it('terminal lifecycles win and deactivate the session', () => {
+    expect(sessionPhase('completed', 9, 'grading')).toMatchObject({
+      kind: 'complete',
+      active: false,
+    })
+    expect(sessionPhase('failed', 2)).toMatchObject({ kind: 'failed', label: 'failed' })
+    expect(sessionPhase('cancelled', 2)).toMatchObject({ kind: 'failed', label: 'cancelled' })
   })
 })
 
