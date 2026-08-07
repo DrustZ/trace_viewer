@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tailscale = process.env.TAILSCALE_BIN || '/usr/local/bin/tailscale'
+const requireAccessToken = process.env.TRACE_VIEWER_REQUIRE_ACCESS_TOKEN !== '0'
 
 function withinProject(candidate) {
   const relative = path.relative(projectRoot, candidate)
@@ -60,22 +61,25 @@ function tailscaleIdentity() {
 }
 
 const { address, dnsName } = tailscaleIdentity()
-const { token: accessToken, tokenPath } = persistentAccessToken()
+const access = requireAccessToken ? persistentAccessToken() : { token: undefined, tokenPath: null }
 const webEnvironment = {
   ...process.env,
   ...(dnsName ? { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: dnsName } : {}),
 }
 delete webEnvironment.TRACE_VIEWER_ACCESS_TOKEN
 delete webEnvironment.TRACE_VIEWER_ACCESS_TOKEN_FILE
+const apiEnvironment = {
+  ...process.env,
+  HOST: '127.0.0.1',
+  PORT: '8787',
+}
+delete apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN
+delete apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN_FILE
+if (access.token) apiEnvironment.TRACE_VIEWER_ACCESS_TOKEN = access.token
 const children = [
   spawn(process.execPath, ['./node_modules/tsx/dist/cli.mjs', 'watch', 'server/index.ts'], {
     cwd: projectRoot,
-    env: {
-      ...process.env,
-      HOST: '127.0.0.1',
-      PORT: '8787',
-      TRACE_VIEWER_ACCESS_TOKEN: accessToken,
-    },
+    env: apiEnvironment,
     stdio: 'inherit',
   }),
   spawn(
@@ -88,9 +92,11 @@ const children = [
 console.log(`[tailscale] Trace Viewer available at http://${address}:5173/`)
 if (dnsName) console.log(`[tailscale] Stable URL: http://${dnsName}:5173/`)
 console.log(
-  tokenPath
-    ? '[tailscale] API access protection enabled; token stored outside the served project root'
-    : '[tailscale] API access protection enabled; token supplied by environment',
+  access.token
+    ? access.tokenPath
+      ? '[tailscale] API access protection enabled; token stored outside the served project root'
+      : '[tailscale] API access protection enabled; token supplied by environment'
+    : '[tailscale] Access-token gate disabled; access is restricted by the Tailnet binding',
 )
 
 let stopping = false
