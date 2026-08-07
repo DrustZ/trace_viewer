@@ -32,7 +32,7 @@ def _first_paragraph(value: str | None) -> str:
 
 
 def _result_calls(source: str) -> dict[str, str]:
-    """Return the check-name -> function-name map from `_grade_checks` AST.
+    """Return the check-name -> function-name map from the atomic grader AST.
 
     Refusing non-literal/dynamic definitions is deliberate: if the grader is
     refactored beyond what this fixed probe can prove, the caller must show
@@ -102,17 +102,27 @@ def main() -> None:
         raise RuntimeError("invalid_scenarios")
 
     project_root = Path.cwd().resolve()
-    grader_path = project_root / "src" / "ace" / "scenario.py"
-    split_path = project_root / "src" / "ace" / "db.py"
+    grader_path = (
+        project_root / "src" / "ace" / "evaluation" / "grading" / "atomic.py"
+    )
+    split_path = (
+        project_root
+        / "src"
+        / "ace"
+        / "simulation"
+        / "environment"
+        / "database.py"
+    )
     grader_source = grader_path.read_text(encoding="utf-8")
     check_functions = _result_calls(grader_source)
 
     # Import only after reading the exact source that will be fingerprinted.
     # A fresh subprocess prevents stale module state across catalog refreshes.
-    import src.ace.scenario as scenario_module
-    from src.ace.db import Database
+    import ace.evaluation.grading.atomic as grading_module
+    from ace.evaluation.scenarios import Scenario
+    from ace.simulation.environment.database import Database
 
-    if not callable(getattr(scenario_module, "_grade_checks", None)):
+    if not callable(getattr(grading_module, "_grade_checks", None)):
         raise RuntimeError("grade_checks_not_callable")
     if not callable(getattr(Database, "split_of", None)):
         raise RuntimeError("split_resolver_not_callable")
@@ -120,12 +130,12 @@ def main() -> None:
     originals: dict[str, Any] = {}
     check_docs: dict[str, dict[str, str]] = {}
     for check_name, function_name in check_functions.items():
-        function = getattr(scenario_module, function_name, None)
+        function = getattr(grading_module, function_name, None)
         if not callable(function):
             raise RuntimeError("check_function_missing")
         originals[function_name] = function
         check_docs[check_name] = {
-            "sourceSymbol": f"src/ace/scenario.py::{function_name}",
+            "sourceSymbol": f"src/ace/evaluation/grading/atomic.py::{function_name}",
             "purpose": _first_paragraph(inspect.getdoc(function)),
         }
 
@@ -137,7 +147,7 @@ def main() -> None:
         return True, "authority probe"
 
     for function_name in originals:
-        setattr(scenario_module, function_name, successful_check)
+        setattr(grading_module, function_name, successful_check)
 
     output_scenarios: list[dict[str, Any]] = []
     try:
@@ -149,13 +159,13 @@ def main() -> None:
             if not isinstance(key, str) or not key or not isinstance(payload, dict):
                 raise RuntimeError("invalid_scenario_entry")
             try:
-                scenario = scenario_module.Scenario.from_json(payload)
+                scenario = Scenario.from_json(payload)
                 completed = SimpleNamespace(status="completed", termination=None)
                 interrupted = SimpleNamespace(status="cancelled", termination="authority_probe")
-                _, completed_raw = scenario_module._grade_checks(
+                _, completed_raw = grading_module._grade_checks(
                     scenario, completed, object(), "episode"
                 )
-                _, interrupted_raw = scenario_module._grade_checks(
+                _, interrupted_raw = grading_module._grade_checks(
                     scenario, interrupted, object(), "episode"
                 )
                 completed_checks = _validated_checks(completed_raw)
@@ -173,7 +183,9 @@ def main() -> None:
                     docs = check_docs.get(check["name"])
                     if docs is None:
                         docs = {
-                            "sourceSymbol": "src/ace/scenario.py::_grade_checks",
+                            "sourceSymbol": (
+                                "src/ace/evaluation/grading/atomic.py::_grade_checks"
+                            ),
                             "purpose": "Conditional episode-status gate emitted by the active grader.",
                         }
                     conditional = check["name"] not in {
@@ -215,26 +227,28 @@ def main() -> None:
                 )
     finally:
         for function_name, function in originals.items():
-            setattr(scenario_module, function_name, function)
+            setattr(grading_module, function_name, function)
 
-    grade_contract = inspect.getdoc(scenario_module._grade_checks)
-    atomic_contract = inspect.getdoc(scenario_module.grade_atomic)
+    grade_contract = inspect.getdoc(grading_module._grade_checks)
+    atomic_contract = inspect.getdoc(grading_module.grade_atomic)
     print(
         json.dumps(
             {
                 "schemaVersion": SCHEMA_VERSION,
                 "grader": {
-                    "file": "src/ace/scenario.py",
+                    "file": "src/ace/evaluation/grading/atomic.py",
                     "digest": _sha256(grader_path),
-                    "symbol": "src/ace/scenario.py::grade_atomic",
+                    "symbol": "src/ace/evaluation/grading/atomic.py::grade_atomic",
                     "sourceContract": "\n\n".join(
                         value for value in (grade_contract, atomic_contract) if value
                     ),
                 },
                 "splitResolver": {
-                    "file": "src/ace/db.py",
+                    "file": "src/ace/simulation/environment/database.py",
                     "digest": _sha256(split_path),
-                    "symbol": "src/ace/db.py::Database.split_of",
+                    "symbol": (
+                        "src/ace/simulation/environment/database.py::Database.split_of"
+                    ),
                     "sourceContract": inspect.getdoc(Database.split_of),
                 },
                 "scenarios": output_scenarios,

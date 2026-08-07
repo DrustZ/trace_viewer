@@ -272,7 +272,7 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
           <h2 className="text-xs font-semibold text-slate-800">
-            Major failures & judge disagreements
+            High-confidence triage & judge disagreements
           </h2>
           <span className="ml-auto text-[11px] tabular-nums text-slate-400">
             {dashboard.triageTruncated
@@ -298,7 +298,7 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
         </header>
         {dashboard.triage.length === 0 ? (
           <p className="p-6 text-center text-xs text-slate-400">
-            No major triage items in this run scope.
+            No high-confidence triage items in this run scope.
           </p>
         ) : (
           <div className="max-h-96 divide-y divide-slate-100 overflow-auto">

@@ -22,6 +22,8 @@ const TRACE_COLLECTION_KEYS = [
   'evolution',
   'search',
   'ace-runs',
+  'ace-tasks',
+  'ace-task',
   'review-queue',
 ] as const
 
@@ -56,7 +58,15 @@ export function invalidationTargets(event: LiveEvent): InvalidationTarget[] | 'a
 
   if (event.type === 'batch.updated') {
     const targets = [prefixTarget('ace-runs')]
-    if (event.runId) targets.push(exactTarget('ace-run', event.runId))
+    if (event.runId) {
+      targets.push(exactTarget('ace-run', event.runId))
+      targets.push({
+        id: `ace-dashboard:${event.runId}`,
+        filters: { predicate: (query) => dashboardIncludesRun(query, event.runId as string) },
+      })
+    } else {
+      targets.push(prefixTarget('ace-dashboard'))
+    }
     return targets
   }
 
@@ -83,6 +93,7 @@ export function invalidationTargets(event: LiveEvent): InvalidationTarget[] | 'a
   } else {
     targets.push(prefixTarget('ace-dashboard'))
   }
+  if (event.runId === 'production') targets.push(prefixTarget('ace-analysis'))
   return targets
 }
 

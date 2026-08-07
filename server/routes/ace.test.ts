@@ -26,10 +26,13 @@ class FakeBridge implements AceRouteBridge {
   calls: BridgeCall[] = []
   starts: Array<{ runId: string; params: Record<string, unknown> }> = []
   responses = new Map<string, unknown>()
+  failures = new Map<string, Error>()
   activeEntries = new Map<string, { pid: number | undefined; startedAt: string }>()
 
   call<T>(command: string, params: Record<string, unknown>, timeoutMs?: number): Promise<T> {
     this.calls.push({ command, params, timeoutMs })
+    const failure = this.failures.get(command)
+    if (failure) return Promise.reject(failure)
     const fallback =
       command === 'control'
         ? { run_id: params.runId, control: { desired_state: params.command } }
@@ -77,7 +80,11 @@ function traceFixture(
       checkpointStep: 0,
       split: 'test',
       sourceFormat: 'agent-conversation',
-      extra: { environment_seed: 3, ...extra },
+      extra: {
+        environment_seed: 3,
+        ...(corpusId === 'simulation' ? { run_kind: 'scored' } : {}),
+        ...extra,
+      },
     },
     messages: [{ id: 'm-0', role: 'user', content: 'help' }],
     warnings: [],
@@ -139,6 +146,38 @@ describe('ACE cockpit routes', () => {
     await fs.rm(root, { recursive: true, force: true })
   })
 
+  it('reports bridge readiness only after the configured Python executes capabilities', async () => {
+    const bridgeSource = path.join(root, 'src', 'ace', 'experiments', 'cockpit_bridge.py')
+    await fs.mkdir(path.dirname(bridgeSource), { recursive: true })
+    await fs.mkdir(path.dirname(config.python as string), { recursive: true })
+    await fs.writeFile(bridgeSource, '# fixture\n')
+    await fs.writeFile(config.python as string, '# fixture\n')
+    const app = buildApp(store, bridge, config)
+
+    const ready = await request(app).get('/api/ace/capabilities')
+    expect(ready.status).toBe(200)
+    expect(ready.body).toMatchObject({
+      available: true,
+      projectConfigured: true,
+      pythonAvailable: true,
+      bridgeSourceAvailable: true,
+      bridgeAvailable: true,
+      runRootAvailable: true,
+    })
+    expect(bridge.calls.at(-1)).toEqual({ command: 'capabilities', params: {}, timeoutMs: 10_000 })
+
+    bridge.failures.set('capabilities', new Error('fixture import failure'))
+    const unavailable = await request(app).get('/api/ace/capabilities')
+    expect(unavailable.status).toBe(200)
+    expect(unavailable.body).toMatchObject({
+      available: false,
+      bridgeSourceAvailable: true,
+      bridgeAvailable: false,
+      message: 'ACE cockpit bridge failed its runtime capability probe',
+    })
+    expect(JSON.stringify(unavailable.body)).not.toContain('fixture import failure')
+  })
+
   async function addTrace(
     traceId: string,
     corpusId: 'production' | 'simulation',
@@ -195,6 +234,8 @@ describe('ACE cockpit routes', () => {
       pass: 0,
       fail: 0,
       ungraded: 2,
+      terminalEpisodes: 2,
+      inProgressEpisodes: 0,
       scope: {
         mode: 'selected',
         requestedRunIds: ['run-a', 'production'],
@@ -205,8 +246,22 @@ describe('ACE cockpit routes', () => {
       detectorTiers: [{ code: 'hard_fact', count: 1 }],
     })
     expect(response.body.scope.availableRuns).toMatchObject([
-      { runId: 'production', traces: 1, corpusIds: ['production'], runKind: 'production' },
-      { runId: 'run-a', traces: 1, corpusIds: ['simulation'], runKind: 'scored' },
+      {
+        runId: 'production',
+        traces: 1,
+        corpusIds: ['production'],
+        runKind: 'production',
+        terminalEpisodes: 1,
+        inProgressEpisodes: 0,
+      },
+      {
+        runId: 'run-a',
+        traces: 1,
+        corpusIds: ['simulation'],
+        runKind: 'scored',
+        terminalEpisodes: 1,
+        inProgressEpisodes: 0,
+      },
       { runId: 'run-a-long', traces: 1, corpusIds: ['simulation'], runKind: 'scored' },
     ])
     expect(bridge.calls.filter((call) => call.command === 'analyze')).toHaveLength(1)
@@ -281,7 +336,7 @@ describe('ACE cockpit routes', () => {
       runId: 'reconcile-run',
       runKind: 'debug',
       manifestAvailable: true,
-      controlsAvailable: true,
+      controlsAvailable: false,
       traces: [
         { traceUid: orphan.traceUid, sourceTraceId: 'orphan-s1' },
         { traceUid: scheduled.traceUid, sourceTraceId: 'scheduled-s1' },
@@ -298,6 +353,17 @@ describe('ACE cockpit routes', () => {
     })
     expect(response.body.episodes[0].traceUid).toBe(scheduled.traceUid)
     expect(response.body.episodes[1].traceUid).toBeUndefined()
+
+    const rejectedControl = await request(app)
+      .post('/api/ace/runs/reconcile-run/control')
+      .send({ action: 'cancel' })
+    expect(rejectedControl.status).toBe(409)
+    expect(rejectedControl.body).toMatchObject({
+      lifecycle: 'completed',
+      controlsAvailable: false,
+      allowedActions: [],
+    })
+    expect(bridge.calls.filter((call) => call.command === 'control')).toHaveLength(0)
   })
 
   it('makes production and trace-only runs reachable as read-only synthesized summaries', async () => {
@@ -772,6 +838,27 @@ describe('ACE cockpit routes', () => {
   })
 
   it('validates the run id before forwarding pause/resume/cancel', async () => {
+    const runDirectory = path.join(config.runRoot, 'safe-run')
+    await fs.mkdir(runDirectory)
+    await fs.writeFile(
+      path.join(runDirectory, 'batch.json'),
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'safe-run',
+        run_kind: 'debug',
+        lifecycle: { status: 'running' },
+        totals: { episodes: 1 },
+        episode_states: [
+          {
+            scenario_id: 'scenario-01',
+            environment_seed: 1,
+            file: 'scenario-01-s1.json',
+            status: 'running',
+          },
+        ],
+        episodes: [],
+      }),
+    )
     const app = buildApp(store, bridge, config)
     const paused = await request(app)
       .post('/api/ace/runs/safe-run/control')
@@ -782,6 +869,23 @@ describe('ACE cockpit routes', () => {
       command: 'control',
       params: { runId: 'safe-run', command: 'pause' },
     })
+
+    const invalidForLifecycle = await request(app)
+      .post('/api/ace/runs/safe-run/control')
+      .send({ action: 'resume' })
+    expect(invalidForLifecycle.status).toBe(409)
+    expect(invalidForLifecycle.body).toMatchObject({
+      runId: 'safe-run',
+      lifecycle: 'running',
+      allowedActions: ['pause', 'cancel'],
+    })
+    expect(bridge.calls).toHaveLength(1)
+
+    const missing = await request(app)
+      .post('/api/ace/runs/missing-run/control')
+      .send({ action: 'cancel' })
+    expect(missing.status).toBe(404)
+    expect(bridge.calls).toHaveLength(1)
 
     const rejected = await request(app)
       .post('/api/ace/runs/not!safe/control')

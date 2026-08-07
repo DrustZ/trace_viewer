@@ -201,20 +201,32 @@ export type ReviewGroundTruthUnavailableReason =
   | 'config_digest_mismatch'
   | 'task_catalog_definition_conflict'
   | 'task_catalog_definition_invalid'
+  | 'current_task_catalog_not_trace_bound'
   | 'unsafe_ground_truth_shape'
 
 export interface ReviewGroundTruthAvailable {
   status: 'available'
   authoritative: true
   source:
-    | 'current_task_catalog'
     | 'trace_bound_episode_sidecar_scenario_snapshot'
     | 'trace_bound_batch_manifest_scenario_snapshot'
-  /** False means authoritative for the current task definition, not a historical-trace claim. */
-  traceBound: boolean
+  traceBound: true
   scenarioId: string
   configDigest?: string
-  definitionDigest?: string
+  task?: ReviewGroundTruthTask
+  policy?: ReviewGroundTruthPolicy
+  database?: ReviewGroundTruthDatabase
+  rubric?: ReviewGroundTruthRubric
+}
+
+/** Current-checkout context useful in Assisted review, never historical trace ground truth. */
+export interface ReviewGroundTruthReference {
+  status: 'reference'
+  authoritative: false
+  source: 'current_task_catalog'
+  traceBound: false
+  scenarioId: string
+  definitionDigest: string
   task?: ReviewGroundTruthTask
   policy?: ReviewGroundTruthPolicy
   database?: ReviewGroundTruthDatabase
@@ -229,7 +241,10 @@ export interface ReviewGroundTruthUnavailable {
 }
 
 /** Server-sanitized, task-definition-only context safe for blind Calibration. */
-export type ReviewGroundTruth = ReviewGroundTruthAvailable | ReviewGroundTruthUnavailable
+export type ReviewGroundTruth =
+  | ReviewGroundTruthAvailable
+  | ReviewGroundTruthReference
+  | ReviewGroundTruthUnavailable
 
 /** Safe-to-show context. It must never contain model, arm, or automatic verdicts. */
 export interface ReviewTraceContext {

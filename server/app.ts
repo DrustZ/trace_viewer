@@ -47,6 +47,8 @@ export interface AppDeps {
   importDir?: string
   /** Append-only human labels + atomic drafts. Defaults to sibling ACE runs/labels. */
   reviewStore?: ReviewStore
+  /** Stable Calibration alias key override. Tests should inject a 32-byte Buffer. */
+  reviewBlindSecret?: Buffer
   /** Explicit override for focused tests. Undefined reads TRACE_VIEWER_ACCESS_TOKEN; null disables. */
   accessToken?: string | null
 }
@@ -112,6 +114,7 @@ export function createApp(deps: AppDeps = {}): Express {
         loadTaskCatalog: () => loadAceTaskCatalog(aceTaskProjectRoot),
       }),
       reviewStore: deps.reviewStore,
+      blindSecret: deps.reviewBlindSecret,
     }),
   )
   app.use(chatRoutes(ctx))

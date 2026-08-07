@@ -1,5 +1,6 @@
 import { encodeFilterSet } from '@shared/filter/parse'
 import type { AceBatchSummary } from '@shared/schema/ace'
+import { ACE_RUN_CONTROL_ACTIONS, aceRunControlDecision } from '@shared/schema/aceRunControl'
 import type { TracesListResponse } from '@shared/schema/api'
 import type { Trace } from '@shared/schema/types'
 import { useMemo } from 'react'
@@ -52,6 +53,23 @@ function LiveRunMonitor({
   const active = summary
     ? ['queued', 'running', 'paused', 'cancelling'].includes(summary.lifecycle)
     : true
+  const controlDecisions = ACE_RUN_CONTROL_ACTIONS.map((action) => ({
+    action,
+    decision: summary
+      ? aceRunControlDecision(summary, action, control.isPending)
+      : {
+          allowed: false,
+          reason: 'Waiting for an authoritative run lifecycle before controls are enabled.',
+        },
+  }))
+  const enabledActions = controlDecisions
+    .filter(({ decision }) => decision.allowed)
+    .map(({ action }) => action)
+  const controlStatus = control.isPending
+    ? 'A run control request is in progress.'
+    : enabledActions.length > 0
+      ? `Available now: ${enabledActions.join(', ')}. Changes apply at a safe turn boundary.`
+      : controlDecisions[0]?.decision.reason
 
   return (
     <section className="rounded-lg border border-blue-200 bg-white p-4" data-testid="lab-live-run">
@@ -66,11 +84,12 @@ function LiveRunMonitor({
           </span>
         )}
         <div className="ml-auto flex gap-1">
-          {(['pause', 'resume', 'cancel'] as const).map((action) => (
+          {controlDecisions.map(({ action, decision }) => (
             <button
               key={action}
               type="button"
-              disabled={control.isPending}
+              disabled={!decision.allowed}
+              title={decision.reason}
               onClick={() => control.mutate(action)}
               className="rounded border border-slate-200 px-2 py-1 text-[10px] capitalize hover:bg-slate-50 disabled:opacity-40"
             >
@@ -80,10 +99,20 @@ function LiveRunMonitor({
         </div>
       </div>
 
+      <p className="mt-2 text-[10px] text-slate-500" data-testid="lab-control-status">
+        {controlStatus}
+      </p>
+
       {run.isLoading && <p className="mt-3 text-xs text-slate-500">Waiting for batch manifest…</p>}
       {run.isError && (
         <p className="mt-3 text-xs text-amber-700">
           The bridge accepted the run; its first durable manifest has not appeared yet.
+        </p>
+      )}
+      {control.error && (
+        <p role="alert" className="mt-3 text-xs text-red-700">
+          Control request failed:{' '}
+          {control.error instanceof Error ? control.error.message : String(control.error)}
         </p>
       )}
       {summary && (

@@ -8,6 +8,7 @@ import type {
   AceRunLifecycle,
   AceRunLineage,
 } from '../../shared/schema/ace'
+import { aceRunLifecycleControlsAvailable } from '../../shared/schema/aceRunControl'
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -191,6 +192,7 @@ export async function readAceBatch(manifestPath: string): Promise<AceBatchSummar
   const finished = expected > 0 && terminalEpisodes.length >= expected
   const rawLifecycleRecord = record(raw.lifecycle)
   const rawLifecycle = rawLifecycleRecord.status ?? raw.status
+  const normalizedLifecycle = lifecycle(rawLifecycle, finished)
   const passed = episodes.filter((row) => row.outcome === 'pass').length
   const failedGrade = episodes.filter((row) => row.outcome === 'fail').length
   const runtimeErrors = episodes.filter((row) => row.outcome === 'runtime_error').length
@@ -214,8 +216,8 @@ export async function readAceBatch(manifestPath: string): Promise<AceBatchSummar
     runKind: runKind(raw.run_kind ?? record(raw.spec).run_kind, schemaVersion),
     schemaVersion,
     manifestAvailable: true,
-    controlsAvailable: true,
-    lifecycle: lifecycle(rawLifecycle, finished),
+    controlsAvailable: aceRunLifecycleControlsAvailable(normalizedLifecycle),
+    lifecycle: normalizedLifecycle,
     updatedAt:
       string(rawLifecycleRecord.heartbeat_at) ??
       string(rawLifecycleRecord.updated_at) ??
@@ -318,6 +320,7 @@ export class AceRunCatalog {
           if (!cached) return null
           return {
             ...cached,
+            controlsAvailable: false,
             staleManifest: true,
             manifestError: error instanceof Error ? error.message : String(error),
           }

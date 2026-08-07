@@ -18,6 +18,7 @@ import type {
   AceTaskVariant,
 } from '../../shared/schema/aceTasks'
 import type { TraceOutcome, TraceSummary } from '../../shared/schema/types'
+import { isFormalMetricsTrace } from './formalMetrics'
 import {
   type AceTaskScoringExporter,
   type AceTaskScoringProbeInput,
@@ -26,7 +27,11 @@ import {
 } from './taskScoringAuthority'
 
 const SOURCE_DIRECTORY = 'configs/scenarios' as const
-const SCHEMA_CONTRACT = 'src/ace/scenario.py::Scenario' as const
+const SCHEMA_CONTRACT = 'src/ace/evaluation/scenarios.py::Scenario' as const
+const GRADER_FILE = 'src/ace/evaluation/grading/atomic.py' as const
+const GRADER_SYMBOL = `${GRADER_FILE}::grade_atomic` as const
+const SPLIT_FILE = 'src/ace/simulation/environment/database.py' as const
+const SPLIT_SYMBOL = `${SPLIT_FILE}::Database.split_of` as const
 
 type UnknownRecord = Record<string, unknown>
 
@@ -42,7 +47,7 @@ export interface AceTaskCatalog {
     authority?: 'current_worktree_catalog'
     catalogDigest?: string
     traceDefinitionAuthority?: 'trace_bound_snapshot_only'
-    splitContract?: 'src/ace/db.py::Database.split_of'
+    splitContract?: typeof SPLIT_SYMBOL
   }
 }
 
@@ -138,8 +143,8 @@ async function loadScoringContract(
   probeInputs: readonly AceTaskScoringProbeInput[],
   exporter: AceTaskScoringExporter,
 ): Promise<ScoringLoadResult> {
-  const graderFile = 'src/ace/scenario.py' as const
-  const splitFile = 'src/ace/db.py' as const
+  const graderFile = GRADER_FILE
+  const splitFile = SPLIT_FILE
   const graderBefore = await sourceText(projectRoot, graderFile)
   const splitBefore = await sourceText(projectRoot, splitFile)
   const rubricRoot = path.join(projectRoot, 'configs', 'rubrics')
@@ -211,7 +216,7 @@ async function loadScoringContract(
         digest: graderAfter ? fullDigest(graderAfter) : null,
         available: verified,
         authority,
-        symbol: 'src/ace/scenario.py::grade_atomic',
+        symbol: GRADER_SYMBOL,
         gating: true,
       },
       splitResolver: {
@@ -219,7 +224,7 @@ async function loadScoringContract(
         digest: splitAfter ? fullDigest(splitAfter) : null,
         available: verified,
         authority,
-        symbol: 'src/ace/db.py::Database.split_of',
+        symbol: SPLIT_SYMBOL,
         sourceContract: verifiedExport?.splitResolver.sourceContract ?? null,
       },
       verdictFormula:
@@ -322,16 +327,20 @@ export function traceCoverageFor(
   const allMatching = allMatchingTaskTraces(scenarioId, traces)
   const matching = allMatching.filter(isFormalTaskTrace)
   const runIds = [...new Set(matching.map((trace) => trace.meta.runId ?? 'run-a'))].sort()
-  const byPair = new Map<string, Set<string>>()
+  const byPair = new Map<string, Map<string, number>>()
   for (const trace of matching) {
     if (!trace.meta.pairKey) continue
-    const runs = byPair.get(trace.meta.pairKey) ?? new Set<string>()
-    runs.add(trace.meta.runId ?? 'run-a')
+    const runs = byPair.get(trace.meta.pairKey) ?? new Map<string, number>()
+    const runId = trace.meta.runId ?? 'run-a'
+    runs.set(runId, (runs.get(runId) ?? 0) + 1)
     byPair.set(trace.meta.pairKey, runs)
   }
   const matchedRunSets = [...byPair.values()]
-    .filter((runs) => runs.size >= 2)
-    .map((runs) => [...runs].sort())
+    // A pair key is usable only when every arm contributes exactly one trace.
+    // Duplicated rows within one arm are an integrity ambiguity and must match
+    // the stricter A/B comparison quarantine rather than inflating coverage.
+    .filter((runs) => runs.size >= 2 && [...runs.values()].every((count) => count === 1))
+    .map((runs) => [...runs.keys()].sort())
   return {
     traceCount: matching.length,
     exploratoryTraceCount: allMatching.length - matching.length,
@@ -357,8 +366,7 @@ function allMatchingTaskTraces(
 }
 
 function isFormalTaskTrace(trace: TraceSummary): boolean {
-  const runKind = trace.meta.extra?.run_kind ?? trace.meta.extra?.runKind
-  return runKind !== 'debug' && runKind !== 'counterfactual'
+  return isFormalMetricsTrace(trace)
 }
 
 function matchingTaskTraces(scenarioId: string, traces: readonly TraceSummary[]): TraceSummary[] {
@@ -711,9 +719,7 @@ export async function loadAceTaskCatalog(
         ),
       ),
       traceDefinitionAuthority: 'trace_bound_snapshot_only',
-      ...(scoringLoad.authority.status === 'verified'
-        ? { splitContract: 'src/ace/db.py::Database.split_of' as const }
-        : {}),
+      ...(scoringLoad.authority.status === 'verified' ? { splitContract: SPLIT_SYMBOL } : {}),
     },
   }
 }

@@ -188,16 +188,16 @@ export function tracesRoutes(ctx: RouteCtx, deps: TraceRouteDeps = {}): Router {
         return
       }
       const requestedUid = lookup.kind === 'found' ? lookup.traceUid : requestId
-      const legacyResponse = lookup.kind === 'found' && lookup.via === 'sourceTraceId'
-      const responseId = (summary: TraceSummary) =>
-        legacyResponse ? (summary.meta.sourceTraceId ?? summary.meta.traceId) : addressOf(summary)
       const idx = items.findIndex((s) => addressOf(s) === requestedUid)
       const body: NeighborsResponse =
         idx === -1
           ? { prevId: null, nextId: null, position: 0, total: items.length }
           : {
-              prevId: idx > 0 ? responseId(items[idx - 1]) : null,
-              nextId: idx < items.length - 1 ? responseId(items[idx + 1]) : null,
+              // Compatibility aliases are accepted only as input. Navigation
+              // always returns canonical UIDs because a neighboring producer
+              // id may be duplicated even when the current id is unique.
+              prevId: idx > 0 ? addressOf(items[idx - 1]) : null,
+              nextId: idx < items.length - 1 ? addressOf(items[idx + 1]) : null,
               position: idx + 1,
               total: items.length,
             }

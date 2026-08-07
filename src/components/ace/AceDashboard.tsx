@@ -388,7 +388,8 @@ export function AceDashboard() {
         {aggregate && aggregate.triage.length > 0 && (
           <div className="rounded-lg border border-slate-200 bg-white">
             <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
-              Major failures & judge disagreements · showing {Math.min(20, aggregate.triage.length)}
+              High-confidence triage & judge disagreements · showing{' '}
+              {Math.min(20, aggregate.triage.length)}
               {' of '}
               {aggregate.triageTotal}
               <Link

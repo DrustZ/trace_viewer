@@ -74,7 +74,9 @@ function evaluatedTrace(options: {
   timestamp: string
   checks: Array<{ name: string; gating: boolean }>
   snapshot?: Record<string, unknown>
+  runKind?: 'scored' | 'debug' | 'counterfactual' | null
 }): TraceSummary {
+  const runKind = options.runKind === undefined ? 'scored' : options.runKind
   return {
     meta: {
       traceId: `${options.runId}:task-a`,
@@ -87,13 +89,16 @@ function evaluatedTrace(options: {
       checkpointStep: 0,
       split: 'test',
       sourceFormat: 'agent-conversation',
-      extra: options.snapshot
-        ? {
-            scenario_snapshot: options.snapshot,
-            scenario_snapshot_provenance: 'episode_sidecar',
-            config_digest: 'config-a',
-          }
-        : {},
+      extra: {
+        ...(options.snapshot
+          ? {
+              scenario_snapshot: options.snapshot,
+              scenario_snapshot_provenance: 'episode_sidecar',
+              config_digest: 'config-a',
+            }
+          : {}),
+        ...(runKind ? { run_kind: runKind } : {}),
+      },
     },
     evaluation: {
       lifecycle: {
@@ -118,9 +123,12 @@ describe('ACE task catalog', () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'ace-task-catalog-'))
     await fs.mkdir(path.join(root, 'configs', 'scenarios'), { recursive: true })
     await fs.mkdir(path.join(root, 'configs', 'rubrics'), { recursive: true })
-    await fs.mkdir(path.join(root, 'src', 'ace'), { recursive: true })
+    await fs.mkdir(path.join(root, 'src', 'ace', 'evaluation', 'grading'), { recursive: true })
+    await fs.mkdir(path.join(root, 'src', 'ace', 'simulation', 'environment'), {
+      recursive: true,
+    })
     await fs.writeFile(
-      path.join(root, 'src', 'ace', 'scenario.py'),
+      path.join(root, 'src', 'ace', 'evaluation', 'grading', 'atomic.py'),
       `def _grade_checks():
     """Current gating contract from source."""
 
@@ -129,7 +137,7 @@ def grade_atomic():
 `,
     )
     await fs.writeFile(
-      path.join(root, 'src', 'ace', 'db.py'),
+      path.join(root, 'src', 'ace', 'simulation', 'environment', 'database.py'),
       `class Database:
     @staticmethod
     def split_of(order_id):
@@ -153,8 +161,14 @@ def grade_atomic():
   const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 
   const verifiedExporter: AceTaskScoringExporter = async (projectRoot, scenarios) => {
-    const grader = await fs.readFile(path.join(projectRoot, 'src', 'ace', 'scenario.py'), 'utf8')
-    const split = await fs.readFile(path.join(projectRoot, 'src', 'ace', 'db.py'), 'utf8')
+    const grader = await fs.readFile(
+      path.join(projectRoot, 'src', 'ace', 'evaluation', 'grading', 'atomic.py'),
+      'utf8',
+    )
+    const split = await fs.readFile(
+      path.join(projectRoot, 'src', 'ace', 'simulation', 'environment', 'database.py'),
+      'utf8',
+    )
     const names = [
       'ACTIONS',
       'MUST_PRECEDE',
@@ -170,15 +184,15 @@ def grade_atomic():
     return {
       schemaVersion: 1,
       grader: {
-        file: 'src/ace/scenario.py',
+        file: 'src/ace/evaluation/grading/atomic.py',
         digest: sha256(grader),
-        symbol: 'src/ace/scenario.py::grade_atomic',
+        symbol: 'src/ace/evaluation/grading/atomic.py::grade_atomic',
         sourceContract: 'Current runtime-probed scoring contract.',
       },
       splitResolver: {
-        file: 'src/ace/db.py',
+        file: 'src/ace/simulation/environment/database.py',
         digest: sha256(split),
-        symbol: 'src/ace/db.py::Database.split_of',
+        symbol: 'src/ace/simulation/environment/database.py::Database.split_of',
         sourceContract: 'Current runtime-probed split contract.',
       },
       scenarios: scenarios.map(({ key, scenario }) => {
@@ -211,7 +225,7 @@ def grade_atomic():
           journeyKey: String(scenario.journey_id ?? scenario.scenario_id),
           effectiveChecks: names.map((name) => ({
             name,
-            sourceSymbol: `src/ace/scenario.py::_${name.toLowerCase()}`,
+            sourceSymbol: `src/ace/evaluation/grading/atomic.py::_${name.toLowerCase()}`,
             purpose: `Runtime purpose for ${name}.`,
             gatingRule: 'Resolved by current Python runtime.',
             effectiveGating: gating(name),
@@ -269,9 +283,9 @@ def grade_atomic():
     expect(catalog.source.catalogDigest).toMatch(/^[a-f0-9]{64}$/)
     expect(catalog.scoring).toMatchObject({
       primaryGrader: {
-        file: 'src/ace/scenario.py',
+        file: 'src/ace/evaluation/grading/atomic.py',
         available: true,
-        symbol: 'src/ace/scenario.py::grade_atomic',
+        symbol: 'src/ace/evaluation/grading/atomic.py::grade_atomic',
         gating: true,
       },
       primaryBoundary: 'episode',
@@ -369,6 +383,23 @@ def grade_atomic():
     })
   })
 
+  it('does not count an A/B pair when one arm has duplicate traces', () => {
+    const duplicatedBaseline = trace('baseline-chat', 'schedule:task-a:7')
+    duplicatedBaseline.meta.traceId = 'baseline-duplicate'
+    duplicatedBaseline.meta.traceUid = 'baseline-duplicate-uid'
+    const coverage = traceCoverageFor('task-a', [
+      trace('baseline-chat', 'schedule:task-a:7'),
+      duplicatedBaseline,
+      trace('optimized-chat', 'schedule:task-a:7'),
+    ])
+
+    expect(coverage).toMatchObject({
+      traceCount: 3,
+      matchedPairCount: 0,
+      compareRunIds: null,
+    })
+  })
+
   it('keeps debug and counterfactual traces out of formal task status', () => {
     const formal = evaluatedTrace({
       runId: 'formal',
@@ -401,6 +432,55 @@ def grade_atomic():
         status: 'all_pass',
         outcomes: { pass: 1, fail: 0 },
         scoredDenominator: 1,
+        passRate: 1,
+      },
+    })
+  })
+
+  it('uses the fail-closed formal gate for task coverage and status', () => {
+    const candidate = (runId: string) =>
+      evaluatedTrace({
+        runId,
+        outcome: 'pass',
+        timestamp: '2026-08-06T00:00:00.000Z',
+        checks: [],
+        runKind: null,
+      })
+    const camel = candidate('camel')
+    camel.meta.extra = { ...camel.meta.extra, runKind: 'scored' }
+    const lineage = candidate('lineage')
+    if (lineage.evaluation) lineage.evaluation.lineage = { runKind: 'scored' }
+    const excluded = candidate('excluded')
+    excluded.meta.extra = { ...excluded.meta.extra, run_kind: 'scored' }
+    if (excluded.evaluation) excluded.evaluation.lineage = { formalMetricsExcluded: true }
+    const synthetic = candidate('synthetic')
+    synthetic.meta.extra = { ...synthetic.meta.extra, run_kind: 'scored' }
+    if (synthetic.evaluation) synthetic.evaluation.lineage = { synthetic: true }
+    const missing = candidate('missing')
+    const replay = candidate('replay')
+    replay.meta.extra = { ...replay.meta.extra, run_kind: 'scored' }
+    if (replay.evaluation) replay.evaluation.lineage = { mode: 'exact' }
+    const legacy = candidate('legacy')
+    delete legacy.meta.corpusId
+
+    const coverage = traceCoverageFor('task-a', [
+      camel,
+      lineage,
+      excluded,
+      synthetic,
+      missing,
+      replay,
+      legacy,
+    ])
+    expect(coverage).toMatchObject({
+      traceCount: 3,
+      exploratoryTraceCount: 4,
+      runCount: 3,
+      runIds: ['camel', 'legacy', 'lineage'],
+      status: {
+        status: 'all_pass',
+        outcomes: { pass: 3, fail: 0, invalid: 0, runtime_error: 0, ungraded: 0 },
+        scoredDenominator: 3,
         passRate: 1,
       },
     })
@@ -504,7 +584,7 @@ def grade_atomic():
     })
     expect(catalog.scoring?.splitResolver).toMatchObject({
       available: true,
-      symbol: 'src/ace/db.py::Database.split_of',
+      symbol: 'src/ace/simulation/environment/database.py::Database.split_of',
       authority: { status: 'verified' },
     })
     expect(variant).toMatchObject({
@@ -521,7 +601,10 @@ def grade_atomic():
     await writePack('graded.json', [complete])
     const staleExporter: AceTaskScoringExporter = async (projectRoot, scenarios) => {
       const result = await verifiedExporter(projectRoot, scenarios)
-      await fs.appendFile(path.join(projectRoot, 'src', 'ace', 'scenario.py'), '\n# drift\n')
+      await fs.appendFile(
+        path.join(projectRoot, 'src', 'ace', 'evaluation', 'grading', 'atomic.py'),
+        '\n# drift\n',
+      )
       return result
     }
     const catalog = await loadAceTaskCatalog(root, [], { scoringExporter: staleExporter })

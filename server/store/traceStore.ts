@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import type { ParsedTrace } from '../../shared/connectors/types'
 import type {
   Trace,
@@ -187,6 +188,19 @@ export class TraceStore {
    */
   replaceSource(parsed: ParsedTrace[], sourcePath: string): Trace[] {
     const traces = parsed.map((entry) => this.materialize(entry, sourcePath))
+    // A batch heartbeat can ask the scanner to revisit sibling episode files.
+    // Keep the existing objects/version when normalization produced no semantic change.
+    const current = [...this.byUid.values()].filter((stored) => stored.sourcePath === sourcePath)
+    if (
+      current.length === traces.length &&
+      traces.every((trace) => {
+        const traceUid = trace.meta.traceUid as string
+        const stored = this.byUid.get(traceUid)
+        return stored?.sourcePath === sourcePath && isDeepStrictEqual(stored.trace, trace)
+      })
+    ) {
+      return traces
+    }
     const nextUids = new Set(traces.map((trace) => trace.meta.traceUid as string))
     const removed: { traceUid: string; runId?: string }[] = []
     for (const [traceUid, stored] of this.byUid) {

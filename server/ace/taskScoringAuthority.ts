@@ -8,6 +8,10 @@ const SCRIPT = fileURLToPath(new URL('./task_scoring_export.py', import.meta.url
 const OUTPUT_LIMIT = 16 * 1024 * 1024
 const STDERR_LIMIT = 256 * 1024
 const TIMEOUT_MS = 30_000
+const GRADER_FILE = 'src/ace/evaluation/grading/atomic.py' as const
+const GRADER_SYMBOL = `${GRADER_FILE}::grade_atomic` as const
+const SPLIT_FILE = 'src/ace/simulation/environment/database.py' as const
+const SPLIT_SYMBOL = `${SPLIT_FILE}::Database.split_of` as const
 
 export interface AceTaskScoringProbeInput {
   key: string
@@ -36,15 +40,15 @@ export type AceTaskScoringProbeScenario =
 export interface AceTaskScoringExport {
   schemaVersion: 1
   grader: {
-    file: 'src/ace/scenario.py'
+    file: typeof GRADER_FILE
     digest: string
-    symbol: 'src/ace/scenario.py::grade_atomic'
+    symbol: typeof GRADER_SYMBOL
     sourceContract: string
   }
   splitResolver: {
-    file: 'src/ace/db.py'
+    file: typeof SPLIT_FILE
     digest: string
-    symbol: 'src/ace/db.py::Database.split_of'
+    symbol: typeof SPLIT_SYMBOL
     sourceContract: string
   }
   scenarios: AceTaskScoringProbeScenario[]
@@ -103,10 +107,10 @@ function parseExport(value: unknown): AceTaskScoringExport {
     throw new Error('ACE scoring authority returned an incomplete response')
   }
   if (
-    grader.file !== 'src/ace/scenario.py' ||
-    grader.symbol !== 'src/ace/scenario.py::grade_atomic' ||
-    splitResolver.file !== 'src/ace/db.py' ||
-    splitResolver.symbol !== 'src/ace/db.py::Database.split_of'
+    grader.file !== GRADER_FILE ||
+    grader.symbol !== GRADER_SYMBOL ||
+    splitResolver.file !== SPLIT_FILE ||
+    splitResolver.symbol !== SPLIT_SYMBOL
   ) {
     throw new Error('ACE scoring authority returned unexpected source identities')
   }
@@ -143,15 +147,15 @@ function parseExport(value: unknown): AceTaskScoringExport {
   return {
     schemaVersion: 1,
     grader: {
-      file: 'src/ace/scenario.py',
+      file: GRADER_FILE,
       digest: digest(grader, 'digest'),
-      symbol: 'src/ace/scenario.py::grade_atomic',
+      symbol: GRADER_SYMBOL,
       sourceContract: requiredString(grader, 'sourceContract'),
     },
     splitResolver: {
-      file: 'src/ace/db.py',
+      file: SPLIT_FILE,
       digest: digest(splitResolver, 'digest'),
-      symbol: 'src/ace/db.py::Database.split_of',
+      symbol: SPLIT_SYMBOL,
       sourceContract: requiredString(splitResolver, 'sourceContract'),
     },
     scenarios,
@@ -161,15 +165,19 @@ function parseExport(value: unknown): AceTaskScoringExport {
 /** Execute the fixed, read-only probe with the sibling ACE virtual environment. */
 export const runAceTaskScoringExport: AceTaskScoringExporter = (projectRoot, scenarios) =>
   new Promise((resolve, reject) => {
-    const python = path.join(path.resolve(projectRoot), '.venv', 'bin', 'python')
+    const resolvedProjectRoot = path.resolve(projectRoot)
+    const python = path.join(resolvedProjectRoot, '.venv', 'bin', 'python')
     const existingPythonPath = process.env.PYTHONPATH
+    const pythonPath = [
+      path.join(resolvedProjectRoot, 'src'),
+      resolvedProjectRoot,
+      ...(existingPythonPath ? [existingPythonPath] : []),
+    ].join(path.delimiter)
     const child = spawn(python, [SCRIPT], {
-      cwd: path.resolve(projectRoot),
+      cwd: resolvedProjectRoot,
       env: {
         ...aceChildEnvironment(),
-        PYTHONPATH: existingPythonPath
-          ? `${path.resolve(projectRoot)}${path.delimiter}${existingPythonPath}`
-          : path.resolve(projectRoot),
+        PYTHONPATH: pythonPath,
       },
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],

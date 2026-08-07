@@ -11,10 +11,11 @@ import type {
   AceRunTraceSummary,
 } from '../../shared/schema/ace'
 import { parseAceRegressionScenarioSnapshot } from '../../shared/schema/aceRegression'
+import { ACE_RUN_CONTROL_ACTIONS, aceRunControlDecision } from '../../shared/schema/aceRunControl'
 import type { Trace } from '../../shared/schema/types'
 import { type AppliedAnalysisBundle, applyAceAnalysisBundle } from '../ace/analysisBundle'
 import { productionAnalysisSourceFingerprint } from '../ace/analysisSource'
-import { AceBridgeClient, type AceBridgeCommand } from '../ace/bridge'
+import { AceBridgeClient, type AceBridgeCommand, aceBridgeSourcePath } from '../ace/bridge'
 import { buildAceDashboard } from '../ace/dashboard'
 import { AceLaunchLineageStore } from '../ace/launchLineageStore'
 import {
@@ -651,7 +652,7 @@ export function aceRoutes(
       batches.push(
         synthesizedRun(runId, summaries, {
           controlsAvailable: true,
-          ...(summaries.length === 0 ? { lifecycle: 'queued' as const } : {}),
+          lifecycle: summaries.length === 0 ? 'queued' : 'running',
           updatedAt: active?.startedAt ?? new Date().toISOString(),
         }),
       )
@@ -712,7 +713,7 @@ export function aceRoutes(
         config.python ??
         process.env.ACE_PYTHON ??
         path.join(config.projectRoot, '.venv', 'bin', 'python')
-      const bridgeModule = path.join(config.projectRoot, 'src', 'ace', 'cockpit_bridge.py')
+      const bridgeModule = aceBridgeSourcePath(config.projectRoot)
       const readable = async (candidate: string) => {
         try {
           await fs.access(candidate)
@@ -721,20 +722,35 @@ export function aceRoutes(
           return false
         }
       }
-      const [projectConfigured, pythonAvailable, bridgeAvailable, runRootAvailable] =
+      const [projectConfigured, pythonAvailable, bridgeSourceAvailable, runRootAvailable] =
         await Promise.all([
           readable(config.projectRoot),
           readable(python),
           readable(bridgeModule),
           readable(config.runRoot),
         ])
+      let bridgeAvailable = false
+      if (projectConfigured && pythonAvailable && bridgeSourceAvailable) {
+        try {
+          await bridge.call('capabilities', {}, 10_000)
+          bridgeAvailable = true
+        } catch {
+          // File presence cannot prove that the active venv can import the current worktree.
+          // The launcher must fail closed before it offers any provider-backed action.
+        }
+      }
       res.json({
         available: projectConfigured && pythonAvailable && bridgeAvailable,
         projectConfigured,
         pythonAvailable,
+        bridgeSourceAvailable,
         bridgeAvailable,
         runRootAvailable,
-        ...(!bridgeAvailable ? { message: 'ACE cockpit bridge is not installed' } : {}),
+        ...(!bridgeSourceAvailable
+          ? { message: 'ACE cockpit bridge is not installed' }
+          : !bridgeAvailable
+            ? { message: 'ACE cockpit bridge failed its runtime capability probe' }
+            : {}),
       })
     }),
   )
@@ -866,12 +882,21 @@ export function aceRoutes(
       const action = parseControlRequest(req.body)
       const runId = safeId(req.params.runId, 'runId')
       const run = (await batchesWithTraceUids()).find((candidate) => candidate.runId === runId)
-      if (run?.controlsAvailable === false) {
+      if (!run) {
+        res.status(404).json({ error: 'run not found', runId })
+        return
+      }
+      const decision = aceRunControlDecision(run, action)
+      if (!decision.allowed) {
         res.status(409).json({
-          error: 'run is read-only because no controllable ACE manifest/bridge is available',
+          error: decision.reason,
           runId,
+          lifecycle: run.lifecycle,
           manifestAvailable: run.manifestAvailable,
-          controlsAvailable: false,
+          controlsAvailable: run.controlsAvailable !== false,
+          allowedActions: ACE_RUN_CONTROL_ACTIONS.filter(
+            (candidate) => aceRunControlDecision(run, candidate).allowed,
+          ),
         })
         return
       }

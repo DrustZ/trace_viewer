@@ -276,8 +276,8 @@ function catalogGroundTruth(task: AceTaskDetail | undefined): GroundTruthResolut
   const sections = groundTruthSections(source, card)
   const sanitized = sanitizeReviewGroundTruth(
     {
-      status: 'available',
-      authoritative: true,
+      status: 'reference',
+      authoritative: false,
       source: 'current_task_catalog',
       traceBound: false,
       scenarioId: task.scenarioId,
@@ -291,7 +291,7 @@ function catalogGroundTruth(task: AceTaskDetail | undefined): GroundTruthResolut
   )
   return {
     groundTruth:
-      sanitized?.status === 'available'
+      sanitized?.status === 'reference'
         ? sanitized
         : unavailableGroundTruth('task_catalog_definition_invalid', task.scenarioId),
     ...(sections.issue ? { issue: sections.issue } : {}),

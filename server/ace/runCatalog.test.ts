@@ -254,6 +254,7 @@ describe('ACE live batch catalog', () => {
     )
 
     const complete = await readAceBatch(manifestPath)
+    expect(complete.controlsAvailable).toBe(false)
     expect(complete.totals).toMatchObject({
       userSimAttempts: 3,
       invalidUserSimAttempts: 1,
@@ -274,6 +275,7 @@ describe('ACE live batch catalog', () => {
       }),
     )
     const partial = await readAceBatch(manifestPath)
+    expect(partial.controlsAvailable).toBe(false)
     expect(partial.totals).toMatchObject({
       userSimAttempts: null,
       invalidUserSimAttempts: null,
@@ -310,9 +312,32 @@ describe('ACE live batch catalog', () => {
       expect.objectContaining({
         runId: 'safe-run',
         runKind: 'counterfactual',
+        controlsAvailable: false,
         staleManifest: true,
         manifestError: expect.any(String),
       }),
     ])
+  })
+
+  it('treats a manifest with no authoritative lifecycle as an uncontrollable orphan', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ace-orphan-batch-'))
+    fixtures.push(directory)
+    const manifestPath = path.join(directory, 'batch.json')
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'orphan-run',
+        run_kind: 'debug',
+        totals: { episodes: 0 },
+        episode_states: [],
+        episodes: [],
+      }),
+    )
+
+    await expect(readAceBatch(manifestPath)).resolves.toMatchObject({
+      lifecycle: 'unknown',
+      controlsAvailable: false,
+    })
   })
 })

@@ -4,6 +4,7 @@ import type {
   AceRunLifecycle,
   AceRunTraceSummary,
 } from '@shared/schema/ace'
+import { type AceRunControlAction, aceRunControlDecision } from '@shared/schema/aceRunControl'
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAceRun, useAceRuns, useControlAceRun } from '../api/ace'
@@ -31,17 +32,16 @@ function Outcome({ value }: { value: string }) {
 
 const TERMINAL_EPISODE_STATUSES = new Set(['completed', 'cancelled', 'failed', 'error'])
 const EPISODE_PAGE_SIZE = 100
-type AceControlAction = 'pause' | 'resume' | 'cancel'
 
 export function aceRunControlDisabled(
-  run: Pick<AceBatchSummary, 'controlsAvailable' | 'lifecycle'>,
-  action: AceControlAction,
+  run: Pick<
+    AceBatchSummary,
+    'controlsAvailable' | 'lifecycle' | 'manifestAvailable' | 'staleManifest'
+  >,
+  action: AceRunControlAction,
   pending = false,
 ): boolean {
-  if (run.controlsAvailable === false || pending) return true
-  if (action === 'pause') return run.lifecycle !== 'running'
-  if (action === 'resume') return run.lifecycle !== 'paused'
-  return !['queued', 'running', 'paused', 'cancelling'].includes(run.lifecycle)
+  return !aceRunControlDecision(run, action, pending).allowed
 }
 
 export function AceRunAccessStatus({
@@ -83,6 +83,20 @@ export function formatHeartbeatAge(ageMs: number | null): string {
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes}m ago`
   return `${Math.floor(minutes / 60)}h ago`
+}
+
+export function aceRunProgress(
+  scheduledEpisodes: number,
+  episodes: readonly Pick<AceBatchEpisode, 'status'>[],
+): { terminal: number; inProgress: number; stateNotRepresented: number } {
+  const terminal = episodes.filter((episode) =>
+    TERMINAL_EPISODE_STATUSES.has(episode.status),
+  ).length
+  return {
+    terminal,
+    inProgress: Math.max(0, scheduledEpisodes - terminal),
+    stateNotRepresented: Math.max(0, scheduledEpisodes - episodes.length),
+  }
 }
 
 export function filterAceRunEpisodes(
@@ -188,6 +202,7 @@ export default function AceRunsPage() {
   const heartbeat = run.data
     ? aceRunHeartbeat(run.data.updatedAt, run.data.lifecycle)
     : { ageMs: null, stale: false }
+  const progress = run.data ? aceRunProgress(run.data.totals.episodes, episodes) : null
 
   return (
     <div className="min-h-screen bg-slate-50 px-5 py-4">
@@ -281,6 +296,7 @@ export default function AceRunsPage() {
                       type="button"
                       onClick={() => control.mutate(action)}
                       disabled={aceRunControlDisabled(run.data, action, control.isPending)}
+                      title={aceRunControlDecision(run.data, action, control.isPending).reason}
                       className="rounded border border-slate-200 px-2 py-1 text-xs capitalize hover:bg-slate-50 disabled:opacity-40"
                     >
                       {action}
@@ -327,11 +343,13 @@ export default function AceRunsPage() {
                 <div>
                   <span className="text-slate-400">In progress</span>
                   <br />
-                  <b>
-                    {formatNumber(
-                      episodes.filter((row) => !TERMINAL_EPISODE_STATUSES.has(row.status)).length,
-                    )}
-                  </b>
+                  <b>{formatNumber(progress?.inProgress ?? 0)}</b>
+                  {(progress?.stateNotRepresented ?? 0) > 0 ? (
+                    <div className="text-[10px] text-amber-600">
+                      {formatNumber(progress?.stateNotRepresented ?? 0)} schedule states not yet
+                      represented
+                    </div>
+                  ) : null}
                 </div>
                 <div>
                   <span className="text-slate-400">Pass rate</span>

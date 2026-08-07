@@ -290,6 +290,50 @@ describe('trace scanner data roots', () => {
     }
   })
 
+  it('does not publish sibling trace updates for a heartbeat-only manifest rewrite', async () => {
+    const root = await temporaryRoot()
+    const manifestPath = path.join(root, 'batch.json')
+    await fs.writeFile(path.join(root, 'episode.json'), nativeTrace('episode-1', 'run-live'))
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'run-live',
+        heartbeat_at: '2026-08-06T00:00:00.000Z',
+        episodes: [],
+      }),
+    )
+    const store = new TraceStore()
+    await scanAll(store, [`live-batch=${root}`])
+    const events: Array<{ type: string; runId?: string }> = []
+    store.subscribe((event) => events.push(event))
+    const watcher = watch(store, [`live-batch=${root}`])
+    try {
+      await new Promise<void>((resolve) => watcher.once('ready', () => resolve()))
+      await fs.writeFile(
+        manifestPath,
+        JSON.stringify({
+          schema_version: 3,
+          batch_id: 'run-live',
+          heartbeat_at: '2026-08-06T00:00:01.000Z',
+          episodes: [],
+        }),
+      )
+      await vi.waitFor(
+        () =>
+          expect(events).toContainEqual(
+            expect.objectContaining({ type: 'batch.updated', runId: 'run-live' }),
+          ),
+        { timeout: 2_000, interval: 25 },
+      )
+      await new Promise((resolve) => setTimeout(resolve, 450))
+      expect(events.filter((event) => event.type === 'trace.upserted')).toEqual([])
+      expect(events.filter((event) => event.type === 'batch.updated')).toHaveLength(1)
+    } finally {
+      await watcher.close()
+    }
+  })
+
   it('does not double-count an atomic-save add event for an already-known corrupt source', async () => {
     const root = await temporaryRoot()
     const sourcePath = path.join(root, 'bad.json')

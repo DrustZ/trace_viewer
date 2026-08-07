@@ -11,6 +11,7 @@ import { ReviewStore } from './reviews/reviewStore'
 import { TraceStore } from './store/traceStore'
 
 let temporaryDirectory = ''
+const TEST_BLIND_SECRET = Buffer.alloc(32, 0x24)
 
 beforeEach(async () => {
   temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'trace-review-app-'))
@@ -64,7 +65,12 @@ describe('review app integration', () => {
       finalsPath: reviewsPath,
       draftsDir: path.join(temporaryDirectory, 'drafts'),
     })
-    const app = createApp({ store: traceStore, reviewStore, dataRoots: [] })
+    const app = createApp({
+      store: traceStore,
+      reviewStore,
+      reviewBlindSecret: TEST_BLIND_SECRET,
+      dataRoots: [],
+    })
     const traceUid = stored.meta.traceUid as string
 
     const queue = await request(app).get(

@@ -5,6 +5,7 @@ import {
   AceRunAccessStatus,
   aceRunControlDisabled,
   aceRunHeartbeat,
+  aceRunProgress,
   filterAceRunEpisodes,
 } from './AceRunsPage'
 
@@ -70,6 +71,15 @@ describe('ACE run diagnostics helpers', () => {
     expect(aceRunHeartbeat('2026-08-06T00:02:00Z', 'running', now).stale).toBe(false)
     expect(aceRunHeartbeat('2026-08-06T00:00:00Z', 'completed', now).stale).toBe(false)
     expect(aceRunHeartbeat('not-a-date', 'running', now)).toEqual({ ageMs: null, stale: false })
+  })
+
+  it('derives in-progress from the complete schedule when manifest states are partial', () => {
+    expect(
+      aceRunProgress(45, [
+        ...Array.from({ length: 8 }, () => ({ status: 'completed' })),
+        ...Array.from({ length: 2 }, () => ({ status: 'running' })),
+      ]),
+    ).toEqual({ terminal: 8, inProgress: 37, stateNotRepresented: 35 })
   })
 
   it('filters the complete schedule by status and trace-level root-cause signals', () => {

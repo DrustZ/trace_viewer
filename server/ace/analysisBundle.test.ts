@@ -93,7 +93,7 @@ function traceFixture(options: {
   outcome?: TraceOutcome
   seed?: number
   evaluation?: TraceEvaluation
-  runKind?: 'scored' | 'debug' | 'counterfactual'
+  runKind?: 'scored' | 'debug' | 'counterfactual' | null
   configDigest?: string
   pairKey?: string | null
 }): ParsedTrace {
@@ -102,6 +102,12 @@ function traceFixture(options: {
   const runId = options.runId ?? 'run-a'
   const instanceId = options.instanceId ?? options.traceId
   const environmentSeed = options.seed ?? 1
+  const runKind =
+    options.runKind === undefined
+      ? options.corpusId === 'production'
+        ? undefined
+        : 'scored'
+      : options.runKind
   return {
     meta: {
       traceId: options.traceId,
@@ -123,7 +129,7 @@ function traceFixture(options: {
         config_digest: options.configDigest ?? 'config-a',
         prompt: 'baseline',
         transport: 'responses',
-        ...(options.runKind ? { run_kind: options.runKind } : {}),
+        ...(runKind ? { run_kind: runKind } : {}),
       },
     },
     messages: [
@@ -784,6 +790,83 @@ describe('buildAceDashboard', () => {
       formalScheduledEpisodes: 0,
       scope: { selectedRunIds: ['debug-run'] },
     })
+  })
+
+  it('fails closed across camelCase, lineage exclusions, synthetic traces, and missing kinds', () => {
+    const camel = traceFixture({
+      traceId: 'camel',
+      runId: 'camel-run',
+      outcome: 'pass',
+      runKind: null,
+    })
+    camel.meta.extra = { ...camel.meta.extra, runKind: 'scored' }
+    const lineage = traceFixture({
+      traceId: 'lineage',
+      runId: 'lineage-run',
+      outcome: 'pass',
+      runKind: null,
+    })
+    if (lineage.evaluation) lineage.evaluation.lineage = { runKind: 'scored' }
+    const excluded = traceFixture({
+      traceId: 'excluded',
+      runId: 'excluded-run',
+      outcome: 'pass',
+    })
+    if (excluded.evaluation) {
+      excluded.evaluation.lineage = { runKind: 'scored', formalMetricsExcluded: true }
+    }
+    const synthetic = traceFixture({
+      traceId: 'synthetic',
+      runId: 'synthetic-run',
+      outcome: 'pass',
+    })
+    if (synthetic.evaluation) {
+      synthetic.evaluation.lineage = { runKind: 'scored', synthetic: true }
+    }
+    const missing = traceFixture({
+      traceId: 'missing',
+      runId: 'missing-run',
+      outcome: 'pass',
+      runKind: null,
+    })
+    const replay = traceFixture({
+      traceId: 'replay',
+      runId: 'replay-run',
+      outcome: 'pass',
+    })
+    if (replay.evaluation) replay.evaluation.lineage = { runKind: 'scored', mode: 'exact' }
+    const store = new TraceStore()
+    for (const parsed of [camel, lineage, excluded, synthetic, missing, replay]) {
+      store.upsert(parsed)
+    }
+
+    const dashboard = buildAceDashboard(store)
+    expect(dashboard).toMatchObject({
+      total: 2,
+      pass: 2,
+      scope: {
+        defaultRunIds: ['camel-run', 'lineage-run'],
+        selectedRunIds: ['camel-run', 'lineage-run'],
+      },
+    })
+    expect(dashboard.reliability.cells.map((cell) => cell.runId)).toEqual([
+      'camel-run',
+      'lineage-run',
+    ])
+    expect(
+      dashboard.scope.availableRuns.map(({ runId, runKind, includedByDefault }) => ({
+        runId,
+        runKind,
+        includedByDefault,
+      })),
+    ).toEqual([
+      { runId: 'camel-run', runKind: 'scored', includedByDefault: true },
+      { runId: 'excluded-run', runKind: 'unknown', includedByDefault: false },
+      { runId: 'lineage-run', runKind: 'scored', includedByDefault: true },
+      { runId: 'missing-run', runKind: 'unknown', includedByDefault: false },
+      { runId: 'replay-run', runKind: 'unknown', includedByDefault: false },
+      { runId: 'synthetic-run', runKind: 'unknown', includedByDefault: false },
+    ])
   })
 
   it('quarantines a run whose trace-level kinds mix formal and exploratory episodes', () => {

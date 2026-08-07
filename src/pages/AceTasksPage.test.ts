@@ -139,7 +139,7 @@ describe('ACE task explorer links', () => {
           effectiveChecks: [
             {
               name: 'REQUIRED_INFO',
-              sourceSymbol: 'src/ace/scenario.py::_check_required_info',
+              sourceSymbol: 'src/ace/evaluation/grading/atomic.py::_check_required_info',
               purpose: 'Current source documentation.',
               gatingRule: 'Resolved by current Python runtime.',
               effectiveGating: true,
@@ -164,19 +164,19 @@ describe('ACE task explorer links', () => {
     }
     const scoring: AceTaskScoringContract = {
       primaryGrader: {
-        file: 'src/ace/scenario.py',
+        file: 'src/ace/evaluation/grading/atomic.py',
         digest: 'a'.repeat(64),
         available: false,
         authority,
-        symbol: 'src/ace/scenario.py::grade_atomic',
+        symbol: 'src/ace/evaluation/grading/atomic.py::grade_atomic',
         gating: true,
       },
       splitResolver: {
-        file: 'src/ace/db.py',
+        file: 'src/ace/simulation/environment/database.py',
         digest: 'b'.repeat(64),
         available: false,
         authority,
-        symbol: 'src/ace/db.py::Database.split_of',
+        symbol: 'src/ace/simulation/environment/database.py::Database.split_of',
         sourceContract: null,
       },
       verdictFormula: 'STALE FORMULA',

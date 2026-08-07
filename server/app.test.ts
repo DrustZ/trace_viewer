@@ -311,22 +311,75 @@ describe('api', () => {
   })
 
   it('GET /api/traces/:id/neighbors reports middle and edge positions', async () => {
+    const listed = await request(app).get('/api/traces?sort=time&order=asc&limit=100')
+    const uid = (sourceTraceId: string) =>
+      listed.body.items.find(
+        (item: { meta: { sourceTraceId?: string; traceId: string } }) =>
+          (item.meta.sourceTraceId ?? item.meta.traceId) === sourceTraceId,
+      ).meta.traceUid
     const middle = await request(app).get(
       '/api/traces/lc-i01-s100-r02/neighbors?sort=time&order=asc',
     )
     expect(middle.body).toEqual({
-      prevId: 'lc-i01-s100-r01',
-      nextId: 'lc-i01-s200-r01',
+      prevId: uid('lc-i01-s100-r01'),
+      nextId: uid('lc-i01-s200-r01'),
       position: 2,
       total: 5,
     })
     const edge = await request(app).get('/api/traces/openai-import-1/neighbors')
-    expect(edge.body).toEqual({ prevId: null, nextId: HARMONY_ID, position: 1, total: 5 })
+    expect(edge.body).toEqual({ prevId: null, nextId: uid(HARMONY_ID), position: 1, total: 5 })
     // A trace excluded by the filters reports position 0 with no neighbors.
     const filteredOut = await request(app).get(
       '/api/traces/openai-import-1/neighbors?status=failed',
     )
     expect(filteredOut.body).toEqual({ prevId: null, nextId: null, position: 0, total: 0 })
+  })
+
+  it('returns canonical neighbor UIDs even when the request used a unique legacy id', async () => {
+    const store = new TraceStore()
+    const add = (traceId: string, timestamp: string, sourcePath: string) => {
+      const parsed = parseAny(
+        JSON.stringify(
+          nativeEntry({
+            traceId,
+            timestamp,
+            checkpointStep: 100,
+            split: 'train',
+            score: 1,
+            content: 'A sufficiently detailed assistant response.',
+          }),
+        ),
+        { fallbackTimestamp: timestamp },
+      ).traces[0]
+      return store.upsert(parsed, sourcePath)
+    }
+    const duplicateBefore = add('duplicate-producer-id', '2026-03-01T00:00:00.000Z', '/a.json')
+    add('unique-current-id', '2026-03-02T00:00:00.000Z', '/current.json')
+    const duplicateAfter = add('duplicate-producer-id', '2026-03-03T00:00:00.000Z', '/b.json')
+    const duplicateUids = [
+      duplicateBefore.meta.traceUid as string,
+      duplicateAfter.meta.traceUid as string,
+    ].sort()
+    const duplicateLookup = store.lookup('duplicate-producer-id')
+    expect(duplicateLookup).toMatchObject({ kind: 'ambiguous', candidates: duplicateUids })
+
+    const duplicateApp = createApp({ store, dataRoots: [] })
+    const neighbors = await request(duplicateApp).get(
+      '/api/traces/unique-current-id/neighbors?sort=time&order=asc',
+    )
+    expect(neighbors.status).toBe(200)
+    expect(neighbors.body).toMatchObject({
+      prevId: duplicateBefore.meta.traceUid,
+      nextId: duplicateAfter.meta.traceUid,
+      position: 2,
+      total: 3,
+    })
+    expect((await request(duplicateApp).get(`/api/traces/${neighbors.body.prevId}`)).status).toBe(
+      200,
+    )
+    expect((await request(duplicateApp).get(`/api/traces/${neighbors.body.nextId}`)).status).toBe(
+      200,
+    )
   })
 
   it('GET /api/traces/:id/siblings returns same instance+step rollouts, score desc', async () => {

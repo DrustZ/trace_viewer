@@ -10,14 +10,24 @@ describe('fixed ACE Python scoring authority probe', () => {
   beforeEach(async () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'ace-scoring-authority-'))
     await fs.mkdir(path.join(root, '.venv', 'bin'), { recursive: true })
-    await fs.mkdir(path.join(root, 'src', 'ace'), { recursive: true })
-    await fs.writeFile(path.join(root, 'src', '__init__.py'), '')
-    await fs.writeFile(path.join(root, 'src', 'ace', '__init__.py'), '')
+    await fs.mkdir(path.join(root, 'src', 'ace', 'evaluation', 'grading'), { recursive: true })
+    await fs.mkdir(path.join(root, 'src', 'ace', 'simulation', 'environment'), {
+      recursive: true,
+    })
+    for (const file of [
+      ['ace', '__init__.py'],
+      ['ace', 'evaluation', '__init__.py'],
+      ['ace', 'evaluation', 'grading', '__init__.py'],
+      ['ace', 'simulation', '__init__.py'],
+      ['ace', 'simulation', 'environment', '__init__.py'],
+    ]) {
+      await fs.writeFile(path.join(root, 'src', ...file), '')
+    }
     const python = path.join(root, '.venv', 'bin', 'python')
     await fs.writeFile(python, '#!/bin/sh\nexec python3 "$@"\n')
     await fs.chmod(python, 0o755)
     await fs.writeFile(
-      path.join(root, 'src', 'ace', 'db.py'),
+      path.join(root, 'src', 'ace', 'simulation', 'environment', 'database.py'),
       `class Database:
     @staticmethod
     def split_of(order_id):
@@ -26,8 +36,8 @@ describe('fixed ACE Python scoring authority probe', () => {
 `,
     )
     await fs.writeFile(
-      path.join(root, 'src', 'ace', 'scenario.py'),
-      `from src.ace.db import Database
+      path.join(root, 'src', 'ace', 'evaluation', 'scenarios.py'),
+      `from ace.simulation.environment.database import Database
 
 class Scenario:
     def __init__(self, scenario_id, card, reward_basis, journey_id=None):
@@ -47,6 +57,11 @@ class Scenario:
     @property
     def journey_key(self):
         return self.journey_id or self.scenario_id
+`,
+    )
+    await fs.writeFile(
+      path.join(root, 'src', 'ace', 'evaluation', 'grading', 'atomic.py'),
+      `
 
 def _check_expected_actions(*args):
     """Checks expected actions from the current Python source."""

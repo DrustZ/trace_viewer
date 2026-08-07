@@ -26,6 +26,7 @@ function parsedTrace(runId: string): ParsedTrace {
       checkpointStep: 0,
       split: 'test',
       sourceFormat: 'agent-conversation',
+      extra: { run_kind: 'scored' },
     },
     messages: [],
     warnings: [],
@@ -121,7 +122,7 @@ def grade_atomic():
       source: {
         project: 'ACE',
         directory: 'configs/scenarios',
-        schemaContract: 'src/ace/scenario.py::Scenario',
+        schemaContract: 'src/ace/evaluation/scenarios.py::Scenario',
         readOnly: true,
         authority: 'current_worktree_catalog',
         traceDefinitionAuthority: 'trace_bound_snapshot_only',
@@ -175,15 +176,15 @@ def grade_atomic():
       ],
       scoring: {
         primaryGrader: {
-          file: 'src/ace/scenario.py',
+          file: 'src/ace/evaluation/grading/atomic.py',
           available: false,
-          symbol: 'src/ace/scenario.py::grade_atomic',
+          symbol: 'src/ace/evaluation/grading/atomic.py::grade_atomic',
           gating: true,
           authority: { status: 'unavailable', reason: 'python_probe_failed' },
         },
         splitResolver: {
           available: false,
-          symbol: 'src/ace/db.py::Database.split_of',
+          symbol: 'src/ace/simulation/environment/database.py::Database.split_of',
         },
         shadowRubrics: [
           {

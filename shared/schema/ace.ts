@@ -149,6 +149,9 @@ export interface AceCapabilities {
   available: boolean
   projectConfigured: boolean
   pythonAvailable: boolean
+  /** Current bridge source file exists in the configured ACE checkout. */
+  bridgeSourceAvailable?: boolean
+  /** The configured Python successfully imported and executed the fixed capability action. */
   bridgeAvailable: boolean
   runRootAvailable: boolean
   message?: string

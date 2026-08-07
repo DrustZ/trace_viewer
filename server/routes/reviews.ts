@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto'
+import { createHmac } from 'node:crypto'
 import { Router } from 'express'
 import {
   REVIEW_MODES,
@@ -12,8 +12,12 @@ import {
   type ReviewWorkspaceResponse,
   reviewSubjectKey,
 } from '../../shared/reviews/types'
+import {
+  copyInjectedReviewBlindSecret,
+  loadOrCreateReviewBlindSecret,
+} from '../reviews/blindSecret'
 import { computeCalibrationStats, recordHasDisagreement } from '../reviews/calibration'
-import { sanitizeReviewGroundTruth } from '../reviews/groundTruth'
+import { sanitizeReviewGroundTruth, unavailableGroundTruth } from '../reviews/groundTruth'
 import { ReviewStore, ReviewStoreError } from '../reviews/reviewStore'
 import type { ReviewTraceCandidate, ReviewTraceSource } from '../reviews/traceSource'
 import { parseSaveDraftRequest, parseSubmitRequest } from '../reviews/validation'
@@ -29,6 +33,8 @@ export interface ReviewRoutesDeps {
   traceSource: ReviewTraceSource
   reviewStore?: ReviewStore
   defaults?: Partial<ReviewRoutesDefaults>
+  /** Tests inject this so they never create the machine-local default secret. */
+  blindSecret?: Buffer
 }
 
 const DEFAULTS: ReviewRoutesDefaults = {
@@ -107,7 +113,14 @@ function blindTrace(
   candidate: ReviewTraceCandidate,
 ): ReviewTraceCandidate['trace'] {
   const trace = candidate.trace
-  const groundTruth = sanitizeReviewGroundTruth(trace.groundTruth, trace.instanceId)
+  const sanitizedGroundTruth = sanitizeReviewGroundTruth(trace.groundTruth, trace.instanceId)
+  // Calibration may only show evidence bound to the historical trace. A current
+  // checkout reference is useful in Assisted mode but must never masquerade as
+  // the task definition that produced an older episode.
+  const groundTruth =
+    sanitizedGroundTruth?.status === 'reference'
+      ? unavailableGroundTruth('current_task_catalog_not_trace_bound', trace.instanceId)
+      : sanitizedGroundTruth
   return {
     corpusId: trace.corpusId,
     runId: blindRunId(secret, candidate),
@@ -306,20 +319,24 @@ export function reviewsRoutes(deps: ReviewRoutesDeps): Router {
   const router = Router()
   const store = deps.reviewStore ?? new ReviewStore()
   const defaults = { ...DEFAULTS, ...deps.defaults }
-  // Process-local HMAC aliases are stable for a running review session but
-  // cannot be dictionary-matched against the small set of ACE arm/run names.
-  const blindSecret = randomBytes(32)
+  let blindSecret = deps.blindSecret ? copyInjectedReviewBlindSecret(deps.blindSecret) : undefined
+  const getBlindSecret = (): Buffer => {
+    blindSecret ??= loadOrCreateReviewBlindSecret()
+    return blindSecret
+  }
   const candidateForReviewId = async (reviewId: string): Promise<ReviewTraceCandidate | null> => {
     const direct = await deps.traceSource.get(reviewId)
     if (direct) return direct
     if (!/^blind_trace_[0-9a-f]{20}$/.test(reviewId)) return null
+    const secret = getBlindSecret()
     const candidates = await deps.traceSource.list()
-    return candidates.find((candidate) => blindTraceId(blindSecret, candidate) === reviewId) ?? null
+    return candidates.find((candidate) => blindTraceId(secret, candidate) === reviewId) ?? null
   }
 
   router.get(
     '/api/reviews/queue',
     asyncHandler(async (req, res) => {
+      const blindSecret = getBlindSecret()
       const [candidates, finals, drafts] = await Promise.all([
         deps.traceSource.list(),
         store.listFinals(),
@@ -389,6 +406,7 @@ export function reviewsRoutes(deps: ReviewRoutesDeps): Router {
   router.get(
     '/api/reviews/:traceUid/draft',
     asyncHandler(async (req, res) => {
+      const blindSecret = getBlindSecret()
       const candidate = await candidateForReviewId(String(req.params.traceUid))
       if (!candidate) throw new ReviewStoreError('trace not found', 404)
       const canonicalSubject = subjectFor(candidate, req.query, defaults)
@@ -416,6 +434,7 @@ export function reviewsRoutes(deps: ReviewRoutesDeps): Router {
   router.put(
     '/api/reviews/:traceUid/draft',
     asyncHandler(async (req, res) => {
+      const blindSecret = getBlindSecret()
       const candidate = await candidateForReviewId(String(req.params.traceUid))
       if (!candidate) throw new ReviewStoreError('trace not found', 404)
       try {
@@ -441,6 +460,7 @@ export function reviewsRoutes(deps: ReviewRoutesDeps): Router {
   router.post(
     '/api/reviews/:traceUid/submit',
     asyncHandler(async (req, res) => {
+      const blindSecret = getBlindSecret()
       const candidate = await candidateForReviewId(String(req.params.traceUid))
       if (!candidate) throw new ReviewStoreError('trace not found', 404)
       try {

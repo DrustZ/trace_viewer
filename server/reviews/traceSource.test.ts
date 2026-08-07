@@ -77,7 +77,7 @@ function catalog(tasks: AceTaskDetail[]): AceTaskCatalog {
     source: {
       project: 'ACE',
       directory: 'configs/scenarios',
-      schemaContract: 'src/ace/scenario.py::Scenario',
+      schemaContract: 'src/ace/evaluation/scenarios.py::Scenario',
       readOnly: true,
     },
   }
@@ -124,8 +124,8 @@ describe('TraceStore review source', () => {
     })
 
     expect((await source.list())[0]?.trace.groundTruth).toMatchObject({
-      status: 'available',
-      authoritative: true,
+      status: 'reference',
+      authoritative: false,
       source: 'current_task_catalog',
       traceBound: false,
       task: { issue: 'refund', language: 'es', personaGoal: 'Get the eligible refund.' },
@@ -134,8 +134,8 @@ describe('TraceStore review source', () => {
     current = catalog([cancelTask])
     current.source.catalogDigest = 'catalog-v2'
     expect((await source.list())[0]?.trace.groundTruth).toMatchObject({
-      status: 'available',
-      authoritative: true,
+      status: 'reference',
+      authoritative: false,
       source: 'current_task_catalog',
       traceBound: false,
       task: { issue: 'cancel', language: 'en', personaGoal: 'Cancel the eligible order.' },

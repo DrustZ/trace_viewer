@@ -12,6 +12,7 @@ import type {
 import type { AceTaskDetail } from '../../shared/schema/aceTasks'
 import type { TraceSummary } from '../../shared/schema/types'
 import type { TraceStore } from '../store/traceStore'
+import { isFormalMetricsTrace, traceRunKindForScope } from './formalMetrics'
 import { aceTraceDimensions } from './traceDimensions'
 
 function stringValue(value: unknown): string | undefined {
@@ -96,31 +97,16 @@ function triageItem(summary: TraceSummary): AceTriageItem | null {
   }
 }
 
-function explicitRunKind(summary: TraceSummary): AceRunKind | undefined {
-  if (summary.meta.corpusId === 'production') return 'production'
-  const value = summary.meta.extra?.run_kind
-  return value === 'scored' || value === 'debug' || value === 'counterfactual' ? value : undefined
-}
-
 function runScope(
   runId: string,
   traces: readonly TraceSummary[],
   batch: AceBatchSummary | undefined,
 ): AceDashboardRunScope {
   const corpusIds = [...new Set(traces.map((trace) => trace.meta.corpusId ?? 'unknown'))].sort()
-  const explicitKinds = [...new Set(traces.flatMap((trace) => explicitRunKind(trace) ?? []))]
+  const evidencedKinds = new Set<AceRunKind>(traces.map(traceRunKindForScope))
+  if (batch?.runKind && batch.runKind !== 'unknown') evidencedKinds.add(batch.runKind)
   const runKind: AceRunKind =
-    explicitKinds.length > 1
-      ? 'unknown'
-      : explicitKinds.length === 1
-        ? explicitKinds[0]
-        : batch?.runKind && batch.runKind !== 'unknown'
-          ? batch.runKind
-          : corpusIds.includes('production')
-            ? 'production'
-            : corpusIds.includes('simulation')
-              ? 'scored'
-              : 'unknown'
+    evidencedKinds.size === 1 ? ([...evidencedKinds][0] ?? 'unknown') : 'unknown'
   const outcomes = traces.map((trace) => trace.evaluation?.outcome ?? 'ungraded')
   const pass = outcomes.filter((value) => value === 'pass').length
   const fail = outcomes.filter((value) => value === 'fail').length
@@ -131,9 +117,19 @@ function runScope(
   const terminalStatuses = new Set(['completed', 'cancelled', 'failed', 'error'])
   const batchEpisodes = batch?.episodes ?? []
   const scheduledEpisodes = batch?.totals.episodes ?? traces.length
-  const terminalEpisodes = batch
-    ? batchEpisodes.filter((episode) => terminalStatuses.has(episode.status)).length
-    : traces.length
+  const terminalTraceCount =
+    runKind === 'production'
+      ? traces.length
+      : traces.filter((trace) =>
+          terminalStatuses.has(trace.evaluation?.lifecycle.state ?? trace.meta.status),
+        ).length
+  // A synthesized TraceStore run has no authoritative episode manifest. Its empty
+  // `episodes` array must not turn archival production traces (or completed orphan
+  // simulations) into apparently active work. Real manifests retain schedule truth.
+  const terminalEpisodes =
+    batch && batch.manifestAvailable !== false
+      ? batchEpisodes.filter((episode) => terminalStatuses.has(episode.status)).length
+      : terminalTraceCount
   const awaitingTraceIngest =
     batch?.reconciliation?.missingTerminalTraces ??
     batchEpisodes.filter(
@@ -201,11 +197,7 @@ function buildReliability(
 
   for (const summary of traces) {
     const runId = summary.meta.runId ?? 'unknown'
-    const traceRunKind = explicitRunKind(summary)
-    const formal =
-      summary.meta.corpusId === 'simulation' &&
-      availableByRun.get(runId)?.runKind === 'scored' &&
-      (traceRunKind === undefined || traceRunKind === 'scored')
+    const formal = isFormalMetricsTrace(summary) && availableByRun.get(runId)?.runKind === 'scored'
     if (!formal) {
       excludedNonFormalTraceCount += 1
       continue

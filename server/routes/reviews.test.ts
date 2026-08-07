@@ -12,6 +12,7 @@ import { reviewsRoutes } from './reviews'
 
 let temporaryDirectory = ''
 const REAL_RUN_ID = 'sealed-factorial-baseline-optimized-chat-responses'
+const TEST_BLIND_SECRET = Buffer.alloc(32, 0x42)
 const BLIND_CANARIES = [
   'GROUND_TRUTH_SECRET_MODEL',
   'GROUND_TRUTH_SECRET_ARM',
@@ -147,7 +148,7 @@ function testApp(extraCandidates: ReviewTraceCandidate[] = []) {
   ])
   const app = express()
   app.use(express.json())
-  app.use(reviewsRoutes({ traceSource, reviewStore }))
+  app.use(reviewsRoutes({ traceSource, reviewStore, blindSecret: TEST_BLIND_SECRET }))
   const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
     const status =
       typeof error === 'object' &&
@@ -163,6 +164,39 @@ function testApp(extraCandidates: ReviewTraceCandidate[] = []) {
 }
 
 describe('/api/reviews', () => {
+  it('keeps old blind aliases usable after rebuilding the router with the same secret', async () => {
+    const first = testApp()
+    const workspace = await request(first.app).get(
+      '/api/reviews/trace-uid-1/draft?mode=calibration&annotator=local&rubricVersion=judge_v2',
+    )
+    expect(workspace.status).toBe(200)
+    const blindTraceUid = workspace.body.subject.traceUid as string
+    const blindSubject = workspace.body.subject as ReviewSubject
+
+    const rebuilt = testApp()
+    const reopened = await request(rebuilt.app).get(
+      `/api/reviews/${encodeURIComponent(blindTraceUid)}/draft?mode=calibration&annotator=local&rubricVersion=judge_v2`,
+    )
+    expect(reopened.status).toBe(200)
+    expect(reopened.body.subject).toEqual(blindSubject)
+
+    const draft = await request(rebuilt.app)
+      .put(`/api/reviews/${encodeURIComponent(blindTraceUid)}/draft`)
+      .send({ subject: blindSubject, review: reviewPayload(), expectedRevision: 1 })
+    expect(draft.status).toBe(200)
+    expect(draft.body.traceUid).toBe(blindTraceUid)
+
+    const submitted = await request(rebuilt.app)
+      .post(`/api/reviews/${encodeURIComponent(blindTraceUid)}/submit`)
+      .send({
+        subject: blindSubject,
+        review: reviewPayload({ reviewStatus: 'reviewed' }),
+        expectedRevision: 1,
+      })
+    expect(submitted.status).toBe(201)
+    expect(submitted.body.record.traceUid).toBe('trace-uid-1')
+  })
+
   it('supports an ACE-only queue without including generic viewer corpora', async () => {
     const { app } = testApp([
       {
@@ -346,6 +380,52 @@ describe('/api/reviews', () => {
 
     expect(workspace.status).toBe(200)
     expect(workspace.body.trace.groundTruth).toEqual(safeGroundTruth)
+  })
+
+  it('shows current-catalog context only as an Assisted reference and removes it from Calibration', async () => {
+    const currentReference: ReviewGroundTruth = {
+      status: 'reference',
+      authoritative: false,
+      source: 'current_task_catalog',
+      traceBound: false,
+      scenarioId: 'scenario-current',
+      definitionDigest: 'definition-current',
+      task: {
+        issue: 'refund',
+        personaGoal: 'CURRENT_CHECKOUT_ONLY_GOAL',
+      },
+      policy: { forbiddenActions: ['CURRENT_CHECKOUT_ONLY_ACTION'] },
+    }
+    const { app } = testApp([
+      {
+        trace: {
+          corpusId: 'simulation',
+          runId: 'historical-run',
+          traceUid: 'current-reference',
+          sourceTraceId: 'historical-source',
+          instanceId: 'scenario-current',
+          groundTruth: currentReference,
+        },
+      },
+    ])
+
+    const assisted = await request(app).get(
+      '/api/reviews/current-reference/draft?mode=assisted&annotator=local&rubricVersion=judge_v2',
+    )
+    expect(assisted.status).toBe(200)
+    expect(assisted.body.trace.groundTruth).toEqual(currentReference)
+
+    const calibration = await request(app).get(
+      '/api/reviews/current-reference/draft?mode=calibration&annotator=local&rubricVersion=judge_v2',
+    )
+    expect(calibration.status).toBe(200)
+    expect(calibration.body.trace.groundTruth).toEqual({
+      status: 'unavailable',
+      authoritative: false,
+      reason: 'current_task_catalog_not_trace_bound',
+      scenarioId: 'scenario-current',
+    })
+    expect(JSON.stringify(calibration.body)).not.toContain('CURRENT_CHECKOUT_ONLY')
   })
 
   it('shows assisted suggestions and accepts explicit per-failure decisions', async () => {

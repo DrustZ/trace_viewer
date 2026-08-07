@@ -2,6 +2,14 @@ import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import path from 'node:path'
 import { aceChildEnvironment } from './childEnvironment'
 
+/** Current ACE package entry point. Keep the module and source-path probe together. */
+export const ACE_BRIDGE_MODULE = 'ace.experiments.cockpit_bridge'
+export const ACE_BRIDGE_SOURCE_PARTS = ['src', 'ace', 'experiments', 'cockpit_bridge.py'] as const
+
+export function aceBridgeSourcePath(projectRoot: string): string {
+  return path.join(path.resolve(projectRoot), ...ACE_BRIDGE_SOURCE_PARTS)
+}
+
 export type AceBridgeCommand =
   | 'start'
   | 'control'
@@ -98,7 +106,7 @@ export class AceBridgeClient {
     params: Record<string, unknown>,
     timeoutMs: number,
   ): { child: ChildProcessWithoutNullStreams; completion: Promise<T> } {
-    const child = spawn(this.python, ['-m', 'ace.cockpit_bridge', command], {
+    const child = spawn(this.python, ['-m', ACE_BRIDGE_MODULE, command], {
       cwd: this.projectRoot,
       env: aceChildEnvironment(),
       shell: false,

@@ -100,9 +100,7 @@ const rubricSchema = z
   })
   .strict()
 
-const availableBase = {
-  status: z.literal('available'),
-  authoritative: z.literal(true),
+const groundTruthSections = {
   scenarioId: identifier,
   task: taskSchema.optional(),
   policy: policySchema.optional(),
@@ -112,7 +110,9 @@ const availableBase = {
 
 const currentCatalogGroundTruthSchema = z
   .object({
-    ...availableBase,
+    ...groundTruthSections,
+    status: z.literal('reference'),
+    authoritative: z.literal(false),
     source: z.literal('current_task_catalog'),
     traceBound: z.literal(false),
     definitionDigest: identifier,
@@ -121,7 +121,9 @@ const currentCatalogGroundTruthSchema = z
 
 const traceBoundGroundTruthSchema = z
   .object({
-    ...availableBase,
+    ...groundTruthSections,
+    status: z.literal('available'),
+    authoritative: z.literal(true),
     source: z.enum([
       'trace_bound_episode_sidecar_scenario_snapshot',
       'trace_bound_batch_manifest_scenario_snapshot',
@@ -139,6 +141,7 @@ const unavailableReasons = [
   'config_digest_mismatch',
   'task_catalog_definition_conflict',
   'task_catalog_definition_invalid',
+  'current_task_catalog_not_trace_bound',
   'unsafe_ground_truth_shape',
 ] as const satisfies readonly ReviewGroundTruthUnavailableReason[]
 

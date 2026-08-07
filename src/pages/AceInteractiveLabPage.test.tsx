@@ -143,6 +143,8 @@ const childRun = {
   runId: 'child-run',
   runKind: 'counterfactual',
   schemaVersion: 3,
+  manifestAvailable: true,
+  controlsAvailable: true,
   lifecycle: 'running',
   updatedAt: '2026-08-06T00:00:00Z',
   lineage: {
@@ -230,6 +232,34 @@ describe('ACE Interactive Lab page', () => {
     expect(html).toContain('scenario_fresh_rerun_state_regenerated')
     expect(html).toContain('state exact: false')
     expect(html).toContain('Waiting for the first durable message')
+    expect(html).toContain('Available now: pause, cancel')
+    const pauseAttributes = html.match(/<button([^>]*)>pause<\/button>/)?.[1]
+    const resumeAttributes = html.match(/<button([^>]*)>resume<\/button>/)?.[1]
+    const cancelAttributes = html.match(/<button([^>]*)>cancel<\/button>/)?.[1]
+    expect(pauseAttributes).not.toContain('disabled=""')
+    expect(resumeAttributes).toContain('disabled=""')
+    expect(cancelAttributes).not.toContain('disabled=""')
+  })
+
+  it('disables and explains every control for a completed run', () => {
+    mocks.run.mockReturnValue({
+      data: { ...childRun, lifecycle: 'completed', controlsAvailable: false },
+      isLoading: false,
+      isError: false,
+    })
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab?run=child-run&scenarioId=scenario-01']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+
+    expect(html).toContain('Run is completed; no further control actions are valid.')
+    for (const action of ['pause', 'resume', 'cancel']) {
+      expect(html.match(new RegExp(`<button([^>]*)>${action}</button>`))?.[1]).toContain(
+        'disabled=""',
+      )
+    }
   })
 
   it('does not guess checkpoint or matched-seed support when provenance is missing', () => {

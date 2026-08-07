@@ -4,6 +4,7 @@ import {
   type FailureDecision,
   REVIEW_PRIORITIES,
   REVIEW_VERDICTS,
+  type ReviewGroundTruth,
   type ReviewPayload,
   type ReviewRecord,
   type ReviewSubject,
@@ -73,12 +74,47 @@ function errorMessage(value: unknown): string | null {
   return value instanceof Error ? value.message : value ? String(value) : null
 }
 
-function groundTruthAuthority(value: unknown): 'authoritative' | 'unavailable' | 'legacy' {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return 'legacy'
+export interface GroundTruthPresentation {
+  kind: 'trace_bound' | 'reference' | 'unavailable' | 'legacy'
+  title: string
+  warning?: string
+}
+
+export function groundTruthPresentation(
+  value: ReviewGroundTruth | unknown,
+): GroundTruthPresentation {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { kind: 'legacy', title: 'DB / policy ground truth' }
+  }
   const candidate = value as Record<string, unknown>
-  if (candidate.authoritative === true && candidate.status === 'available') return 'authoritative'
-  if (candidate.authoritative === false || candidate.status === 'unavailable') return 'unavailable'
-  return 'legacy'
+  if (
+    candidate.status === 'available' &&
+    candidate.authoritative === true &&
+    candidate.traceBound === true
+  ) {
+    return { kind: 'trace_bound', title: 'Trace-bound task ground truth' }
+  }
+  if (
+    candidate.status === 'reference' &&
+    candidate.authoritative === false &&
+    candidate.source === 'current_task_catalog'
+  ) {
+    return {
+      kind: 'reference',
+      title: 'Current task catalog reference (not trace-bound)',
+      warning:
+        'Informational only: the current checkout may differ from the task definition used for this historical trace.',
+    }
+  }
+  if (candidate.status === 'unavailable' && candidate.authoritative === false) {
+    return {
+      kind: 'unavailable',
+      title: 'Task ground truth unavailable',
+      warning:
+        'No matching trace-bound scenario snapshot exists. The current checkout is not substituted in Calibration mode.',
+    }
+  }
+  return { kind: 'legacy', title: 'DB / policy ground truth' }
 }
 
 function inputClass(): string {
@@ -321,6 +357,10 @@ export function ReviewPanel({
     }
     return [...definitions.values()]
   }, [payload?.rubricReviews, workspaceQuery.data?.trace.rubric])
+  const hasDefinedRubric = Boolean(workspaceQuery.data?.trace.rubric?.length)
+  const groundTruth = workspaceQuery.data?.trace.groundTruth
+  const groundTruthView =
+    groundTruth === undefined ? undefined : groundTruthPresentation(groundTruth)
 
   if (workspaceQuery.isLoading || !payload || loadedSubject.current !== subjectKey) {
     return <aside className={`p-4 text-sm text-slate-500 ${className}`}>Loading review…</aside>
@@ -605,7 +645,7 @@ export function ReviewPanel({
             </article>
           )
         })}
-        {!locked ? (
+        {!locked && !hasDefinedRubric ? (
           <div className="flex gap-2">
             <input
               className={inputClass()}
@@ -636,6 +676,12 @@ export function ReviewPanel({
               Add
             </button>
           </div>
+        ) : null}
+        {!locked && hasDefinedRubric ? (
+          <p className="text-xs text-slate-500">
+            This trace has a fixed rubric. Custom dimensions are disabled so saved reviews match the
+            scoring contract.
+          </p>
         ) : null}
       </section>
 
@@ -845,29 +891,22 @@ export function ReviewPanel({
         ))}
       </section>
 
-      {workspaceQuery.data?.trace.groundTruth !== undefined ? (
+      {groundTruth !== undefined && groundTruthView !== undefined ? (
         <details
           className={`rounded-lg border p-3 ${
-            groundTruthAuthority(workspaceQuery.data.trace.groundTruth) === 'unavailable'
+            groundTruthView.kind === 'unavailable' || groundTruthView.kind === 'reference'
               ? 'border-amber-300 bg-amber-50'
               : 'border-slate-200 bg-slate-50'
           }`}
         >
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-            {groundTruthAuthority(workspaceQuery.data.trace.groundTruth) === 'authoritative'
-              ? 'Trace-bound task ground truth'
-              : groundTruthAuthority(workspaceQuery.data.trace.groundTruth) === 'unavailable'
-                ? 'Task ground truth unavailable'
-                : 'DB / policy ground truth'}
+            {groundTruthView.title}
           </summary>
-          {groundTruthAuthority(workspaceQuery.data.trace.groundTruth) === 'unavailable' ? (
-            <p className="mt-2 text-xs font-medium text-amber-800">
-              No matching trace-bound scenario snapshot exists. Any current-catalog reference below
-              is informational only and must not be used for a Calibration verdict.
-            </p>
+          {groundTruthView.warning ? (
+            <p className="mt-2 text-xs font-medium text-amber-800">{groundTruthView.warning}</p>
           ) : null}
           <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
-            {JSON.stringify(workspaceQuery.data.trace.groundTruth, null, 2)}
+            {JSON.stringify(groundTruth, null, 2)}
           </pre>
         </details>
       ) : null}

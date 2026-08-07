@@ -53,6 +53,28 @@ describe('TraceStore', () => {
     expect(store.getFull('t1')?.stats.score).toBe(1)
   })
 
+  it('treats a semantically identical source replacement as a no-op', () => {
+    const store = new TraceStore()
+    const events: Array<{ type: string; dataVersion: number }> = []
+    store.subscribe((event) => events.push(event))
+
+    store.replaceSource([fixture({ traceId: 'same-source' })], '/same-source.json')
+    const version = store.dataVersion
+    const cached = store.list()
+
+    store.replaceSource([fixture({ traceId: 'same-source' })], '/same-source.json')
+
+    expect(store.dataVersion).toBe(version)
+    expect(store.list()).toBe(cached)
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ type: 'trace.upserted', dataVersion: version })
+
+    store.replaceSource([fixture({ traceId: 'same-source', score: 1 })], '/same-source.json')
+    expect(store.dataVersion).toBe(version + 1)
+    expect(store.getFull('same-source')?.stats.score).toBe(1)
+    expect(events).toHaveLength(2)
+  })
+
   it('keeps duplicate producer ids addressable by uid and rejects ambiguous legacy lookup', () => {
     const store = new TraceStore()
     const first = store.upsert(fixture({ traceId: 'same' }), '/run-a/same.json')

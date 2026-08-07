@@ -95,9 +95,9 @@ export interface AceTaskPersona {
 }
 
 export interface AceTaskTraceCoverage {
-  /** Formal scored (or legacy unknown-kind) simulation traces only. */
+  /** Explicitly scored simulation traces, plus corpus-less legacy fixtures. */
   traceCount: number
-  /** Debug/counterfactual traces deliberately excluded from task-status metrics. */
+  /** Traces rejected by formal eligibility, including exploratory/synthetic/missing provenance. */
   exploratoryTraceCount: number
   runCount: number
   runIds: string[]
@@ -198,14 +198,14 @@ export interface AceTaskFacets {
 export interface AceTaskCatalogSource {
   project: 'ACE'
   directory: 'configs/scenarios'
-  schemaContract: 'src/ace/scenario.py::Scenario'
+  schemaContract: 'src/ace/evaluation/scenarios.py::Scenario'
   readOnly: true
   authority?: 'current_worktree_catalog'
   /** Digest over every current scenario definition and source-pack digest. */
   catalogDigest?: string
   /** Historical trace definitions are authoritative only through their own snapshot. */
   traceDefinitionAuthority?: 'trace_bound_snapshot_only'
-  splitContract?: 'src/ace/db.py::Database.split_of'
+  splitContract?: 'src/ace/simulation/environment/database.py::Database.split_of'
 }
 
 export interface AceTaskScoringArtifact {
@@ -223,11 +223,11 @@ export interface AceTaskRubricArtifact extends AceTaskScoringArtifact {
 
 export interface AceTaskScoringContract {
   primaryGrader: AceTaskScoringArtifact & {
-    symbol: 'src/ace/scenario.py::grade_atomic'
+    symbol: 'src/ace/evaluation/grading/atomic.py::grade_atomic'
     gating: true
   }
   splitResolver: AceTaskScoringArtifact & {
-    symbol: 'src/ace/db.py::Database.split_of'
+    symbol: 'src/ace/simulation/environment/database.py::Database.split_of'
     sourceContract: string | null
   }
   verdictFormula: string
