@@ -24,7 +24,11 @@ import {
   finalizeReviewPayload,
   toggleEvidenceMessageId,
 } from './reviewPayloadOps'
-import { applyReviewClassificationShortcut, reviewShortcutFor } from './shortcuts'
+import {
+  applyReviewClassificationShortcut,
+  isReviewEditingTarget,
+  reviewShortcutFor,
+} from './shortcuts'
 
 // Re-exported so existing imports/tests keep working after the panel split.
 export { type GroundTruthPresentation, groundTruthPresentation } from './ReviewGroundTruthSection'
@@ -85,17 +89,20 @@ function DetailsSection({
   count,
   children,
   tone = 'default',
+  onToggle,
 }: {
   title: string
   count?: number
   children: ReactNode
   tone?: 'default' | 'warning'
+  onToggle?: (open: boolean) => void
 }) {
   return (
     <details
       className={`rounded-lg border p-3 ${
         tone === 'warning' ? 'border-amber-300 bg-amber-50' : 'border-slate-200'
       }`}
+      onToggle={(event) => onToggle?.((event.target as HTMLDetailsElement).open)}
     >
       <summary className="cursor-pointer text-sm font-semibold text-slate-800">
         {title}
@@ -128,6 +135,11 @@ export function ReviewPanel({
   const [editingRevision, setEditingRevision] = useState(false)
   const [revealedAutomatic, setRevealedAutomatic] = useState<ReviewWorkspaceResponse['automatic']>()
   const [focusedFailureId, setFocusedFailureId] = useState<string | null>(null)
+  // C/X must only mutate a failure the reviewer can SEE: the accordion renders
+  // collapsed by default, and a shortcut against an invisible finding would be
+  // silently persisted by autosave.
+  const [failuresSectionOpen, setFailuresSectionOpen] = useState(false)
+  const panelRef = useRef<HTMLElement | null>(null)
   const [focusedDimensionId, setFocusedDimensionId] = useState<string | null>(null)
   const [evidenceHint, setEvidenceHint] = useState<string | null>(null)
   const loadedSubject = useRef<string | null>(null)
@@ -316,14 +328,18 @@ export function ReviewPanel({
         return
       }
       if (!payload || locked) return
-      if (shortcut === 'save') {
+      if (shortcut === 'save' || shortcut === 'submit') {
+        // The chord exemption lets Cmd+S/Cmd+Enter fire while typing in the
+        // panel's own note fields — but a chord from an editable control
+        // elsewhere on the page (queue search, filters popover) must not
+        // save/lock the open review.
+        if (isReviewEditingTarget(event.target)) {
+          const target = event.target instanceof Node ? event.target : null
+          if (!target || !panelRef.current?.contains(target)) return
+        }
         event.preventDefault()
-        void saveCurrent()
-        return
-      }
-      if (shortcut === 'submit') {
-        event.preventDefault()
-        void submitCurrent()
+        if (shortcut === 'save') void saveCurrent()
+        else void submitCurrent()
         return
       }
       if (
@@ -344,6 +360,7 @@ export function ReviewPanel({
       }
       if (
         (shortcut === 'failure-confirm' || shortcut === 'failure-reject') &&
+        failuresSectionOpen &&
         focusedFailureId &&
         visibleFailureIds.includes(focusedFailureId)
       ) {
@@ -361,6 +378,7 @@ export function ReviewPanel({
     window.addEventListener('keydown', listener)
     return () => window.removeEventListener('keydown', listener)
   }, [
+    failuresSectionOpen,
     focusedFailureId,
     goNext,
     goPrev,
@@ -491,7 +509,10 @@ export function ReviewPanel({
   const transcript = workspaceQuery.data?.trace.transcript ?? []
 
   return (
-    <aside className={`space-y-5 rounded-xl border border-slate-200 bg-white p-4 ${className}`}>
+    <aside
+      ref={panelRef}
+      className={`space-y-5 rounded-xl border border-slate-200 bg-white p-4 ${className}`}
+    >
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Human review</h2>
@@ -597,7 +618,11 @@ export function ReviewPanel({
         </DetailsSection>
 
         {automatic?.failures?.length ? (
-          <DetailsSection title="Automatic failures" count={automatic.failures.length}>
+          <DetailsSection
+            title="Automatic failures"
+            count={automatic.failures.length}
+            onToggle={setFailuresSectionOpen}
+          >
             <ReviewFailureSection
               failures={automatic.failures}
               reviews={payload.failureReviews}

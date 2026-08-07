@@ -4,6 +4,18 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 15 — 2026-08-07 11:35 — 接手 Round 13 遗留 D2/D3/D4
+
+codex 两轮空闲，我直接实现了（899 tests + tsc 全绿验证）：
+
+1. **D2** `ReviewPanel` — `DetailsSection` 增加 `onToggle`，"Automatic failures" 手风琴的
+   open 状态提升为 `failuresSectionOpen`；C/X 快捷键仅在手风琴展开（finding 可见）时生效。
+2. **D3** `ReviewPanel` — Cmd+S/Cmd+Enter 的编辑目标豁免限定在面板子树：
+   `panelRef.contains(event.target)`，在队列搜索/Filters popover 输入框里按 chord 不再
+   保存/锁定当前 review。
+3. **D4** `ReviewPage` — `movePending` state 在 move()（保存草稿 + 邻页请求）期间传
+   `suspended` 给面板，恢复冻结路径；死 prop 复活为原设计用途，边界期键入不再被静默丢弃。
+
 ## Round 14 — 2026-08-07 10:25 — Playground 四提交审查（04f6b88..69f376c）
 
 - **Playground/lab 重构质量好**：花钱路径三重防护齐全（共享 `buildAceRunRequest` 校验 +

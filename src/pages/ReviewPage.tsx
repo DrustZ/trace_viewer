@@ -39,6 +39,10 @@ export function ReviewPage() {
   const [queueNotice, setQueueNotice] = useState<string | null>(null)
   const navigationGuard = useRef<ReviewNavigationGuard | null>(null)
   const moving = useRef(false)
+  // Freezes the panel while a move persists the draft / fetches the adjacent
+  // page — keystrokes typed in that window would be silently discarded by the
+  // post-navigation remount otherwise.
+  const [movePending, setMovePending] = useState(false)
   const observedScopeKey = useRef(scopeKey)
 
   // Changing anything but the page offset re-scopes the queue; the previous
@@ -89,6 +93,7 @@ export function ReviewPage() {
     async (delta: 1 | -1, persistCurrent: ReviewNavigationGuard) => {
       if (moving.current) return
       moving.current = true
+      setMovePending(true)
       try {
         if (!(await persistCurrent())) {
           setQueueNotice('Navigation cancelled because the current draft could not be saved.')
@@ -161,6 +166,7 @@ export function ReviewPage() {
         )
       } finally {
         moving.current = false
+        setMovePending(false)
       }
     },
     [filters, queueItems, queuePage, selected?.traceUid, setSearchParams],
@@ -214,6 +220,7 @@ export function ReviewPage() {
               onNext={next}
               onPrev={prev}
               onNavigationGuardChange={registerNavigationGuard}
+              suspended={movePending}
               rootCauseTagSuggestions={tagSuggestions}
             />
           ) : (
