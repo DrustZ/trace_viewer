@@ -95,6 +95,21 @@ describe('ACE bridge durable start handshake', () => {
     expect(rejected.active('rejected-run')).toBeNull()
   })
 
+  it('maps a failure envelope without a structured error to a typed bridge error', async () => {
+    const fixture = await fakeBridge(`
+  process.stdout.write(JSON.stringify({ schemaVersion: 1, ok: false }))
+`)
+    const client = new AceBridgeClient({
+      projectRoot: fixture.projectRoot,
+      python: fixture.executable,
+    })
+
+    await expect(client.call('capabilities', {})).rejects.toMatchObject({
+      name: 'AceBridgeError',
+      code: 'invalid_bridge_response',
+    })
+  })
+
   it('ignores another launch token and fails when the child exits without our READY marker', async () => {
     const fixture = await fakeBridge(`
   process.stderr.write('ACE_COCKPIT_READY ' + JSON.stringify({

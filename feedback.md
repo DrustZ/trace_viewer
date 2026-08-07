@@ -4,6 +4,18 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 16 — 2026-08-07 12:15 — 遗留 minor 清扫 + 第二个 flaky 定位
+
+- 核验早期 minor：app.ts 错误中间件 4xx-5xx 透传 ✅ 已修；`publicBridgeResult` 递归
+  basename 全部 `*path` 键 ✅ 已修；launchLineageStore 队列 ✅ 已修。
+- **[已修复 by Claude]** `bridge.ts parseEnvelope` — `{"ok":false}` 无 error 对象时抛裸
+  TypeError 丢 stderr 诊断（Round 1 minor #6，最后一个真实遗留）→ 显式校验 + 类型化
+  `invalid_bridge_response`（+fakeBridge 测试）。
+- **[已修复 by Claude]** 定位到巡检期间第二个 flaky：`reviews.test.ts › filters queue
+  state/priority…` 多请求集成测试在满并发下 5s 超时 → 15s（连跑 3 轮 900/900 验证）。
+- 仍开放（均 minor、低优先级）：AceAnalysisPage `runSearch` 本地 state 不进 URL；
+  events.ts SSE 慢消费者无背压上限。
+
 ## Round 15 — 2026-08-07 11:35 — 接手 Round 13 遗留 D2/D3/D4
 
 codex 两轮空闲，我直接实现了（899 tests + tsc 全绿验证）：

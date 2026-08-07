@@ -545,7 +545,9 @@ describe('/api/reviews', () => {
         },
       ],
     })
-  })
+    // Multi-request integration test: 5s default flakes when the suite runs
+    // under full parallel load (observed in patrol runs).
+  }, 15_000)
 
   it('rejects client-injected automatic data, hidden failure decisions, and stale subjects', async () => {
     const { app } = testApp()

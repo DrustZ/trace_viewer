@@ -98,7 +98,17 @@ function parseEnvelope<T>(stdout: string): T {
     )
   }
   if (!envelope.ok) {
-    throw new AceBridgeError(envelope.error.code, envelope.error.message, envelope.error.details)
+    // A failure envelope missing its error object ({"ok":false}) must surface
+    // as a typed bridge error (which appends the stderr tail upstream), not as
+    // a raw TypeError that loses the diagnostic.
+    const error = envelope.error
+    if (typeof error !== 'object' || error === null || typeof error.code !== 'string') {
+      throw new AceBridgeError(
+        'invalid_bridge_response',
+        'ACE bridge returned a failure envelope without a structured error',
+      )
+    }
+    throw new AceBridgeError(error.code, error.message, error.details)
   }
   return envelope.result
 }
