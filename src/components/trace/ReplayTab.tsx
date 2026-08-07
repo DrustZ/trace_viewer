@@ -533,7 +533,7 @@ export function ReplayTab({ trace }: { trace: Trace }) {
               to={`/ace/lab?${new URLSearchParams({ trace: traceUid }).toString()}`}
               className="ml-2 font-medium underline"
             >
-              Configure in Interactive Lab
+              Configure in Playground
             </Link>
           </div>
         )}

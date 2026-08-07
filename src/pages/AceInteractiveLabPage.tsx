@@ -3,20 +3,34 @@ import type { AceBatchSummary } from '@shared/schema/ace'
 import { ACE_RUN_CONTROL_ACTIONS, aceRunControlDecision } from '@shared/schema/aceRunControl'
 import type { TracesListResponse } from '@shared/schema/api'
 import type { Trace } from '@shared/schema/types'
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useAceCheckpoints, useAceRun, useAceRuns, useControlAceRun } from '../api/ace'
-import { useAceTask } from '../api/aceTasks'
-import { useTrace, useTraces } from '../api/hooks'
-import { AceRunLauncher } from '../components/ace/AceRunLauncher'
 import {
-  taskScenarioFiles,
-  traceEnvironmentSeed,
-  traceRunFormOverrides,
-  traceRunRecordedConfig,
-} from '../components/ace/interactiveLab'
+  useAceCapabilities,
+  useAceRun,
+  useAceRuns,
+  useAceScenarios,
+  useControlAceRun,
+  useStartAceRun,
+} from '../api/ace'
+import { useAceTasks } from '../api/aceTasks'
+import { useTrace, useTraces } from '../api/hooks'
+import { traceEnvironmentSeed } from '../components/ace/interactiveLab'
+import {
+  buildPlaygroundRunRequest,
+  initialPlaygroundConfig,
+  type PlaygroundRunConfig,
+} from '../components/ace/playgroundRun'
+import {
+  EpisodeConversation,
+  EpisodeResultCard,
+  PlaygroundActions,
+} from '../components/ace/PlaygroundSession'
 import { ErrorState, LoadingState } from '../components/common/EmptyState'
 import { formatNumber, formatPercent } from '../components/common/format'
+
+const INPUT =
+  'w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-400'
 
 function compareHref(runA: string, runB: string, instanceId: string): string {
   return `/compare?${new URLSearchParams({ runA, runB, instance: instanceId }).toString()}`
@@ -235,39 +249,404 @@ function LiveRunMonitor({
   )
 }
 
+const BOT_HINTS: Record<string, string> = {
+  '': 'Runner default harness.',
+  baseline: 'Plain policy prompt, no extra structure.',
+  playbook: 'Policy prompt plus the support playbook guidance.',
+  workflow: 'Structured workflow harness drives each turn.',
+}
+
+/** Episode session: bubbles from the run's single trace, then grade + actions. */
+function EpisodeSession({ runId, onChildRun }: { runId: string; onChildRun: (id: string) => void }) {
+  const run = useAceRun(runId)
+  const filters = useMemo(
+    () => encodeFilterSet({ conditions: [{ key: 'run', op: 'eq', value: runId }] }),
+    [runId],
+  )
+  const traces = useTraces({ filters, sort: 'timestamp', order: 'asc', limit: 5 })
+  const items = traces.data && 'items' in traces.data ? (traces.data as TracesListResponse).items : []
+  const episodeUid = items[0] ? (items[0].meta.traceUid ?? items[0].meta.traceId) : undefined
+  const episode = useTrace(episodeUid)
+  return (
+    <div className="space-y-3" data-testid="playground-session">
+      {episode.data ? (
+        <>
+          <EpisodeConversation trace={episode.data} />
+          <EpisodeResultCard trace={episode.data} costUsd={run.data?.totals.costUsd} />
+          <PlaygroundActions trace={episode.data} onChildRun={onChildRun} />
+        </>
+      ) : (
+        <p className="rounded-md bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">
+          {run.data?.lifecycle === 'failed'
+            ? 'The run failed before producing a durable trace.'
+            : 'Waiting for the first durable message…'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function PlaygroundWorkbench({
+  sourceTrace,
+  requestedTraceUid,
+  selectedRunId,
+  initialConfig,
+  onRunSelected,
+}: {
+  sourceTrace?: Trace
+  requestedTraceUid?: string
+  selectedRunId?: string
+  initialConfig: PlaygroundRunConfig
+  onRunSelected: (runId: string) => void
+}) {
+  const sourceIsSimulation = sourceTrace?.meta.corpusId === 'simulation'
+  const recordedSeed = sourceTrace ? traceEnvironmentSeed(sourceTrace) : undefined
+
+  const capabilities = useAceCapabilities()
+  const scenarios = useAceScenarios()
+  const tasks = useAceTasks({})
+  const start = useStartAceRun()
+
+  const [config, setConfig] = useState<PlaygroundRunConfig>(initialConfig)
+  const [validationError, setValidationError] = useState<string | null>(null)
+
+  const packFiles = (scenarios.data?.items ?? []).map((pack) => pack.file)
+  const packScenarios = useMemo(() => {
+    const base = config.scenarioFile.split('/').at(-1)
+    return (tasks.data?.items ?? []).filter((task) =>
+      task.sourceFiles.some((file) => file.split('/').at(-1) === base),
+    )
+  }, [tasks.data?.items, config.scenarioFile])
+
+  // Matched fresh rerun lineage only when scenario+seed still equal the recorded ones.
+  const sourceTraceUidForRun =
+    requestedTraceUid &&
+    sourceIsSimulation &&
+    recordedSeed !== undefined &&
+    config.scenarioId === sourceTrace?.meta.instanceId &&
+    config.seed.trim() === String(recordedSeed)
+      ? requestedTraceUid
+      : undefined
+
+  const available = capabilities.data?.available === true
+  const setField = <Key extends keyof PlaygroundRunConfig>(
+    key: Key,
+    value: PlaygroundRunConfig[Key],
+  ) => {
+    setConfig((current) => ({ ...current, [key]: value }))
+    setValidationError(null)
+  }
+
+  // Same double-submit + idempotent-batchId discipline as the batch launcher.
+  const submitInFlight = useRef(false)
+  const pendingBatchId = useRef<string | null>(null)
+  const runEpisode = async () => {
+    if (!available || submitInFlight.current) return
+    const result = buildPlaygroundRunRequest({
+      ...config,
+      ...(sourceTraceUidForRun ? { sourceTraceUid: sourceTraceUidForRun } : {}),
+    })
+    if (!result.ok) {
+      setValidationError(result.error)
+      return
+    }
+    submitInFlight.current = true
+    const batchId = (pendingBatchId.current ??= `viewer-${crypto.randomUUID()}`)
+    try {
+      const response = await start.mutateAsync({ ...result.request, batchId })
+      pendingBatchId.current = null
+      onRunSelected(response.runId)
+    } catch {
+      // React Query exposes the server error below the button.
+    } finally {
+      submitInFlight.current = false
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 px-5 py-4">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <header className="flex flex-wrap items-center gap-3">
+          <h1 className="text-base font-semibold text-slate-900">Playground</h1>
+          <p className="text-xs text-slate-500">
+            Interactive experiments against the real simulated world: one episode at a time — full
+            harness, tools, grading. Batches live in Runs → New run.
+          </p>
+          <span
+            className={`ml-auto rounded px-2 py-1 text-[10px] font-medium ${
+              available ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+            }`}
+          >
+            {available
+              ? 'ACE bridge ready'
+              : capabilities.isLoading
+                ? 'Checking bridge…'
+                : (capabilities.data?.message ?? 'Bridge unavailable')}
+          </span>
+        </header>
+
+        {sourceTrace && (
+          <section className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
+            <div className="flex flex-wrap items-center gap-2">
+              <b>Source trace</b>
+              <Link
+                to={`/trace/${encodeURIComponent(sourceTrace.meta.traceUid ?? sourceTrace.meta.traceId)}`}
+                className="font-mono text-blue-700 hover:underline"
+              >
+                {sourceTrace.meta.sourceTraceId ?? sourceTrace.meta.traceId}
+              </Link>
+              <span>task {sourceTrace.meta.instanceId}</span>
+              <span>run {sourceTrace.meta.runId ?? 'unknown'}</span>
+              <span>seed {recordedSeed ?? 'unavailable'}</span>
+              {sourceTraceUidForRun && (
+                <span className="rounded bg-violet-50 px-1.5 py-0.5 text-violet-700">
+                  matched fresh rerun · lineage recorded
+                </span>
+              )}
+            </div>
+            {!sourceIsSimulation && (
+              <p className="mt-2 text-amber-700">
+                Production traces have no task-grade scenario contract. Save this trace as a
+                runnable regression scenario first (trace → Rerun &amp; Fork tab).
+              </p>
+            )}
+            {sourceIsSimulation && recordedSeed === undefined && (
+              <p className="mt-2 text-amber-700">
+                This trace did not record an environment seed, so matched trace ancestry is disabled
+                instead of guessing one.
+              </p>
+            )}
+          </section>
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+          {/* Left: configuration panel */}
+          <section
+            className="space-y-3 self-start rounded-lg border border-slate-200 bg-white p-4"
+            data-testid="playground-config"
+          >
+            <h2 className="text-sm font-semibold text-slate-800">Configuration</h2>
+
+            <label className="block text-xs text-slate-600">
+              Prompt preset
+              <select
+                className={INPUT}
+                data-testid="playground-prompt-preset"
+                value={config.promptPreset}
+                onChange={(event) => setField('promptPreset', event.target.value)}
+              >
+                <option>baseline</option>
+                <option>improved</option>
+                <option>optimized</option>
+              </select>
+            </label>
+            <label className="block text-xs text-slate-600">
+              Custom prompt (optional)
+              <textarea
+                rows={6}
+                className={INPUT}
+                data-testid="playground-prompt-text"
+                value={config.promptText}
+                onChange={(event) => setField('promptText', event.target.value)}
+                placeholder="Paste a full assistant policy prompt; overrides the preset."
+              />
+              <span className="mt-0.5 block text-[10px] text-slate-400">
+                Editing the prompt makes this a counterfactual run — formal metrics stay clean.
+              </span>
+            </label>
+
+            <label className="block text-xs text-slate-600">
+              Bot harness
+              <select
+                className={INPUT}
+                data-testid="playground-bot"
+                value={config.bot}
+                onChange={(event) =>
+                  setField('bot', event.target.value as PlaygroundRunConfig['bot'])
+                }
+              >
+                <option value="">Runner default</option>
+                <option value="baseline">Baseline</option>
+                <option value="playbook">Playbook</option>
+                <option value="workflow">Workflow</option>
+              </select>
+              <span className="mt-0.5 block text-[10px] text-slate-400">
+                {BOT_HINTS[config.bot] ?? BOT_HINTS['']}
+              </span>
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs text-slate-600">
+                Model
+                <input
+                  className={INPUT}
+                  value={config.model}
+                  onChange={(event) => setField('model', event.target.value)}
+                  placeholder="Runner default"
+                />
+              </label>
+              <label className="text-xs text-slate-600">
+                Temperature
+                <input
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  className={INPUT}
+                  value={config.temperature}
+                  onChange={(event) => setField('temperature', event.target.value)}
+                />
+              </label>
+            </div>
+            <label className="block text-xs text-slate-600">
+              Reasoning effort
+              <select
+                className={INPUT}
+                value={config.reasoningEffort}
+                onChange={(event) =>
+                  setField(
+                    'reasoningEffort',
+                    event.target.value as PlaygroundRunConfig['reasoningEffort'],
+                  )
+                }
+              >
+                <option value="">Runner default</option>
+                <option value="none">None</option>
+                <option value="minimal">Minimal</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="xhigh">XHigh</option>
+              </select>
+            </label>
+
+            <label className="block text-xs text-slate-600">
+              Scenario pack
+              <select
+                className={INPUT}
+                data-testid="playground-scenario-pack"
+                value={config.scenarioFile}
+                onChange={(event) => setField('scenarioFile', event.target.value)}
+              >
+                {!packFiles.includes(config.scenarioFile) && (
+                  <option value={config.scenarioFile}>{config.scenarioFile}</option>
+                )}
+                {(scenarios.data?.items ?? []).map((pack) => (
+                  <option key={pack.file} value={pack.file}>
+                    {pack.file} ({pack.count})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-slate-600">
+              Scenario
+              <select
+                className={INPUT}
+                data-testid="playground-scenario-id"
+                value={config.scenarioId}
+                onChange={(event) => setField('scenarioId', event.target.value)}
+              >
+                <option value="">Pick a scenario…</option>
+                {config.scenarioId !== '' &&
+                  !packScenarios.some((task) => task.scenarioId === config.scenarioId) && (
+                    <option value={config.scenarioId}>{config.scenarioId}</option>
+                  )}
+                {packScenarios.map((task) => (
+                  <option key={task.scenarioId} value={task.scenarioId}>
+                    {task.scenarioId}
+                    {task.issue ? ` · ${task.issue}` : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-0.5 block text-[10px] text-slate-400">
+                One scenario × one seed; the full ACE harness (world, tools, user simulator,
+                grader) runs fresh.
+              </span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs text-slate-600">
+                Seed
+                <input
+                  type="number"
+                  min="0"
+                  className={INPUT}
+                  data-testid="playground-seed"
+                  value={config.seed}
+                  onChange={(event) => setField('seed', event.target.value)}
+                />
+              </label>
+              <label className="text-xs text-slate-600">
+                Cost cap (USD)
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.25"
+                  className={INPUT}
+                  value={config.costCap}
+                  onChange={(event) => setField('costCap', event.target.value)}
+                />
+              </label>
+            </div>
+          </section>
+
+          {/* Right: session area */}
+          <section className="min-w-0 space-y-3">
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3">
+              <button
+                type="button"
+                data-testid="playground-run-episode"
+                onClick={() => void runEpisode()}
+                disabled={!available || start.isPending}
+                className="rounded-md bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-40"
+              >
+                {start.isPending ? 'Starting…' : 'Run episode'}
+              </button>
+              <span className="text-[11px] text-slate-500">
+                {config.promptText.trim()
+                  ? 'Counterfactual run (custom prompt) · excluded from formal metrics.'
+                  : 'Debug run · excluded from formal metrics.'}
+              </span>
+            </div>
+            {validationError && (
+              <p role="alert" className="text-xs text-red-600">
+                {validationError}
+              </p>
+            )}
+            {start.error && !validationError && (
+              <p role="alert" className="text-xs text-red-600">
+                {start.error instanceof Error ? start.error.message : 'Run could not start'}
+              </p>
+            )}
+
+            {selectedRunId ? (
+              <EpisodeSession runId={selectedRunId} onChildRun={onRunSelected} />
+            ) : (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-xs text-slate-400">
+                Configure on the left, then run one episode to see the conversation, grade, and
+                fork/regression actions here.
+              </p>
+            )}
+
+            {selectedRunId && (
+              <LiveRunMonitor
+                runId={selectedRunId}
+                sourceTrace={sourceTrace}
+                instanceId={config.scenarioId || (sourceTrace?.meta.instanceId ?? '')}
+              />
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AceInteractiveLabPage() {
   const [search, setSearch] = useSearchParams()
   const requestedTraceUid = search.get('trace')?.trim() || undefined
   const selectedRunId = search.get('run')?.trim() || undefined
   const trace = useTrace(requestedTraceUid)
   const sourceTrace = trace.data
-  const scenarioId = sourceTrace?.meta.instanceId ?? search.get('scenarioId')?.trim() ?? ''
-  const task = useAceTask(scenarioId || undefined)
-  const scenarioFiles = taskScenarioFiles(task.data)
-  const requestedScenarioFile = search.get('scenarioFile')?.trim()
-  const scenarioFile =
-    requestedScenarioFile && scenarioFiles.includes(requestedScenarioFile)
-      ? requestedScenarioFile
-      : scenarioFiles[0]
-  const recordedSeed = sourceTrace ? traceEnvironmentSeed(sourceTrace) : undefined
-  const rawRequestedSeed = search.get('seed')
-  const requestedSeed = rawRequestedSeed === null ? Number.NaN : Number(rawRequestedSeed)
-  const seed =
-    recordedSeed ?? (Number.isSafeInteger(requestedSeed) && requestedSeed >= 0 ? requestedSeed : 1)
-  const checkpoints = useAceCheckpoints(requestedTraceUid)
-  const sourceIsSimulation = sourceTrace?.meta.corpusId === 'simulation'
-  const sourceInitialValues =
-    sourceTrace && sourceIsSimulation ? traceRunFormOverrides(sourceTrace) : undefined
-  const sourceRecordedConfig =
-    sourceTrace && sourceIsSimulation ? traceRunRecordedConfig(sourceTrace) : undefined
-  const traceBranchReady = Boolean(
-    requestedTraceUid && sourceIsSimulation && scenarioFile && recordedSeed !== undefined,
-  )
-  const checkpointBranchable = Boolean(
-    checkpoints.data?.available &&
-      checkpoints.data.forkAvailable &&
-      checkpoints.data.checkpoints.some((checkpoint) => checkpoint.branchable),
-  )
 
   if (requestedTraceUid && trace.isLoading) {
     return (
@@ -284,129 +663,28 @@ export default function AceInteractiveLabPage() {
     )
   }
 
-  const updateRun = (runId: string) => {
+  const onRunSelected = (runId: string) => {
     const next = new URLSearchParams(search)
     next.set('run', runId)
     setSearch(next)
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-5 py-4">
-      <div className="mx-auto max-w-7xl space-y-4">
-        <header className="flex flex-wrap items-center gap-3">
-          <h1 className="text-base font-semibold text-slate-900">ACE Interactive Lab</h1>
-        </header>
-
-        <section className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-            <b>Fresh task rerun · full ACE harness</b>
-            <p className="mt-1 text-blue-700">
-              Runs models, bot harness, tools, grader, faults, and optional evaluators from a fresh
-              world. This is the configurable path below.
-            </p>
-          </div>
-          <div
-            className={`rounded-lg border p-3 text-xs ${checkpointBranchable ? 'border-violet-200 bg-violet-50 text-violet-900' : 'border-slate-200 bg-slate-100 text-slate-500'}`}
-          >
-            <b>Checkpoint fork · restored prefix/state</b>
-            <p className="mt-1">
-              Exact/counterfactual continuation is available only at recorded safe boundaries with
-              scenario and config snapshots.
-            </p>
-            {sourceTrace && (
-              <Link
-                to={`/trace/${encodeURIComponent(sourceTrace.meta.traceUid ?? sourceTrace.meta.traceId)}?tab=replay`}
-                className={`mt-2 inline-block underline ${checkpointBranchable ? 'text-violet-700' : 'pointer-events-none text-slate-400'}`}
-              >
-                {checkpointBranchable
-                  ? 'Open checkpoint fork controls'
-                  : `Unavailable: ${(checkpoints.data?.missing ?? ['no branchable checkpoint']).join(', ')}`}
-              </Link>
-            )}
-          </div>
-          <div
-            className={`rounded-lg border p-3 text-xs ${sourceTrace ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-100 text-slate-500'}`}
-          >
-            <b>LLM-only continuation · no ACE execution</b>
-            <p className="mt-1">
-              Sends a transcript prefix to a stand-in model. It does not restore DB/RNG, execute
-              tools, run the user simulator, or grade a task.
-            </p>
-            {sourceTrace && (
-              <Link
-                to={`/trace/${encodeURIComponent(sourceTrace.meta.traceUid ?? sourceTrace.meta.traceId)}?tab=playground`}
-                className="mt-2 inline-block text-amber-700 underline"
-              >
-                Open LLM-only continuation
-              </Link>
-            )}
-          </div>
-        </section>
-
-        {sourceTrace && (
-          <section className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
-            <div className="flex flex-wrap items-center gap-2">
-              <b>Source trace</b>
-              <Link
-                to={`/trace/${encodeURIComponent(sourceTrace.meta.traceUid ?? sourceTrace.meta.traceId)}`}
-                className="font-mono text-blue-700 hover:underline"
-              >
-                {sourceTrace.meta.sourceTraceId ?? sourceTrace.meta.traceId}
-              </Link>
-              <span>task {scenarioId}</span>
-              <span>run {sourceTrace.meta.runId ?? 'unknown'}</span>
-              <span>seed {recordedSeed ?? 'unavailable'}</span>
-            </div>
-            {!sourceIsSimulation && (
-              <p className="mt-2 text-amber-700">
-                Production traces have no task-grade scenario contract. Save this trace as a
-                runnable regression scenario before a fresh ACE rerun.
-              </p>
-            )}
-            {sourceIsSimulation && recordedSeed === undefined && (
-              <p className="mt-2 text-amber-700">
-                This trace did not record an environment seed, so matched trace ancestry is disabled
-                instead of guessing one.
-              </p>
-            )}
-          </section>
-        )}
-
-        {task.isLoading ? (
-          <LoadingState label="Resolving authoritative task definition…" />
-        ) : !scenarioId || task.isError || !task.data || !scenarioFile ? (
-          <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
-            <b>Fresh task rerun unavailable.</b> Open the lab from a simulation trace or task
-            definition with an authoritative <code>configs/scenarios/*.json</code> source. No run
-            has been started.
-          </section>
-        ) : (
-          <>
-            {scenarioFiles.length > 1 && (
-              <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                This task ID has definitions in multiple packs ({scenarioFiles.join(', ')}). Review
-                the task conflict and explicitly choose the intended pack below.
-              </p>
-            )}
-            <AceRunLauncher
-              key={`${requestedTraceUid ?? 'task'}:${scenarioFile}:${scenarioId}:${seed}`}
-              title="Interactive task configuration"
-              initialValues={sourceInitialValues}
-              recordedConfig={sourceRecordedConfig}
-              initialScenarioFile={scenarioFile}
-              initialScenarioId={scenarioId}
-              initialSeed={seed}
-              initialRunKind="debug"
-              sourceTraceUid={traceBranchReady ? requestedTraceUid : undefined}
-              onStarted={updateRun}
-            />
-          </>
-        )}
-
-        {selectedRunId && (
-          <LiveRunMonitor runId={selectedRunId} sourceTrace={sourceTrace} instanceId={scenarioId} />
-        )}
-      </div>
-    </div>
+    <PlaygroundWorkbench
+      // Keyed remount: the config panel re-derives from a new source trace.
+      key={requestedTraceUid ?? 'blank'}
+      sourceTrace={sourceTrace}
+      requestedTraceUid={requestedTraceUid}
+      selectedRunId={selectedRunId}
+      initialConfig={initialPlaygroundConfig(
+        {
+          scenarioFile: search.get('scenarioFile') ?? undefined,
+          scenarioId: search.get('scenarioId') ?? undefined,
+          seed: search.get('seed') ?? undefined,
+        },
+        sourceTrace,
+      )}
+      onRunSelected={onRunSelected}
+    />
   )
 }

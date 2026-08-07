@@ -822,7 +822,7 @@ export default function AceTasksPage() {
                           to={labHref}
                           className="rounded-md bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
                         >
-                          Open Interactive Lab
+                          Open in Playground
                         </Link>
                       )}
                       {experimentHref && (

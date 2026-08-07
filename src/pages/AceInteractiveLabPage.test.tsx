@@ -1,5 +1,4 @@
 import type { AceBatchSummary } from '@shared/schema/ace'
-import type { AceTaskDetail } from '@shared/schema/aceTasks'
 import type { Trace } from '@shared/schema/types'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
@@ -8,62 +7,35 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   trace: vi.fn(),
   traces: vi.fn(),
-  task: vi.fn(),
-  checkpoints: vi.fn(),
+  tasks: vi.fn(),
+  capabilities: vi.fn(),
+  scenarios: vi.fn(),
+  startRun: vi.fn(),
   run: vi.fn(),
   runs: vi.fn(),
   control: vi.fn(),
+  checkpoints: vi.fn(),
+  replay: vi.fn(),
+  regressionCapability: vi.fn(),
+  saveRegression: vi.fn(),
 }))
 
 vi.mock('../api/hooks', () => ({
   useTrace: mocks.trace,
   useTraces: mocks.traces,
 }))
-vi.mock('../api/aceTasks', () => ({ useAceTask: mocks.task }))
+vi.mock('../api/aceTasks', () => ({ useAceTasks: mocks.tasks }))
 vi.mock('../api/ace', () => ({
-  useAceCheckpoints: mocks.checkpoints,
+  useAceCapabilities: mocks.capabilities,
+  useAceScenarios: mocks.scenarios,
+  useStartAceRun: mocks.startRun,
   useAceRun: mocks.run,
   useAceRuns: mocks.runs,
   useControlAceRun: mocks.control,
-}))
-vi.mock('../components/ace/AceRunLauncher', () => ({
-  ACE_RUN_FIDELITY_FIELDS: [
-    'prompt',
-    'model',
-    'userModel',
-    'transport',
-    'temperature',
-    'userTemperature',
-    'reasoningEffort',
-    'bot',
-    'botOpens',
-    'maxMessages',
-    'concurrency',
-    'stateScope',
-    'latentRefundBlockRate',
-    'toolFailBeforeRate',
-    'toolResponseLostRate',
-    'judge',
-    'judgeSample',
-    'semanticVerify',
-    'semanticVerifySample',
-    'checkpoints',
-  ],
-  AceRunLauncher: (props: Record<string, unknown>) => {
-    const initial = (props.initialValues ?? {}) as Record<string, unknown>
-    const recorded = (props.recordedConfig ?? {}) as { missing?: unknown[] }
-    return (
-      <div data-testid="launcher">
-        launcher:{String(props.initialScenarioFile)}:{String(props.initialScenarioId)}:
-        {String(props.initialSeed)}:{String(props.initialRunKind)}:{String(props.sourceTraceUid)}
-        <span>
-          config:{String(initial.prompt)}:{String(initial.model)}:{String(initial.userModel)}:
-          {String(initial.transport)}:{String(initial.bot)}:{String(initial.stateScope)}:missing-
-          {String(recorded.missing?.length)}
-        </span>
-      </div>
-    )
-  },
+  useAceCheckpoints: mocks.checkpoints,
+  useAceReplay: mocks.replay,
+  useAceRegressionCapability: mocks.regressionCapability,
+  useSaveAceRegression: mocks.saveRegression,
 }))
 
 import AceInteractiveLabPage from './AceInteractiveLabPage'
@@ -86,36 +58,28 @@ function sourceTrace(): Trace {
       extra: {
         environment_seed: 3,
         config_snapshot: {
-          runner: {
-            max_messages: 32,
-            concurrency: 2,
-            bot_opens: true,
-            state_scope: 'journey',
-            latent_refund_block_rate: 0,
-            tool_fail_before_rate: 0,
-            tool_response_lost_rate: 0,
-            judge_mode: 'off',
-            judge_sample: 1,
-            semantic_verify_mode: 'off',
-            semantic_verify_sample: 1,
-            checkpoint_enabled: true,
-          },
+          runner: {},
           spec: {
             prompt_source: { kind: 'preset', value: 'baseline' },
             bot_model: 'assistant-recorded',
-            user_model: 'user-recorded',
             bot_temperature: 0.3,
-            user_temperature: 0.9,
-            agent_transport: 'responses',
             reasoning_effort: 'low',
             bot: 'baseline',
           },
         },
       },
     },
-    messages: [],
+    messages: [
+      { id: 'm-0', role: 'user', content: 'My order is late' },
+      {
+        id: 'm-1',
+        role: 'assistant',
+        content: 'Let me check.',
+        metadata: { agentType: 'beta' },
+      },
+    ],
     stats: {
-      score: 0,
+      score: 1,
       hasError: false,
       truncated: false,
       inputTokens: 0,
@@ -127,89 +91,144 @@ function sourceTrace(): Trace {
       sandboxExecutions: 0,
       thinkingPortion: 0,
     },
+    evaluation: {
+      lifecycle: { state: 'completed' },
+      outcome: 'pass',
+      checks: [],
+      metrics: {},
+      failures: [],
+      flags: [],
+      worldDiff: [],
+      ledger: [],
+    },
   }
 }
 
-const task = {
-  scenarioId: 'scenario-01',
-  variants: [
-    {
-      sources: [{ pack: 'atomic', file: 'configs/scenarios/atomic.json' }],
-    },
-  ],
-} as AceTaskDetail
-
 const childRun = {
   runId: 'child-run',
-  runKind: 'counterfactual',
+  runKind: 'debug',
   schemaVersion: 3,
   manifestAvailable: true,
   controlsAvailable: true,
   lifecycle: 'running',
   updatedAt: '2026-08-06T00:00:00Z',
-  lineage: {
-    relation: 'fresh_task_rerun',
-    parentTraceUid: 'simulation:parent-run:episode-1',
-    parentRunId: 'parent-run',
-    fidelity: 'scenario_fresh_rerun_state_regenerated',
-    stateExact: false,
-    configExact: false,
-    llmExact: false,
-  },
   spec: {},
   totals: {
     episodes: 1,
-    passed: 0,
+    passed: 1,
     failedGrade: 0,
     runtimeErrors: 0,
     invalidUserSim: 0,
     userSimAttempts: null,
     invalidUserSimAttempts: null,
-    passRate: null,
+    passRate: 1,
     userSimValidityRate: null,
     userSimAttemptValidityRate: null,
     avgUserTurns: null,
     avgToolCalls: null,
     flagsMajor: 0,
     flagsMinor: 0,
-    costUsd: 0,
+    costUsd: 0.05,
   },
   failureChecks: [],
   terminations: [],
 } satisfies AceBatchSummary
 
-describe('ACE Interactive Lab page', () => {
+describe('Playground page', () => {
   beforeEach(() => {
     mocks.trace
       .mockReset()
-      .mockReturnValue({ data: sourceTrace(), isLoading: false, isError: false })
-    mocks.task.mockReset().mockReturnValue({ data: task, isLoading: false, isError: false })
-    mocks.checkpoints.mockReset().mockReturnValue({
+      .mockImplementation((uid?: string) =>
+        uid === undefined
+          ? { data: undefined, isLoading: false, isError: false }
+          : { data: sourceTrace(), isLoading: false, isError: false },
+      )
+    mocks.traces.mockReset().mockReturnValue({ data: { items: [], total: 0 } })
+    mocks.tasks.mockReset().mockReturnValue({
+      data: {
+        items: [
+          {
+            scenarioId: 'scenario-01',
+            issue: 'late_order',
+            sourceFiles: ['configs/scenarios/atomic.json'],
+          },
+          {
+            scenarioId: 'refund-02',
+            issue: 'refund',
+            sourceFiles: ['configs/scenarios/atomic.json'],
+          },
+          {
+            scenarioId: 'other-pack-1',
+            issue: null,
+            sourceFiles: ['configs/scenarios/multi.json'],
+          },
+        ],
+      },
+    })
+    mocks.capabilities.mockReset().mockReturnValue({ data: { available: true }, isLoading: false })
+    mocks.scenarios.mockReset().mockReturnValue({
+      data: { items: [{ file: 'atomic.json', count: 12 }] },
+    })
+    mocks.startRun
+      .mockReset()
+      .mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null })
+    mocks.run.mockReset().mockReturnValue({ data: childRun, isLoading: false, isError: false })
+    mocks.runs.mockReset().mockReturnValue({ data: { items: [childRun] } })
+    mocks.control.mockReset().mockReturnValue({ mutate: vi.fn(), isPending: false })
+    mocks.checkpoints.mockReset().mockReturnValue({ data: undefined })
+    mocks.replay.mockReset().mockReturnValue({ mutate: vi.fn(), isPending: false })
+    mocks.regressionCapability.mockReset().mockReturnValue({ data: undefined })
+    mocks.saveRegression.mockReset().mockReturnValue({ mutate: vi.fn(), isPending: false })
+  })
+
+  it('renders a left config panel prefilled from the source trace and a Run episode button', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab?trace=simulation%3Aparent-run%3Aepisode-1']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+
+    expect(html).toContain('Playground')
+    expect(html).toContain('data-testid="playground-config"')
+    expect(html).toContain('data-testid="playground-run-episode"')
+    // Recorded config prefilled: model input, seed, scenario id from provenance.
+    expect(html).toContain('value="assistant-recorded"')
+    expect(html).toMatch(/data-testid="playground-seed"[^>]*value="3"/)
+    expect(html).toContain('scenario-01')
+    expect(html).toContain('matched fresh rerun · lineage recorded')
+    // The three capability cards and the 30-field batch form are gone.
+    expect(html).not.toContain('Fresh task rerun · full ACE harness')
+    expect(html).not.toContain('Checkpoint fork · restored prefix/state')
+    expect(html).not.toContain('LLM-only continuation · no ACE execution')
+    expect(html).not.toContain('Concurrency')
+    expect(html).not.toContain('Response-lost rate')
+    expect(html).not.toContain('Judge sample')
+    // Batch escape hatch is signposted instead.
+    expect(html).toContain('Runs → New run')
+  })
+
+  it('renders the session area with conversation bubbles and the grade card for a run', () => {
+    const episodeSummary = sourceTrace()
+    mocks.traces.mockReturnValue({ data: { items: [episodeSummary], total: 1 } })
+    mocks.checkpoints.mockReturnValue({
       data: {
         available: true,
         forkAvailable: true,
         historicalReplayAvailable: false,
         missing: [],
-        checkpoints: [{ id: 0, phase: 'await_bot', branchable: true }],
+        checkpoints: [{ id: 0, phase: 'await_bot', branchable: true, message_count: 2 }],
       },
     })
-    mocks.run.mockReset().mockReturnValue({ data: childRun, isLoading: false, isError: false })
-    mocks.runs.mockReset().mockReturnValue({
+    mocks.regressionCapability.mockReturnValue({
       data: {
-        items: [
-          childRun,
-          {
-            ...childRun,
-            runId: 'sibling-run',
-          },
-        ],
+        available: true,
+        scenarioSnapshotAvailable: true,
+        expectedArtifactKind: 'runnable_scenario_pack',
+        explanation: 'ok',
+        missing: [],
       },
     })
-    mocks.control.mockReset().mockReturnValue({ mutate: vi.fn(), isPending: false })
-    mocks.traces.mockReset().mockReturnValue({ data: { items: [], total: 0 } })
-  })
 
-  it('keeps three fidelity modes distinct and prefills a matched fresh ACE branch', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter
         initialEntries={['/ace/lab?trace=simulation%3Aparent-run%3Aepisode-1&run=child-run']}
@@ -218,28 +237,17 @@ describe('ACE Interactive Lab page', () => {
       </MemoryRouter>,
     )
 
-    expect(html).toContain('Fresh task rerun · full ACE harness')
-    expect(html).toContain('Checkpoint fork · restored prefix/state')
-    expect(html).toContain('LLM-only continuation · no ACE execution')
-    expect(html).toContain(
-      'launcher:atomic.json:scenario-01:3:debug:simulation:parent-run:episode-1',
-    )
-    expect(html).toContain(
-      'config:baseline:assistant-recorded:user-recorded:responses:baseline:journey:missing-0',
-    )
-    expect(html).toContain('Open checkpoint fork controls')
-    expect(html).toContain('Compare parent run ↔ branch')
-    expect(html).toContain('Compare with sibling sibling-run')
-    expect(html).toContain('scenario_fresh_rerun_state_regenerated')
-    expect(html).toContain('state exact: false')
-    expect(html).toContain('Waiting for the first durable message')
+    expect(html).toContain('data-testid="playground-session"')
+    expect(html).toContain('data-role="user"')
+    expect(html).toContain('data-role="beta"')
+    expect(html).toContain('data-testid="playground-result-card"')
+    expect(html).toContain('cost $0.050')
+    expect(html).toContain('data-testid="playground-fork"')
+    expect(html).toContain('data-testid="playground-save-regression"')
+    expect(html).toContain('data-testid="playground-human-input"')
+    // LiveRunMonitor stays below the session as run status.
+    expect(html).toContain('data-testid="lab-live-run"')
     expect(html).toContain('Available now: pause, cancel')
-    const pauseAttributes = html.match(/<button([^>]*)>pause<\/button>/)?.[1]
-    const resumeAttributes = html.match(/<button([^>]*)>resume<\/button>/)?.[1]
-    const cancelAttributes = html.match(/<button([^>]*)>cancel<\/button>/)?.[1]
-    expect(pauseAttributes).not.toContain('disabled=""')
-    expect(resumeAttributes).toContain('disabled=""')
-    expect(cancelAttributes).not.toContain('disabled=""')
   })
 
   it('disables and explains every control for a completed run', () => {
@@ -261,31 +269,5 @@ describe('ACE Interactive Lab page', () => {
         'disabled=""',
       )
     }
-  })
-
-  it('does not guess checkpoint or matched-seed support when provenance is missing', () => {
-    const noSeed = sourceTrace()
-    noSeed.meta.extra = {}
-    mocks.trace.mockReturnValue({ data: noSeed, isLoading: false, isError: false })
-    mocks.checkpoints.mockReturnValue({
-      data: {
-        available: false,
-        forkAvailable: false,
-        historicalReplayAvailable: false,
-        missing: ['checkpoint archive', 'scenario/config snapshot'],
-        checkpoints: [],
-      },
-    })
-
-    const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/ace/lab?trace=simulation%3Aparent-run%3Aepisode-1']}>
-        <AceInteractiveLabPage />
-      </MemoryRouter>,
-    )
-
-    expect(html).toContain('Unavailable: checkpoint archive, scenario/config snapshot')
-    expect(html).toContain('did not record an environment seed')
-    expect(html).toContain('launcher:atomic.json:scenario-01:1:debug:undefined')
-    expect(html).not.toContain('launcher:atomic.json:scenario-01:1:debug:simulation:')
   })
 })

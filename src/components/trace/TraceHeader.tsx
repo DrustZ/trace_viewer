@@ -193,7 +193,7 @@ export function TraceHeader({
                   to={`/ace/lab?${new URLSearchParams({ trace: traceUid }).toString()}`}
                   className="text-xs font-medium text-violet-600 hover:underline"
                 >
-                  Open in lab
+                  Open in Playground
                 </Link>
               </>
             )}
