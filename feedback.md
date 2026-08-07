@@ -4,6 +4,40 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 8 — 2026-08-07 02:55
+
+### 状态
+
+codex 连续第二轮空闲（工作区干净），我把剩余 LOW 清了一部分。
+
+### 本轮 Claude 的直接修改（831 tests + tsc 全绿验证）
+
+1. **launcher 花钱幂等 key（Round 2 收口）** — `AceRunLauncher.submit` 现在每个提交会话
+   生成一次性 `viewer-<uuid>` 作为 `batchId`：失败重试复用同一 id（若上次其实已启动，
+   服务端以 run_already_active/duplicate 409 拒绝而不是再开一批），成功后清空。
+   Experiments 路径原本就传 `${experimentId}-a/-b`，现在两条花钱路径都有服务端幂等。
+
+### 有意不做的（记录决策）
+
+- **probe 失败 TTL**：我实现后发现你们的测试
+  `retries unavailable and digest-mismatch probes instead of caching failures`
+  显式固化了"失败不缓存、每请求重试"的设计（修好的 venv 立即恢复优先）。已回退，尊重
+  这个决策。观察：坏 venv 下 2s 轮询 ≈ 每 2s 一个快速失败的解释器（in-flight 去重只限
+  并发不限频率）。如果以后想改，建议 TTL + 可注入时钟，测试改为推进时间断言。
+- **probe 指纹 venv/symlink 盲区**：作为已知限制记录（非可编辑安装的依赖升级不会失效
+  缓存；symlink 的 .py 不进指纹）。本地工具威胁模型下可接受，文档里提一句即可。
+
+### 八轮总结（2026-08-06 22:00 → 08-07 02:55）
+
+- 测试 582 → 831，tsc/biome 全绿，全部 Critical/HIGH/MEDIUM 清零。
+- codex 修复亮点：Tailnet token 门 + IP 校验、dataRoots allowlist、SSE 定向失效、
+  probe 内容寻址缓存、overlay token 恢复、start READY 等待、control per-run flock。
+- Claude 直接修复 13 项：reviewStore 撕裂尾部、bridge stdin EPIPE、useAceRun 轮询、
+  ReplayTab 花费校验、三处花钱路径 in-flight 防护、experiments 部分失败自锁、
+  recordHasDisagreement、ReviewPanel autosave 竞态、traceStore uid 集合、
+  setSearch 合并、stateRank 全序、detectorAnalysisAvailable、informalSelectedRunIds、
+  launcher 幂等 batchId。
+
 ## Round 7 — 2026-08-07 02:20
 
 ### 状态

@@ -538,6 +538,10 @@ export function AceRunLauncher({
   // click landing before that would launch a second full batch of real spend.
   // The ref closes that window synchronously.
   const submitInFlight = useRef(false)
+  // Server-side idempotency: the same batchId is reused until a launch
+  // succeeds, so retrying after a lost response cannot start a second paid
+  // batch — the bridge rejects a duplicate/active run id with a 409 instead.
+  const pendingBatchId = useRef<string | null>(null)
   const submit = async () => {
     if (!available || submitInFlight.current) return
     const result = buildAceRunRequest(values, { sourceTraceUid })
@@ -546,8 +550,10 @@ export function AceRunLauncher({
       return
     }
     submitInFlight.current = true
+    const batchId = (pendingBatchId.current ??= `viewer-${crypto.randomUUID()}`)
     try {
-      const response = await start.mutateAsync(result.request)
+      const response = await start.mutateAsync({ ...result.request, batchId })
+      pendingBatchId.current = null
       onStarted?.(response.runId)
     } catch {
       // React Query exposes the server error below the controls.
