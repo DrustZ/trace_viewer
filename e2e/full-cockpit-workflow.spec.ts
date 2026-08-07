@@ -5,6 +5,7 @@ const PARENT_RUN = 'e2e-parent-run'
 const CHILD_RUN = 'e2e-counterfactual-run'
 const PARENT_TRACE = 'simulation:e2e-parent:trace-001'
 const CHILD_TRACE = 'simulation:e2e-child:trace-001'
+const MISMATCHED_CHILD_TRACE = 'simulation:e2e-child:trace-seed-8'
 const PAIR_KEY = `schedule-e2e:${SCENARIO_ID}:7`
 
 type RunRevision = 'one-message' | 'three-messages' | 'failed'
@@ -143,6 +144,21 @@ function trace(kind: 'parent' | 'child') {
               policyChanged: true,
             },
           }),
+    },
+  }
+}
+
+function mismatchedChildTrace() {
+  const candidate = trace('child')
+  return {
+    ...candidate,
+    meta: {
+      ...candidate.meta,
+      traceId: 'refund-child-seed-8',
+      traceUid: MISMATCHED_CHILD_TRACE,
+      sourceTraceId: 'refund-child-seed-8',
+      pairKey: `schedule-e2e:${SCENARIO_ID}:8`,
+      extra: { environment_seed: 8 },
     },
   }
 }
@@ -545,8 +561,8 @@ test('fixed local workflow launches, follows live progress, reviews, forks, and 
       const filters = url.searchParams.get('filters') ?? ''
       const child = filters.includes(CHILD_RUN)
       await fulfillJson(route, {
-        total: 1,
-        items: [trace(child ? 'child' : 'parent')],
+        total: child ? 2 : 1,
+        items: child ? [trace('child'), mismatchedChildTrace()] : [trace('parent')],
       })
       return
     }
@@ -556,6 +572,10 @@ test('fixed local workflow launches, follows live progress, reviews, forks, and 
     }
     if (pathname === `/api/traces/${encodeURIComponent(CHILD_TRACE)}`) {
       await fulfillJson(route, trace('child'))
+      return
+    }
+    if (pathname === `/api/traces/${encodeURIComponent(MISMATCHED_CHILD_TRACE)}`) {
+      await fulfillJson(route, mismatchedChildTrace())
       return
     }
 
@@ -682,6 +702,14 @@ test('fixed local workflow launches, follows live progress, reviews, forks, and 
   await expect(
     childColumn.getByText('Before I issue the refund, please confirm the exact amount.'),
   ).toBeVisible()
+
+  await page.goto(
+    `/compare?runA=${encodeURIComponent(PARENT_RUN)}&runB=${encodeURIComponent(CHILD_RUN)}&instance=${encodeURIComponent(SCENARIO_ID)}&traceA=${encodeURIComponent(PARENT_TRACE)}&traceB=${encodeURIComponent(MISMATCHED_CHILD_TRACE)}`,
+  )
+  await expect(page.getByTestId('aligned-ace-trace-mismatch')).toContainText(
+    'Aligned diff unavailable',
+  )
+  await expect(page.getByText('Aligned ACE trace diff')).toHaveCount(0)
 
   expect(unexpectedRequests).toEqual([])
   expect(externalRequests).toEqual([])

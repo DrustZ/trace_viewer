@@ -388,15 +388,30 @@ export function reviewsRoutes(deps: ReviewRoutesDeps): Router {
         const priorityDelta = priorityRank(b.priority) - priorityRank(a.priority)
         if (priorityDelta !== 0) return priorityDelta
         if (a.state !== b.state) return a.state === 'draft' ? -1 : 1
-        return (b.trace.timestamp ?? '').localeCompare(a.trace.timestamp ?? '')
+        return (
+          (b.trace.timestamp ?? '').localeCompare(a.trace.timestamp ?? '') ||
+          a.subject.traceUid.localeCompare(b.subject.traceUid)
+        )
       })
-      const limit = asBoundedInteger(req.query.limit, 100, 500)
-      const offset = asBoundedInteger(req.query.offset, 0, Number.MAX_SAFE_INTEGER)
+      const limit = Math.max(1, asBoundedInteger(req.query.limit, 100, 500))
+      const requestedOffset = asBoundedInteger(req.query.offset, 0, Number.MAX_SAFE_INTEGER)
+      const anchorTraceUid = firstParam(req.query.anchorTraceUid)
+      const anchorAbsoluteIndex = anchorTraceUid
+        ? filtered.findIndex((item) => item.subject.traceUid === anchorTraceUid)
+        : -1
+      const offset =
+        anchorAbsoluteIndex >= 0 ? Math.floor(anchorAbsoluteIndex / limit) * limit : requestedOffset
       res.json({
         total: filtered.length,
         limit,
         offset,
         items: filtered.slice(offset, offset + limit),
+        ...(anchorTraceUid
+          ? {
+              anchorFound: anchorAbsoluteIndex >= 0,
+              ...(anchorAbsoluteIndex >= 0 ? { anchorIndex: anchorAbsoluteIndex - offset } : {}),
+            }
+          : {}),
       } satisfies ReviewQueueResponse)
     }),
   )

@@ -204,6 +204,9 @@ test('review pagination is shareable, clamps stale offsets, and keyboard-next cr
   page,
 }) => {
   const paginatedTraces = Array.from({ length: 205 }, (_, index) => `page-trace-${index + 1}`)
+  const removedTraceUids = new Set<string>()
+  let liveTraceInserted = false
+  let failNextDraftSave = false
   await page.addInitScript(() => {
     class QuietEventSource {
       addEventListener() {}
@@ -216,13 +219,27 @@ test('review pagination is shareable, clamps stale offsets, and keyboard-next cr
     const url = new URL(request.url())
     const pathname = url.pathname
     if (pathname === '/api/reviews/queue') {
-      const offset = Number(url.searchParams.get('offset') ?? 0)
+      const visibleTraces = [
+        ...(liveTraceInserted ? ['page-trace-live-insert'] : []),
+        ...paginatedTraces,
+      ].filter((traceUid) => !removedTraceUids.has(traceUid))
+      const requestedOffset = Number(url.searchParams.get('offset') ?? 0)
       const limit = Number(url.searchParams.get('limit') ?? 200)
+      const anchorTraceUid = url.searchParams.get('anchorTraceUid')
+      const anchorAbsoluteIndex = anchorTraceUid ? visibleTraces.indexOf(anchorTraceUid) : -1
+      const offset =
+        anchorAbsoluteIndex >= 0 ? Math.floor(anchorAbsoluteIndex / limit) * limit : requestedOffset
       await fulfillJson(route, {
-        total: paginatedTraces.length,
+        total: visibleTraces.length,
         limit,
         offset,
-        items: paginatedTraces.slice(offset, offset + limit).map((traceUid, pageIndex) => {
+        ...(anchorTraceUid
+          ? {
+              anchorFound: anchorAbsoluteIndex >= 0,
+              ...(anchorAbsoluteIndex >= 0 ? { anchorIndex: anchorAbsoluteIndex - offset } : {}),
+            }
+          : {}),
+        items: visibleTraces.slice(offset, offset + limit).map((traceUid, pageIndex) => {
           const absoluteIndex = offset + pageIndex + 1
           return {
             subject: subject(traceUid),
@@ -255,6 +272,25 @@ test('review pagination is shareable, clamps stale offsets, and keyboard-next cr
     }
     if (pathname.startsWith('/api/reviews/') && pathname.endsWith('/draft')) {
       const traceUid = decodeURIComponent(pathname.split('/')[3] ?? '')
+      if (request.method() === 'PUT') {
+        if (failNextDraftSave) {
+          failNextDraftSave = false
+          await route.fulfill({ status: 500, body: 'simulated draft persistence failure' })
+          return
+        }
+        const body = request.postDataJSON()
+        removedTraceUids.add(traceUid)
+        await fulfillJson(route, {
+          ...body.subject,
+          ...body.review,
+          revision: body.expectedRevision ?? 1,
+          key: `draft-${traceUid}`,
+          locked: false,
+          createdAt: '2026-08-06T20:01:00.000Z',
+          updatedAt: '2026-08-06T20:01:00.000Z',
+        })
+        return
+      }
       await fulfillJson(route, {
         subject: subject(traceUid),
         trace: {
@@ -309,4 +345,36 @@ test('review pagination is shareable, clamps stale offsets, and keyboard-next cr
   await expect(page).toHaveURL(/offset=200/)
   await expect(page.getByText('Showing 201–205 of 205')).toBeVisible()
   await expect(page.getByText('Transcript for page-trace-201')).toBeVisible()
+
+  await page.getByLabel('Previous review page').click()
+  await page.getByText('Case 200', { exact: true }).click()
+  await page.getByLabel('Overall note').fill('Move this trace into the draft queue.')
+  await page.getByRole('heading', { name: 'Human review', exact: true }).click()
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect(page).not.toHaveURL(/offset=/)
+  await expect(page.getByText('Showing 1–200 of 204')).toBeVisible()
+  await expect(page.getByText('Transcript for page-trace-201')).toBeVisible()
+
+  liveTraceInserted = true
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect(page).toHaveURL(/offset=200/)
+  await expect(page.getByText('Showing 201–205 of 205')).toBeVisible()
+  await expect(page.getByText('Transcript for page-trace-202')).toBeVisible()
+
+  await page.getByLabel('Overall note').fill('Persist before clicking Previous.')
+  failNextDraftSave = true
+  await page.getByLabel('Previous review page').click()
+  await expect(page).toHaveURL(/offset=200/)
+  await expect(page.getByLabel('Overall note')).toHaveValue('Persist before clicking Previous.')
+  await expect(page.getByText(/Queue change cancelled/)).toBeVisible()
+
+  await page.getByLabel('Previous review page').click()
+  await expect(page).not.toHaveURL(/offset=/)
+  await expect(page.getByText('Showing 1–200 of 204')).toBeVisible()
+  await expect(page.getByText('Select a trace to start human review.')).toBeVisible()
+
+  await page.goBack()
+  await expect(page).toHaveURL(/offset=200/)
+  await expect(page.getByText('Select a trace to start human review.')).toBeVisible()
+  await expect(page.getByText('Transcript for page-trace-202')).toHaveCount(0)
 })

@@ -211,6 +211,8 @@ export interface BatchEpisode {
   environmentSeed: number
   /** False when a legacy display-only `seed` fallback supplied the value. */
   environmentSeedRecorded?: boolean
+  /** Explicit manifest identities disagreed; this episode must not be paired. */
+  identityConflicts?: string[]
   sourceFile?: string
   status?: string
   phase?: string

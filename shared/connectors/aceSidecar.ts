@@ -62,14 +62,18 @@ function batchEpisode(value: Record<string, unknown>): BatchEpisode | null {
     numberValue(value.environment_seed) ?? numberValue(value.environmentSeed)
   const environmentSeed = recordedEnvironmentSeed ?? numberValue(value.seed)
   if (!scenarioId || environmentSeed === undefined) return null
+  const environmentSeedRecorded =
+    recordedEnvironmentSeed !== undefined &&
+    Number.isSafeInteger(recordedEnvironmentSeed) &&
+    recordedEnvironmentSeed >= 0
   return {
     ...value,
     scenarioId,
     environmentSeed,
-    environmentSeedRecorded:
-      recordedEnvironmentSeed !== undefined &&
-      Number.isSafeInteger(recordedEnvironmentSeed) &&
-      recordedEnvironmentSeed >= 0,
+    environmentSeedRecorded,
+    ...(recordedEnvironmentSeed !== undefined && !environmentSeedRecorded
+      ? { identityConflicts: ['invalid_environment_seed'] }
+      : {}),
     sourceFile: stringValue(value.file) ?? stringValue(value.sourceFile),
     status: stringValue(value.status),
     phase: stringValue(value.phase),
@@ -86,6 +90,41 @@ function batchEpisodeKey(episode: BatchEpisode): string {
   return episode.sourceFile ?? `${episode.scenarioId}\0${episode.environmentSeed}`
 }
 
+function mergeBatchEpisode(
+  previous: BatchEpisode | undefined,
+  current: BatchEpisode,
+): BatchEpisode {
+  if (!previous) return current
+  const conflicts = new Set([
+    ...(previous.identityConflicts ?? []),
+    ...(current.identityConflicts ?? []),
+  ])
+  if (previous.scenarioId !== current.scenarioId) conflicts.add('scenario_id')
+  if (
+    previous.environmentSeedRecorded === true &&
+    current.environmentSeedRecorded === true &&
+    previous.environmentSeed !== current.environmentSeed
+  ) {
+    conflicts.add('environment_seed')
+  }
+  // An explicit environment_seed is authoritative over a legacy display-only
+  // seed, regardless of whether it arrived in episode_states or episodes.
+  const explicitSeedEpisode =
+    current.environmentSeedRecorded === true
+      ? current
+      : previous.environmentSeedRecorded === true
+        ? previous
+        : current
+  return {
+    ...previous,
+    ...current,
+    environmentSeed: explicitSeedEpisode.environmentSeed,
+    environmentSeedRecorded:
+      previous.environmentSeedRecorded === true || current.environmentSeedRecorded === true,
+    ...(conflicts.size > 0 ? { identityConflicts: [...conflicts].sort() } : {}),
+  }
+}
+
 /** Strict enough to exclude unrelated JSON while retaining future manifest fields. */
 export function parseAceBatchManifest(value: unknown): BatchSummary | null {
   if (!isRecord(value)) return null
@@ -100,7 +139,7 @@ export function parseAceBatchManifest(value: unknown): BatchSummary | null {
   const byEpisode = new Map(scheduled.map((episode) => [batchEpisodeKey(episode), episode]))
   for (const episode of completed) {
     const key = batchEpisodeKey(episode)
-    byEpisode.set(key, { ...byEpisode.get(key), ...episode })
+    byEpisode.set(key, mergeBatchEpisode(byEpisode.get(key), episode))
   }
   const lifecycle = snakeRecord(value.lifecycle)
   const episodes = [...byEpisode.values()]
@@ -464,10 +503,12 @@ function outcomeOf(
   lifecycle: TraceEvaluation['lifecycle']['state'],
   invalid: boolean,
   gradePassed: boolean | undefined,
+  quarantined = false,
 ): TraceOutcome {
   if (lifecycle === 'failed') return 'runtime_error'
-  if (invalid) return 'invalid'
   if (lifecycle !== 'completed') return 'ungraded'
+  if (quarantined) return 'ungraded'
+  if (invalid) return 'invalid'
   if (gradePassed === true) return 'pass'
   if (gradePassed === false) return 'fail'
   return 'ungraded'
@@ -500,14 +541,15 @@ export function applyAceArtifacts(
     (candidate) => !sourceFile || candidate.sourceFile === sourceFile,
   )
 
-  const scenarioId =
-    stringValue(sourceExtra.scenario_id) ??
-    stringValue(sourceExtra.scenarioId) ??
-    episode?.scenarioId
+  const sourceScenarioId =
+    stringValue(sourceExtra.scenario_id) ?? stringValue(sourceExtra.scenarioId)
+  const scenarioId = sourceScenarioId ?? episode?.scenarioId
   const recordedSourceEnvironmentSeed =
     numberValue(sourceExtra.environment_seed) ?? numberValue(sourceExtra.environmentSeed)
   const environmentSeed = recordedSourceEnvironmentSeed ?? episode?.environmentSeed
-  const scheduleDigest = context.batch?.scheduleDigest ?? stringValue(provenance.schedule_digest)
+  const batchScheduleDigest = context.batch?.scheduleDigest
+  const sidecarScheduleDigest = stringValue(provenance.schedule_digest)
+  const scheduleDigest = batchScheduleDigest ?? sidecarScheduleDigest
   const recordedEnvironmentSeed =
     recordedSourceEnvironmentSeed ??
     (episode?.environmentSeedRecorded === true ? episode.environmentSeed : undefined)
@@ -517,13 +559,48 @@ export function applyAceArtifacts(
     recordedEnvironmentSeed >= 0
       ? recordedEnvironmentSeed
       : undefined
+  const identityConflicts = new Set(episode?.identityConflicts ?? [])
+  if (
+    recordedSourceEnvironmentSeed !== undefined &&
+    (!Number.isSafeInteger(recordedSourceEnvironmentSeed) || recordedSourceEnvironmentSeed < 0)
+  ) {
+    identityConflicts.add('invalid_environment_seed')
+  }
+  if (sourceScenarioId && episode?.scenarioId && sourceScenarioId !== episode.scenarioId) {
+    identityConflicts.add('scenario_id')
+  }
+  if (
+    recordedSourceEnvironmentSeed !== undefined &&
+    episode?.environmentSeedRecorded === true &&
+    recordedSourceEnvironmentSeed !== episode.environmentSeed
+  ) {
+    identityConflicts.add('environment_seed')
+  }
+  if (
+    batchScheduleDigest &&
+    sidecarScheduleDigest &&
+    batchScheduleDigest !== sidecarScheduleDigest
+  ) {
+    identityConflicts.add('schedule_digest')
+  }
   const pairKey =
-    scheduleDigest && scenarioId && pairableEnvironmentSeed !== undefined
+    identityConflicts.size === 0 &&
+    scheduleDigest &&
+    scenarioId &&
+    pairableEnvironmentSeed !== undefined
       ? `${scheduleDigest}:${scenarioId}:${pairableEnvironmentSeed}`
       : undefined
 
   const metrics = isRecord(rawEvaluation.metrics) ? rawEvaluation.metrics : {}
-  const rawStatus = episode?.status ?? metrics.status
+  const episodeStatus = episode?.status
+  const metricsStatus = stringValue(metrics.status)
+  const parsedFailedStatus = parsed.meta.status === 'failed' ? parsed.meta.status : undefined
+  const statusStates = [episodeStatus, metricsStatus, parsedFailedStatus]
+    .map((value) => (value === undefined ? undefined : lifecycleState(value, 'unknown')))
+    .filter((value): value is TraceEvaluation['lifecycle']['state'] => value !== undefined)
+  const lifecycleConflict = new Set(statusStates).size > 1
+  const anyFailedStatus = statusStates.includes('failed')
+  const rawStatus = anyFailedStatus ? 'failed' : (episodeStatus ?? metricsStatus)
   const status = traceStatus(rawStatus, parsed.meta.status)
   const lifecycle = lifecycleState(rawStatus, status)
   const pendingPhase =
@@ -535,7 +612,15 @@ export function applyAceArtifacts(
   const termination =
     episode?.termination ?? stringValue(metrics.termination) ?? stringValue(sourceExtra.termination)
   const checks = normalizeChecks(grade.checks)
-  const gradePassed = booleanValue(grade.passed) ?? episode?.gradePassed ?? undefined
+  const sidecarGradePassed = booleanValue(grade.passed)
+  const batchGradePassed = episode?.gradePassed ?? undefined
+  const gradeConflict =
+    sidecarGradePassed !== undefined &&
+    batchGradePassed !== undefined &&
+    sidecarGradePassed !== batchGradePassed
+  const gradePassed = gradeConflict
+    ? undefined
+    : (sidecarGradePassed ?? batchGradePassed ?? undefined)
   const userSimGate = normalizeUserGate(
     sidecar.user_sim_gate ?? sidecar.userSimGate,
     parsed.messages,
@@ -577,6 +662,36 @@ export function applyAceArtifacts(
   })
 
   const failures: FailureV1[] = genericFailures(parsed, ledger)
+  if (identityConflicts.size > 0) {
+    failures.push({
+      origin: 'integrity',
+      code: 'ace_identity_conflict',
+      severity: 'major',
+      gating: false,
+      evidence: { fields: [...identityConflicts].sort() },
+      source: 'ace.artifact_merge',
+    })
+  }
+  if (lifecycleConflict) {
+    failures.push({
+      origin: 'integrity',
+      code: 'ace_lifecycle_conflict',
+      severity: 'major',
+      gating: false,
+      evidence: { batch: episodeStatus, sidecar: metricsStatus, trace: parsedFailedStatus },
+      source: 'ace.artifact_merge',
+    })
+  }
+  if (gradeConflict) {
+    failures.push({
+      origin: 'integrity',
+      code: 'ace_grade_conflict',
+      severity: 'major',
+      gating: false,
+      evidence: { batch: batchGradePassed, sidecar: sidecarGradePassed },
+      source: 'ace.artifact_merge',
+    })
+  }
   if (lifecycle === 'failed') {
     failures.push({
       origin: 'runtime',
@@ -696,7 +811,21 @@ export function applyAceArtifacts(
     })
   }
 
-  const invalid = userSimGate?.invalid ?? episode?.invalidUserSim ?? false
+  const sidecarInvalid = userSimGate?.invalid
+  const batchInvalid = episode?.invalidUserSim
+  const invalidConflict =
+    sidecarInvalid !== undefined && batchInvalid !== undefined && sidecarInvalid !== batchInvalid
+  if (invalidConflict) {
+    failures.push({
+      origin: 'integrity',
+      code: 'ace_user_sim_validity_conflict',
+      severity: 'major',
+      gating: false,
+      evidence: { batch: batchInvalid, sidecar: sidecarInvalid },
+      source: 'ace.artifact_merge',
+    })
+  }
+  const invalid = invalidConflict ? false : (sidecarInvalid ?? batchInvalid ?? false)
   const normalizedFailures = dedupeFailures(failures)
   const messages = parsed.messages.map((message, index) => {
     const rawIndex = message.rawIndex ?? index
@@ -725,7 +854,12 @@ export function applyAceArtifacts(
 
   const evaluation: TraceEvaluation = {
     lifecycle: { state: lifecycle, termination, pendingPhase },
-    outcome: outcomeOf(lifecycle, invalid, gradePassed),
+    outcome: outcomeOf(
+      lifecycle,
+      invalid,
+      gradePassed,
+      identityConflicts.size > 0 || lifecycleConflict || gradeConflict || invalidConflict,
+    ),
     checks,
     metrics,
     failures: normalizedFailures,

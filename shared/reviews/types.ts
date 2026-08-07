@@ -302,6 +302,9 @@ export interface ReviewQueueResponse {
   limit: number
   offset: number
   items: ReviewQueueItem[]
+  /** Present on an anchored read; index is relative to this returned page. */
+  anchorFound?: boolean
+  anchorIndex?: number
 }
 
 export interface ReviewWorkspaceResponse {

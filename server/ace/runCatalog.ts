@@ -100,8 +100,14 @@ function runKind(value: unknown, schemaVersion: number): AceRunKind {
 function outcome(row: Record<string, unknown>): AceEvaluationOutcome {
   const status = string(row.status)
   if (status === 'failed' || status === 'error') return 'runtime_error'
-  if (row.invalid_user_sim === true) return 'invalid'
   if (status !== 'completed') return 'ungraded'
+  if ('environment_seed' in row && !validSeed(number(row.environment_seed, Number.NaN))) {
+    return 'ungraded'
+  }
+  if (Array.isArray(row.__identity_conflicts) && row.__identity_conflicts.length > 0) {
+    return 'ungraded'
+  }
+  if (row.invalid_user_sim === true) return 'invalid'
   const grade = record(row.grade)
   if (typeof grade.passed === 'boolean') return grade.passed ? 'pass' : 'fail'
   return 'ungraded'
@@ -116,7 +122,9 @@ function episodeOf(
   scheduleDigest: string | undefined,
 ): AceBatchEpisode | null {
   const scenarioId = string(row.scenario_id)
-  const seed = number(row.environment_seed, number(row.seed, Number.NaN))
+  const explicitEnvironmentSeed = number(row.environment_seed, Number.NaN)
+  const legacySeed = number(row.seed, Number.NaN)
+  const seed = validSeed(explicitEnvironmentSeed) ? explicitEnvironmentSeed : legacySeed
   const file = string(row.file)
   if (!scenarioId || !validSeed(seed) || !file) return null
   const checks = Array.isArray(record(row.grade).checks) ? record(row.grade).checks : []
@@ -126,7 +134,7 @@ function episodeOf(
     .map((check) => string(check.name))
     .filter((name): name is string => name !== undefined)
   const flags = record(row.flag_summary)
-  const explicitEnvironmentSeed = number(row.environment_seed, Number.NaN)
+  const identityConflicts = Array.isArray(row.__identity_conflicts) ? row.__identity_conflicts : []
   const environmentSeed = validSeed(explicitEnvironmentSeed) ? explicitEnvironmentSeed : seed
   return {
     scenarioId,
@@ -153,9 +161,40 @@ function episodeOf(
       ? { userSimInvalidAttempts: number(row.user_sim_invalid_attempts) }
       : {}),
     environmentSeed,
-    ...(scheduleDigest && validSeed(explicitEnvironmentSeed)
+    ...(scheduleDigest && validSeed(explicitEnvironmentSeed) && identityConflicts.length === 0
       ? { pairKey: `${scheduleDigest}:${scenarioId}:${explicitEnvironmentSeed}` }
       : {}),
+  }
+}
+
+function mergeEpisodeRows(
+  previous: Record<string, unknown> | undefined,
+  current: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!previous) return current
+  const conflicts = new Set<string>([
+    ...(Array.isArray(previous.__identity_conflicts)
+      ? previous.__identity_conflicts.filter((value): value is string => typeof value === 'string')
+      : []),
+  ])
+  const previousScenario = string(previous.scenario_id)
+  const currentScenario = string(current.scenario_id)
+  if (previousScenario && currentScenario && previousScenario !== currentScenario) {
+    conflicts.add('scenario_id')
+  }
+  const previousEnvironmentSeed = number(previous.environment_seed, Number.NaN)
+  const currentEnvironmentSeed = number(current.environment_seed, Number.NaN)
+  if (
+    Number.isFinite(previousEnvironmentSeed) &&
+    Number.isFinite(currentEnvironmentSeed) &&
+    previousEnvironmentSeed !== currentEnvironmentSeed
+  ) {
+    conflicts.add('environment_seed')
+  }
+  return {
+    ...previous,
+    ...current,
+    ...(conflicts.size > 0 ? { __identity_conflicts: [...conflicts].sort() } : {}),
   }
 }
 
@@ -176,11 +215,12 @@ export async function readAceBatch(manifestPath: string): Promise<AceBatchSummar
   const completedRows = Array.isArray(raw.episodes) ? raw.episodes.map(record) : []
   const stateRows = Array.isArray(raw.episode_states) ? raw.episode_states.map(record) : []
   const episodeKey = (row: Record<string, unknown>) =>
-    `${String(row.scenario_id ?? '')}\0${String(row.environment_seed ?? row.seed ?? '')}\0${String(row.file ?? '')}`
+    string(row.file) ??
+    `${String(row.scenario_id ?? '')}\0${String(row.environment_seed ?? row.seed ?? '')}`
   const mergedRows = new Map(stateRows.map((row) => [episodeKey(row), row]))
   for (const row of completedRows) {
     const key = episodeKey(row)
-    mergedRows.set(key, { ...mergedRows.get(key), ...row })
+    mergedRows.set(key, mergeEpisodeRows(mergedRows.get(key), row))
   }
   const episodes = [...mergedRows.values()]
     .map((row) => episodeOf(row, scheduleDigest))

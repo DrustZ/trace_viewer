@@ -366,6 +366,68 @@ describe('ACE cockpit routes', () => {
     expect(bridge.calls.filter((call) => call.command === 'control')).toHaveLength(0)
   })
 
+  it('propagates trace-side artifact quarantine into run outcomes and pairing', async () => {
+    const runId = 'artifact-conflict-run'
+    const traceId = 'conflicted-s3'
+    const added = await addTrace(traceId, 'simulation', runId, '.json', true)
+    const conflicted = traceFixture(traceId, 'simulation', runId)
+    conflicted.meta.pairKey = 'schedule-a:scenario-01:3'
+    conflicted.evaluation = {
+      lifecycle: { state: 'completed' },
+      outcome: 'ungraded',
+      checks: [{ name: 'OUTCOME', ok: false, gating: true }],
+      metrics: {},
+      failures: [
+        {
+          origin: 'integrity',
+          code: 'ace_grade_conflict',
+          severity: 'major',
+          gating: false,
+          source: 'ace.artifact_merge',
+        },
+      ],
+      flags: [],
+      worldDiff: [],
+      ledger: [],
+    }
+    store.upsert(conflicted, added.sourcePath)
+
+    const batchDirectory = path.join(config.runRoot, runId)
+    await fs.writeFile(
+      path.join(batchDirectory, 'batch.json'),
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: runId,
+        run_kind: 'scored',
+        schedule_digest: 'schedule-a',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 1, passed: 1 },
+        episodes: [
+          {
+            scenario_id: 'scenario-01',
+            environment_seed: 3,
+            file: `${traceId}.json`,
+            status: 'completed',
+            grade: {
+              passed: true,
+              checks: [{ name: 'OUTCOME', ok: false, gating: true }],
+            },
+          },
+        ],
+      }),
+    )
+
+    const response = await request(buildApp(store, bridge, config)).get(`/api/ace/runs/${runId}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.episodes).toEqual([
+      expect.objectContaining({ traceUid: added.traceUid, outcome: 'ungraded' }),
+    ])
+    expect(response.body.episodes[0]).not.toHaveProperty('pairKey')
+    expect(response.body.totals).toMatchObject({ passed: 0, failedGrade: 0, passRate: null })
+    expect(response.body.failureChecks).toEqual([])
+  })
+
   it('makes production and trace-only runs reachable as read-only synthesized summaries', async () => {
     const production = await addTrace('production-only', 'production', 'production')
     const simulation = await addTrace('simulation-only', 'simulation', 'trace-only-simulation')

@@ -40,6 +40,39 @@ export interface SubmitReviewResponse {
   automatic?: ReviewRecord['automaticSnapshot']
 }
 
+function reviewQueueSearch(
+  filters: ReviewQueueFilters,
+  options: { anchorTraceUid?: string } = {},
+): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries({
+    annotator: filters.annotator,
+    rubricVersion: filters.rubricVersion,
+    mode: filters.mode,
+    state: filters.state,
+    priority: filters.priority,
+    corpusId: filters.corpusId,
+    runId: filters.runId,
+    q: filters.q,
+    disagreement: filters.disagreement,
+    limit: filters.limit,
+    offset: filters.offset,
+  })) {
+    if (value !== undefined && value !== '') search.set(key, String(value))
+  }
+  for (const tag of filters.tags ?? []) search.append('tag', tag)
+  if (options.anchorTraceUid) search.set('anchorTraceUid', options.anchorTraceUid)
+  return search.toString()
+}
+
+/** Uncached read used when keyboard navigation must revalidate a mutable queue boundary. */
+export function fetchReviewQueue(
+  filters: ReviewQueueFilters,
+  options: { anchorTraceUid?: string } = {},
+): Promise<ReviewQueueResponse> {
+  return apiGet<ReviewQueueResponse>(`/api/reviews/queue?${reviewQueueSearch(filters, options)}`)
+}
+
 function queryString(values: object): string {
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(values)) {
@@ -76,27 +109,10 @@ async function apiPut<T>(path: string, body: unknown): Promise<T> {
 }
 
 export function useReviewQueue(filters: ReviewQueueFilters) {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries({
-    annotator: filters.annotator,
-    rubricVersion: filters.rubricVersion,
-    mode: filters.mode,
-    state: filters.state,
-    priority: filters.priority,
-    corpusId: filters.corpusId,
-    runId: filters.runId,
-    q: filters.q,
-    disagreement: filters.disagreement,
-    limit: filters.limit,
-    offset: filters.offset,
-  })) {
-    if (value !== undefined && value !== '') search.set(key, String(value))
-  }
-  for (const tag of filters.tags ?? []) search.append('tag', tag)
-  const serialized = search.toString()
+  const serialized = reviewQueueSearch(filters)
   return useQuery({
     queryKey: ['review-queue', serialized],
-    queryFn: () => apiGet<ReviewQueueResponse>(`/api/reviews/queue?${serialized}`),
+    queryFn: () => fetchReviewQueue(filters),
   })
 }
 

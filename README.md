@@ -184,7 +184,7 @@ cp .env.example .env    # set ANTHROPIC_API_KEY
 | `npm run build` / `npm start` | typecheck + build; production single-port serve |
 | `npm run generate:all` / `npm run generate` | regenerate the corpus (all runs / run-a), seeded + deterministic |
 | `npm run test:e2e` | deterministic Playwright cockpit workflows (all APIs mocked; no provider spend) |
-| `npm test` / `npm run lint` / `npm run check` | vitest (598 tests) / biome / everything |
+| `npm test` / `npm run lint` / `npm run check` | vitest (821 tests) / biome / everything |
 
 ## Architecture
 

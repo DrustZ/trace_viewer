@@ -473,7 +473,10 @@ export default function AceRunsPage() {
                     </thead>
                     <tbody>
                       {activeEpisodes.map((row) => (
-                        <tr key={row.pairKey} className="border-t border-slate-100">
+                        <tr
+                          key={row.pairKey ?? row.sourceTraceId}
+                          className="border-t border-slate-100"
+                        >
                           <td className="px-3 py-2 font-mono">
                             {row.traceUid ? (
                               <Link
@@ -727,7 +730,10 @@ export default function AceRunsPage() {
                         ...(trace?.judgeDisagreement ? ['judge disagreement'] : []),
                       ].filter((value, index, all) => all.indexOf(value) === index)
                       return (
-                        <tr key={row.pairKey} className="border-t border-slate-100">
+                        <tr
+                          key={row.pairKey ?? row.sourceTraceId}
+                          className="border-t border-slate-100"
+                        >
                           <td className="px-3 py-2 font-mono">
                             {row.traceUid ? (
                               <Link

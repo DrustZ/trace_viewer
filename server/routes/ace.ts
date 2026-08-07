@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { Router } from 'express'
 import type {
+  AceBatchEpisode,
   AceBatchSummary,
   AceEvaluationOutcome,
   AceRunKind,
@@ -449,6 +450,63 @@ export function aceRoutes(
         .sort((left, right) => right.count - left.count || left.code.localeCompare(right.code))
     }
 
+    const episodeWithoutPairKey = (episode: AceBatchEpisode): AceBatchEpisode => {
+      const { pairKey: _pairKey, ...unpaired } = episode
+      return unpaired
+    }
+
+    const reconcileEpisode = (
+      episode: AceBatchEpisode,
+      candidates: typeof aceTraces,
+    ): AceBatchEpisode => {
+      if (candidates.length === 0) return episode
+      if (candidates.length > 1) {
+        return {
+          ...episodeWithoutPairKey(episode),
+          outcome: episode.outcome === 'runtime_error' ? 'runtime_error' : 'ungraded',
+        }
+      }
+      const summary = candidates[0]
+      if (!summary) return episode
+      const traceUid = summary.meta.traceUid ?? summary.meta.traceId
+      const traceOutcome = (summary.evaluation?.outcome ?? 'ungraded') as AceEvaluationOutcome
+      const artifactConflict = (summary.evaluation?.failures ?? []).some((failure) =>
+        /^ace_.*_conflict$/.test(failure.code),
+      )
+      const pairMismatch = episode.pairKey !== undefined && summary.meta.pairKey !== episode.pairKey
+      const quarantined = artifactConflict || pairMismatch
+      const outcome =
+        traceOutcome === 'runtime_error' ? 'runtime_error' : quarantined ? 'ungraded' : traceOutcome
+      const unpaired = episodeWithoutPairKey(episode)
+      return {
+        ...unpaired,
+        traceUid,
+        outcome,
+        ...(episode.pairKey && !quarantined && summary.meta.pairKey === episode.pairKey
+          ? { pairKey: episode.pairKey }
+          : {}),
+      }
+    }
+
+    const totalsForEpisodes = (
+      batch: AceBatchSummary,
+      episodes: readonly AceBatchEpisode[],
+    ): AceBatchSummary['totals'] => {
+      const passed = episodes.filter((episode) => episode.outcome === 'pass').length
+      const failedGrade = episodes.filter((episode) => episode.outcome === 'fail').length
+      const runtimeErrors = episodes.filter((episode) => episode.outcome === 'runtime_error').length
+      const invalidUserSim = episodes.filter((episode) => episode.outcome === 'invalid').length
+      const executed = passed + failedGrade
+      return {
+        ...batch.totals,
+        passed,
+        failedGrade,
+        runtimeErrors,
+        invalidUserSim,
+        passRate: executed > 0 ? passed / executed : null,
+      }
+    }
+
     const synthesizedRun = (
       runId: string,
       summaries: typeof aceTraces,
@@ -558,14 +616,10 @@ export function aceRoutes(
       const traces = sortedTraceProjections(byRun.get(batch.runId) ?? [])
       const episodes = (batch.episodes ?? []).map((episode) => {
         const candidates = byRunAndSource.get(`${batch.runId}\0${episode.sourceTraceId}`) ?? []
-        return {
-          ...episode,
-          // A duplicate producer id inside one run is an integrity problem;
-          // never pick one trace silently.
-          ...(candidates.length === 1
-            ? { traceUid: candidates[0].meta.traceUid ?? candidates[0].meta.traceId }
-            : {}),
-        }
+        // A duplicate producer id or a trace-side artifact disagreement is an
+        // integrity problem. Keep runtime failures visible, but never let an
+        // ambiguous unit enter formal pass/fail or paired statistics.
+        return reconcileEpisode(episode, candidates)
       })
       const scheduledSources = new Set(episodes.map((episode) => episode.sourceTraceId))
       const terminal = new Set(['completed', 'cancelled', 'failed', 'error'])
@@ -580,6 +634,12 @@ export function aceRoutes(
             ? { lineage: recordedLineage.get(batch.runId) }
             : {}),
         episodes,
+        totals: totalsForEpisodes(batch, episodes),
+        failureChecks: counted(
+          episodes
+            .filter((episode) => episode.outcome === 'fail')
+            .flatMap((episode) => episode.failedChecks),
+        ),
         traces,
         reconciliation: {
           scheduledEpisodes: batch.totals.episodes,

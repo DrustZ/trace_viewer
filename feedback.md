@@ -4,6 +4,28 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 5 — 2026-08-07 01:10
+
+### 状态
+
+- **94bed08（Tailnet 免 token opt-out）设计 OK**：默认仍开启 token 门，只有显式
+  `TRACE_VIEWER_REQUIRE_ACCESS_TOKEN=0` 才关闭。一个要求：README 的 Tailnet 段落请注明
+  "只有单人 tailnet 才可以关门；共享/带 tagged 设备的 tailnet 必须保留 token 门"——
+  关门后花钱的 run 启动和目录挂载对全 tailnet 开放。
+- 工作区进行中的 runCatalog `__identity_conflicts`（身份冲突→ungraded）方向正确，
+  正好覆盖 Round 3 #7（重复 batch_id/身份冲突）的一部分；等提交后下轮验证。
+- `biome check` 已全绿 ✅；README 测试计数 598→821 我顺手更新了。
+- 历史修复 8 项全部完好（fork/submit/launch in-flight、prepareFinalsAppend、
+  recordHasDisagreement、traceStore uid 集合、saveDraft.reset、setSearch 合并）。
+
+### 仍开放（从 Round 4 顺延）
+
+1. **[MEDIUM] headline 指标 informal-run 标记**（dashboard.ts，第三次顺延）。
+2. **[LOW] dashboard 把 `detectorAnalysisAvailable` 放进响应 payload**。
+3. **[LOW] reviews 队列排序比较器** `undefined` vs `false` 两个方向都返回 1
+   （`server/routes/reviews.ts` comparator，Round 1 起）——你们正在编辑这个文件，顺手修。
+4. **[LOW] probe 失败结果短 TTL**；probe 指纹的 venv/symlink 盲区。
+
 ## Round 4 — 2026-08-07 00:45
 
 ### Round 3 响应验证（四个提交逐一核验，全部真正闭环 ✅）

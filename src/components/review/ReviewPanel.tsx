@@ -25,7 +25,10 @@ export interface ReviewPanelProps {
   className?: string
   autosaveDelayMs?: number
   onSubmitted?: (record: ReviewRecord) => void
-  onNext?: () => void
+  onNext?: () => void | Promise<void>
+  onNavigationGuardChange?: (guard: (() => Promise<boolean>) | null) => void
+  /** Keep hook/form state alive while hiding all review evidence during a pending URL transition. */
+  suspended?: boolean
 }
 
 function payloadOf(workspace: ReviewWorkspaceResponse): ReviewPayload {
@@ -127,6 +130,8 @@ export function ReviewPanel({
   autosaveDelayMs = 800,
   onSubmitted,
   onNext,
+  onNavigationGuardChange,
+  suspended = false,
 }: ReviewPanelProps) {
   const workspaceQuery = useReviewWorkspace(subject)
   const saveDraft = useSaveReviewDraft()
@@ -220,6 +225,13 @@ export function ReviewPanel({
     }
   }, [locked, nextRevision, payload, saveDraft, subject])
 
+  useEffect(() => {
+    if (!onNavigationGuardChange) return
+    const guard = async () => (!dirty || locked ? true : saveCurrent())
+    onNavigationGuardChange(guard)
+    return () => onNavigationGuardChange(null)
+  }, [dirty, locked, onNavigationGuardChange, saveCurrent])
+
   const submitCurrent = useCallback(async (): Promise<void> => {
     if (!payload || locked || submitInFlight.current) return
     submitInFlight.current = true
@@ -254,14 +266,14 @@ export function ReviewPanel({
     nextInFlight.current = true
     try {
       if (dirty && !locked && !(await saveCurrent())) return
-      onNext()
+      await onNext()
     } finally {
       nextInFlight.current = false
     }
   }, [dirty, locked, onNext, saveCurrent])
 
   useEffect(() => {
-    if (!dirty || !payload || locked) return
+    if (!dirty || !payload || locked || suspended) return
     const version = editVersion.current
     const timer = window.setTimeout(() => {
       // A submit in flight will append and lock the final; a late autosave
@@ -281,11 +293,11 @@ export function ReviewPanel({
         })
     }, autosaveDelayMs)
     return () => window.clearTimeout(timer)
-  }, [autosaveDelayMs, dirty, locked, payload, saveDraft, subject, nextRevision])
+  }, [autosaveDelayMs, dirty, locked, payload, saveDraft, subject, nextRevision, suspended])
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      if (!workspaceReady) return
+      if (!workspaceReady || suspended) return
       const shortcut = reviewShortcutFor(event)
       if (shortcut === 'next' && onNext) {
         event.preventDefault()
@@ -341,6 +353,7 @@ export function ReviewPanel({
     payload,
     saveCurrent,
     submitCurrent,
+    suspended,
     update,
     visibleFailureIds,
     workspaceReady,
@@ -367,6 +380,17 @@ export function ReviewPanel({
   const groundTruth = workspaceQuery.data?.trace.groundTruth
   const groundTruthView =
     groundTruth === undefined ? undefined : groundTruthPresentation(groundTruth)
+
+  if (suspended) {
+    return (
+      <aside
+        aria-live="polite"
+        className={`rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 ${className}`}
+      >
+        Saving the current draft before changing the review queue…
+      </aside>
+    )
+  }
 
   if (workspaceQuery.isLoading || !payload || loadedSubject.current !== subjectKey) {
     return <aside className={`p-4 text-sm text-slate-500 ${className}`}>Loading review…</aside>

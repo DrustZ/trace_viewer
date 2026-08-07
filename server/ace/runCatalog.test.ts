@@ -384,9 +384,11 @@ describe('ACE live batch catalog', () => {
       }),
     )
     const seedContract = await readAceBatch(manifestPath)
-    expect(seedContract.episodes).toHaveLength(2)
+    expect(seedContract.episodes).toHaveLength(3)
     expect(seedContract.episodes?.[0]?.pairKey).toBe('schedule-a:explicit:7')
     expect(seedContract.episodes?.[1]).not.toHaveProperty('pairKey')
+    expect(seedContract.episodes?.[2]).toMatchObject({ outcome: 'ungraded' })
+    expect(seedContract.episodes?.[2]).not.toHaveProperty('pairKey')
   })
 
   it('keeps runtime, invalid, and nonterminal grading conflicts out of each other', async () => {
@@ -412,7 +414,10 @@ describe('ACE live batch catalog', () => {
           row('runtime', 'failed', { invalid_user_sim: true, grade: { passed: true } }),
           row('invalid', 'completed', { invalid_user_sim: true, grade: { passed: true } }),
           row('running', 'running', { grade: { passed: false } }),
-          row('cancelled', 'cancelled', { grade: { passed: false } }),
+          row('cancelled', 'cancelled', {
+            invalid_user_sim: true,
+            grade: { passed: false },
+          }),
         ],
       }),
     )
@@ -423,5 +428,64 @@ describe('ACE live batch catalog', () => {
       'ungraded',
       'ungraded',
     ])
+  })
+
+  it('keeps state identity authority and refuses conflicts when manifest rows merge', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ace-merged-identity-'))
+    fixtures.push(directory)
+    const manifestPath = path.join(directory, 'batch.json')
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'merged-identity',
+        schedule_digest: 'schedule-a',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 2 },
+        episode_states: [
+          {
+            scenario_id: 'preserved',
+            environment_seed: 7,
+            file: 'preserved.json',
+            status: 'running',
+          },
+          {
+            scenario_id: 'conflict-a',
+            environment_seed: 8,
+            file: 'conflict.json',
+            status: 'running',
+          },
+        ],
+        episodes: [
+          {
+            scenario_id: 'preserved',
+            seed: 7,
+            file: 'preserved.json',
+            status: 'completed',
+            grade: { passed: true },
+          },
+          {
+            scenario_id: 'conflict-b',
+            environment_seed: 9,
+            file: 'conflict.json',
+            status: 'completed',
+            grade: { passed: true },
+          },
+        ],
+      }),
+    )
+
+    const batch = await readAceBatch(manifestPath)
+    expect(batch.episodes).toHaveLength(2)
+    expect(batch.episodes?.find((episode) => episode.sourceTraceId === 'preserved')?.pairKey).toBe(
+      'schedule-a:preserved:7',
+    )
+    expect(
+      batch.episodes?.find((episode) => episode.sourceTraceId === 'conflict'),
+    ).not.toHaveProperty('pairKey')
+    expect(batch.episodes?.find((episode) => episode.sourceTraceId === 'conflict')?.outcome).toBe(
+      'ungraded',
+    )
+    expect(batch.totals).toMatchObject({ passed: 1, failedGrade: 0 })
   })
 })

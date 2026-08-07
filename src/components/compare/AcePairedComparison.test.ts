@@ -141,4 +141,18 @@ describe('ACE matched-pair links', () => {
       n: 0,
     })
   })
+
+  it('labels its small-sample normal interval and computes comparable n explicitly', () => {
+    const pairing = pairAceRuns(
+      [episode('schedule:one:1', 'fail', 'a-one'), episode('schedule:two:1', 'pass', 'a-two')],
+      [episode('schedule:one:1', 'pass', 'b-one'), episode('schedule:two:1', 'pass', 'b-two')],
+    )
+
+    expect(pairedPassInterval(pairing.pairs)).toEqual({
+      delta: 0.5,
+      low: expect.closeTo(-0.48, 10),
+      high: 1,
+      n: 2,
+    })
+  })
 })

@@ -139,8 +139,13 @@ describe('ACE artifacts', () => {
     const fractional = applyAceArtifacts(parsed(), {
       meta: { extra: { scenario_id: 'scenario-a', environment_seed: 1.5 } },
       provenance: { schedule_digest: 'schedule-a' },
+      evaluation: { metrics: { status: 'completed' }, grade: { passed: true } },
     })
     expect(fractional.meta.pairKey).toBeUndefined()
+    expect(fractional.evaluation?.outcome).toBe('ungraded')
+    expect(fractional.evaluation?.failures).toContainEqual(
+      expect.objectContaining({ code: 'ace_identity_conflict' }),
+    )
 
     const legacySeedOnly = parseAceBatchManifest({
       schema_version: 3,
@@ -162,6 +167,86 @@ describe('ACE artifacts', () => {
         sourceFile: 'episode-s7.json',
       }).meta.pairKey,
     ).toBeUndefined()
+  })
+
+  it('retains an explicit state seed when the completed row only repeats a legacy seed', () => {
+    const batch = parseAceBatchManifest({
+      schema_version: 3,
+      batch_id: 'merged-seed-authority',
+      schedule_digest: 'schedule-a',
+      episode_states: [
+        {
+          scenario_id: 'scenario-a',
+          environment_seed: 7,
+          file: 'episode-s7.json',
+          status: 'running',
+        },
+      ],
+      episodes: [
+        {
+          scenario_id: 'scenario-a',
+          seed: 7,
+          file: 'episode-s7.json',
+          status: 'completed',
+          grade: { passed: true },
+        },
+      ],
+    })
+
+    expect(batch?.episodes).toEqual([
+      expect.objectContaining({ environmentSeed: 7, environmentSeedRecorded: true }),
+    ])
+    expect(
+      applyAceArtifacts(parsed(), undefined, {
+        batch,
+        sourceFile: 'episode-s7.json',
+      }).meta.pairKey,
+    ).toBe('schedule-a:scenario-a:7')
+  })
+
+  it('quarantines conflicting explicit identity sources instead of silently choosing one', () => {
+    const batch = parseAceBatchManifest({
+      schema_version: 3,
+      batch_id: 'identity-conflict',
+      schedule_digest: 'schedule-batch',
+      episode_states: [
+        {
+          scenario_id: 'scenario-a',
+          environment_seed: 7,
+          file: 'episode-s7.json',
+          status: 'running',
+        },
+      ],
+      episodes: [
+        {
+          scenario_id: 'scenario-b',
+          environment_seed: 8,
+          file: 'episode-s7.json',
+          status: 'completed',
+          grade: { passed: true },
+        },
+      ],
+    })
+    const trace = applyAceArtifacts(
+      parsed(),
+      {
+        meta: { extra: { scenario_id: 'scenario-c', environment_seed: 9 } },
+        provenance: { schedule_digest: 'schedule-sidecar' },
+      },
+      { batch, sourceFile: 'episode-s7.json' },
+    )
+
+    expect(trace.meta.pairKey).toBeUndefined()
+    expect(trace.evaluation?.outcome).toBe('ungraded')
+    expect(trace.evaluation?.failures).toContainEqual(
+      expect.objectContaining({
+        origin: 'integrity',
+        code: 'ace_identity_conflict',
+        evidence: {
+          fields: expect.arrayContaining(['scenario_id', 'environment_seed', 'schedule_digest']),
+        },
+      }),
+    )
   })
 
   it('gives runtime and lifecycle state precedence over conflicting grade metadata', () => {
@@ -193,6 +278,13 @@ describe('ACE artifacts', () => {
           status: 'running',
           grade: { passed: false },
         },
+        {
+          scenario_id: 'cancelled-invalid',
+          environment_seed: 1,
+          file: 'cancelled-invalid.json',
+          status: 'cancelled',
+          invalid_user_sim: true,
+        },
       ],
     })
     expect(batch).not.toBeNull()
@@ -206,6 +298,56 @@ describe('ACE artifacts', () => {
     expect(
       applyAceArtifacts(parsed(), undefined, { batch, sourceFile: 'running.json' }).evaluation,
     ).toMatchObject({ lifecycle: { state: 'executing' }, outcome: 'ungraded' })
+    expect(
+      applyAceArtifacts(parsed(), undefined, {
+        batch,
+        sourceFile: 'cancelled-invalid.json',
+      }).evaluation,
+    ).toMatchObject({ lifecycle: { state: 'cancelled' }, outcome: 'ungraded' })
+  })
+
+  it('quarantines lifecycle, grade, and user-sim disagreements while failed always wins', () => {
+    const batch = parseAceBatchManifest({
+      schema_version: 3,
+      batch_id: 'evaluation-conflicts',
+      schedule_digest: 'schedule-a',
+      episodes: [
+        {
+          scenario_id: 'quarantined',
+          environment_seed: 1,
+          file: 'episode-s7.json',
+          status: 'completed',
+          invalid_user_sim: false,
+          grade: { passed: true },
+        },
+      ],
+    })
+    const quarantined = applyAceArtifacts(
+      parsed(),
+      {
+        evaluation: { metrics: { status: 'running' }, grade: { passed: false } },
+        user_sim_gate: { valid: false, invalid: true, violations: [] },
+      },
+      { batch, sourceFile: 'episode-s7.json' },
+    )
+    expect(quarantined.evaluation).toMatchObject({ outcome: 'ungraded' })
+    expect(quarantined.evaluation?.failures.map((failure) => failure.code)).toEqual(
+      expect.arrayContaining([
+        'ace_lifecycle_conflict',
+        'ace_grade_conflict',
+        'ace_user_sim_validity_conflict',
+      ]),
+    )
+
+    const failed = applyAceArtifacts(
+      parsed(),
+      { evaluation: { metrics: { status: 'failed' }, grade: { passed: true } } },
+      { batch, sourceFile: 'episode-s7.json' },
+    )
+    expect(failed.evaluation).toMatchObject({
+      lifecycle: { state: 'failed' },
+      outcome: 'runtime_error',
+    })
   })
 
   it('normalizes the complete sidecar without mixing shadow findings into grade gating', () => {

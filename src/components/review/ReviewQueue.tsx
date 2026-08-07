@@ -13,7 +13,7 @@ export interface ReviewQueueProps {
   filters?: ReviewQueueFilters
   selectedTraceUid?: string
   className?: string
-  onFiltersChange?: (filters: ReviewQueueFilters) => void
+  onFiltersChange?: (filters: ReviewQueueFilters, navigation?: 'replace' | 'push') => void
   onItemsChange?: (items: readonly ReviewQueueItem[]) => void
   onPageDataChange?: (page: ReviewQueueResponse) => void
   onSelect?: (subject: ReviewSubject, item: ReviewQueueItem) => void
@@ -87,10 +87,13 @@ export function ReviewQueue({
   const queue = useReviewQueue(filters)
 
   const setFilters = useCallback(
-    (update: (previous: ReviewQueueFilters) => ReviewQueueFilters): void => {
+    (
+      update: (previous: ReviewQueueFilters) => ReviewQueueFilters,
+      navigation: 'replace' | 'push' = 'replace',
+    ): void => {
       const next = update(filters)
       if (controlledFilters === undefined) setUncontrolledFilters(next)
-      onFiltersChange?.(next)
+      onFiltersChange?.(next, navigation)
     },
     [controlledFilters, filters, onFiltersChange],
   )
@@ -278,11 +281,15 @@ export function ReviewQueue({
       {!queue.isLoading && queue.data?.items.length === 0 ? (
         <p className="p-6 text-center text-sm text-slate-500">No traces match this queue.</p>
       ) : null}
-      <ol className="max-h-[calc(100vh-18rem)] divide-y divide-slate-100 overflow-auto">
+      <ol
+        aria-busy={queue.isFetching}
+        className="max-h-[calc(100vh-18rem)] divide-y divide-slate-100 overflow-auto"
+      >
         {queue.data?.items.map((item) => (
           <li key={`${item.subject.traceUid}:${item.subject.mode}`}>
             <button
               type="button"
+              aria-pressed={selectedTraceUid === item.subject.traceUid}
               onClick={() => onSelect?.(item.subject, item)}
               className={`w-full p-3 text-left hover:bg-slate-50 ${
                 selectedTraceUid === item.subject.traceUid ? 'bg-blue-50' : ''
@@ -344,8 +351,8 @@ export function ReviewQueue({
         <ReviewQueuePagination
           page={queue.data}
           disabled={queue.isFetching}
-          onPrevious={(offset) => setFilters((previous) => ({ ...previous, offset }))}
-          onNext={(offset) => setFilters((previous) => ({ ...previous, offset }))}
+          onPrevious={(offset) => setFilters((previous) => ({ ...previous, offset }), 'push')}
+          onNext={(offset) => setFilters((previous) => ({ ...previous, offset }), 'push')}
         />
       ) : null}
     </section>

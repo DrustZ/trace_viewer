@@ -249,6 +249,54 @@ describe('/api/reviews', () => {
     expect(JSON.stringify(guessedRun.body)).not.toContain(REAL_RUN_ID)
   })
 
+  it('keeps queue pagination reachable when a client sends limit zero', async () => {
+    const { app } = testApp()
+    const queue = await request(app).get(
+      '/api/reviews/queue?mode=assisted&annotator=local&rubricVersion=judge_v2&limit=0',
+    )
+
+    expect(queue.status).toBe(200)
+    expect(queue.body).toMatchObject({ total: 1, limit: 1, offset: 0 })
+    expect(queue.body.items).toHaveLength(1)
+  })
+
+  it('returns the page containing a stable review anchor after live reordering', async () => {
+    const { app } = testApp([
+      {
+        trace: {
+          corpusId: 'simulation',
+          runId: REAL_RUN_ID,
+          traceUid: 'trace-newest',
+          sourceTraceId: 'trace-newest',
+          timestamp: '2026-08-06T02:00:00.000Z',
+        },
+      },
+      {
+        trace: {
+          corpusId: 'simulation',
+          runId: REAL_RUN_ID,
+          traceUid: 'trace-middle',
+          sourceTraceId: 'trace-middle',
+          timestamp: '2026-08-06T01:00:00.000Z',
+        },
+      },
+    ])
+
+    const queue = await request(app).get(
+      '/api/reviews/queue?mode=assisted&annotator=local&rubricVersion=judge_v2&limit=2&offset=0&anchorTraceUid=trace-uid-1',
+    )
+
+    expect(queue.status).toBe(200)
+    expect(queue.body).toMatchObject({
+      total: 3,
+      limit: 2,
+      offset: 2,
+      anchorFound: true,
+      anchorIndex: 0,
+      items: [{ subject: { traceUid: 'trace-uid-1' } }],
+    })
+  })
+
   it('server-redacts calibration data until immutable submit, then reveals it', async () => {
     const { app, reviewStore } = testApp()
     const blind = await request(app).get(
