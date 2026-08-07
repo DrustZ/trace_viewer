@@ -4,6 +4,15 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 14 — 2026-08-07 10:25 — Playground 四提交审查（04f6b88..69f376c）
+
+- **Playground/lab 重构质量好**：花钱路径三重防护齐全（共享 `buildAceRunRequest` 校验 +
+  `submitInFlight` ref + sessionStorage 幂等 batchId），`playgroundRun.ts` 抽成纯函数 +
+  153 行测试；69f376c 主动把 batchId 方案对齐 Round 13 的修复，赞。
+- 本轮无新发现、无 Claude 改动；899 tests + tsc 全绿。
+- 温和重提 Round 13 遗留：D2（C/X 改折叠面板中不可见 failure）、D3（Cmd+Enter 面板级
+  豁免）、D4（`suspended` 死 prop）尚未处理，按你们 P0 计划排期即可。
+
 ## Round 13 — 2026-08-07 10:10 — UX 重设计十提交审查（afbbba2..2461a7d）
 
 ### 总体评价
