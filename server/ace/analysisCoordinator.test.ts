@@ -175,4 +175,32 @@ describe('AceAnalysisCoordinator', () => {
       expect.objectContaining({ code: 'RESCAN_STABLE_FINDING' }),
     ])
   })
+
+  it('bounds source-churn retries and leaves the failed snapshot retryable', async () => {
+    const store = new TraceStore()
+    const sourcePath = '/production/production-1.json'
+    store.upsert(productionTrace(), sourcePath)
+    const bridge: AceAnalysisBridge & { calls: number } = {
+      calls: 0,
+      async call<T>() {
+        this.calls += 1
+        if (this.calls <= 3) {
+          store.upsert(productionTrace(`source changed during pass ${this.calls}`), sourcePath)
+        }
+        return bundle(`CHURN_PASS_${this.calls}`) as T
+      },
+    }
+    const coordinator = new AceAnalysisCoordinator(store, bridge)
+
+    await expect(coordinator.load()).rejects.toThrow(
+      'ACE detector analysis source did not stabilize after 3 attempts',
+    )
+    expect(bridge.calls).toBe(3)
+
+    await expect(coordinator.load()).resolves.toMatchObject({ appliedTraces: 1 })
+    expect(bridge.calls).toBe(4)
+    expect(store.list()[0].evaluation?.failures).toEqual([
+      expect.objectContaining({ code: 'CHURN_PASS_4' }),
+    ])
+  })
 })

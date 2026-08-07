@@ -5,6 +5,8 @@ import { type AppliedAnalysisBundle, applyAceAnalysisBundleDetailed } from './an
 import { productionAnalysisSourceFingerprint } from './analysisSource'
 
 const ANALYSIS_TIMEOUT_MS = 10 * 60 * 1000
+const SCAN_STABILITY_TIMEOUT_MS = 60 * 1000
+const MAX_SOURCE_STABILITY_ATTEMPTS = 3
 
 export interface AceAnalysisBridge {
   call<T>(command: 'analyze', params: Record<string, unknown>, timeoutMs?: number): Promise<T>
@@ -50,7 +52,13 @@ export class AceAnalysisCoordinator implements AceAnalysisLoader {
   ) {}
 
   private async waitForStableScan(): Promise<void> {
-    while (getScanProgress().scanning) await delay(50)
+    const deadline = Date.now() + SCAN_STABILITY_TIMEOUT_MS
+    while (getScanProgress().scanning) {
+      if (Date.now() >= deadline) {
+        throw new Error('ACE detector analysis timed out waiting for a stable trace scan')
+      }
+      await delay(50)
+    }
   }
 
   private currentSourceFingerprint(): string {
@@ -64,7 +72,7 @@ export class AceAnalysisCoordinator implements AceAnalysisLoader {
 
   private async analyzeUntilStable(sourceFingerprint: string): Promise<AppliedAnalysisBundle> {
     let expectedFingerprint = sourceFingerprint
-    while (true) {
+    for (let attempt = 1; attempt <= MAX_SOURCE_STABILITY_ATTEMPTS; attempt += 1) {
       const response = await this.bridge.call<{ bundle: unknown }>(
         'analyze',
         { corpusPath: '.', output: 'stdout' },
@@ -73,6 +81,11 @@ export class AceAnalysisCoordinator implements AceAnalysisLoader {
       await this.waitForStableScan()
       const currentFingerprint = this.currentSourceFingerprint()
       if (currentFingerprint !== expectedFingerprint) {
+        if (attempt === MAX_SOURCE_STABILITY_ATTEMPTS) {
+          throw new Error(
+            `ACE detector analysis source did not stabilize after ${MAX_SOURCE_STABILITY_ATTEMPTS} attempts`,
+          )
+        }
         expectedFingerprint = currentFingerprint
         continue
       }
@@ -96,6 +109,7 @@ export class AceAnalysisCoordinator implements AceAnalysisLoader {
       }
       return applied.summary
     }
+    throw new Error('ACE detector analysis source did not stabilize')
   }
 
   private overlayIsApplied(successful: SuccessfulAnalysis): boolean {
