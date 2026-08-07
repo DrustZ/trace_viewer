@@ -1,7 +1,7 @@
 import type { ReviewQueueItem, ReviewQueueResponse, ReviewSubject } from '@shared/reviews/types'
 import { useCallback, useEffect, useState } from 'react'
 import { type ReviewQueueFilters, useReviewQueue } from '../../api/reviews'
-import { ReviewFilterPresets } from './ReviewFilterPresets'
+import { ReviewQueueFiltersPopover } from './ReviewQueueFiltersPopover'
 import {
   DEFAULT_REVIEW_QUEUE_FILTERS,
   normalizedReviewQueueOffset,
@@ -17,10 +17,6 @@ export interface ReviewQueueProps {
   onItemsChange?: (items: readonly ReviewQueueItem[]) => void
   onPageDataChange?: (page: ReviewQueueResponse) => void
   onSelect?: (subject: ReviewSubject, item: ReviewQueueItem) => void
-}
-
-function selectClass(): string {
-  return 'rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-800'
 }
 
 export function ReviewQueuePagination({
@@ -68,6 +64,18 @@ export function ReviewQueuePagination({
   )
 }
 
+/** Everything beyond state/priority/disagreement moves into the row tooltip. */
+export function reviewQueueItemTooltip(item: ReviewQueueItem): string | undefined {
+  const parts = [
+    item.rootCauseTags.length > 0 ? `tags: ${item.rootCauseTags.join(', ')}` : undefined,
+    item.automatic?.outcome ? `outcome: ${item.automatic.outcome}` : undefined,
+    item.automatic?.detectorAnalysis?.status === 'unavailable'
+      ? 'detectors unavailable'
+      : undefined,
+  ].filter((part): part is string => Boolean(part))
+  return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
 export function ReviewQueue({
   initialFilters,
   filters: controlledFilters,
@@ -83,7 +91,6 @@ export function ReviewQueue({
     ...initialFilters,
   })
   const filters = controlledFilters ?? uncontrolledFilters
-  const [query, setQuery] = useState(filters.q ?? '')
   const queue = useReviewQueue(filters)
 
   const setFilters = useCallback(
@@ -97,10 +104,6 @@ export function ReviewQueue({
     },
     [controlledFilters, filters, onFiltersChange],
   )
-
-  useEffect(() => {
-    setQuery(filters.q ?? '')
-  }, [filters.q])
 
   useEffect(() => {
     const page = queue.data
@@ -117,159 +120,17 @@ export function ReviewQueue({
   }, [filters.offset, onItemsChange, onPageDataChange, queue.data, setFilters])
 
   return (
-    <section className={`overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
-      <header className="space-y-3 border-b border-slate-200 p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">Review queue</h2>
-            <p className="text-xs text-slate-500">
-              {queue.data ? `${queue.data.total} traces` : 'Loading…'}
-            </p>
-          </div>
-          <div className="flex rounded-md border border-slate-300 p-0.5">
-            {(['calibration', 'assisted'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() =>
-                  setFilters((previous) => ({
-                    ...previous,
-                    mode,
-                    runId: mode === 'calibration' ? undefined : previous.runId,
-                    offset: 0,
-                  }))
-                }
-                className={`rounded px-2 py-1 text-xs ${
-                  filters.mode === mode ? 'bg-slate-900 text-white' : 'text-slate-600'
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
+    <section
+      className={`flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-slate-200 p-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Review queue</h2>
+          <p className="text-xs text-slate-500">
+            {queue.data ? `${queue.data.total} traces · ${filters.mode}` : 'Loading…'}
+          </p>
         </div>
-        <form
-          className="flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setFilters((previous) => ({ ...previous, q: query.trim() || undefined, offset: 0 }))
-          }}
-        >
-          <input
-            aria-label="Search reviews"
-            className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm"
-            value={query}
-            placeholder="Trace, issue, language, tag…"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <button type="submit" className="rounded-md bg-slate-900 px-3 py-2 text-xs text-white">
-            Filter
-          </button>
-        </form>
-        <div className="grid grid-cols-3 gap-2">
-          <select
-            aria-label="Review corpus"
-            className={selectClass()}
-            value={filters.corpusId ?? ''}
-            onChange={(event) =>
-              setFilters((previous) => ({
-                ...previous,
-                corpusId: event.target.value || undefined,
-                offset: 0,
-              }))
-            }
-          >
-            <option value="ace">ACE · all</option>
-            <option value="production">Production</option>
-            <option value="simulation">Simulation</option>
-            <option value="">All data</option>
-          </select>
-          <select
-            aria-label="Review state"
-            className={selectClass()}
-            value={filters.state ?? ''}
-            onChange={(event) =>
-              setFilters((previous) => ({
-                ...previous,
-                state: (event.target.value || undefined) as ReviewQueueFilters['state'],
-                offset: 0,
-              }))
-            }
-          >
-            <option value="">All states</option>
-            <option value="unreviewed">Unreviewed</option>
-            <option value="draft">Draft</option>
-            <option value="submitted">Submitted</option>
-          </select>
-          <select
-            aria-label="Review priority"
-            className={selectClass()}
-            value={filters.priority ?? ''}
-            onChange={(event) =>
-              setFilters((previous) => ({
-                ...previous,
-                priority: (event.target.value || undefined) as ReviewQueueFilters['priority'],
-                offset: 0,
-              }))
-            }
-          >
-            <option value="">All priorities</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-            <option value="none">None</option>
-          </select>
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <input
-            aria-label="Annotator"
-            className={selectClass()}
-            value={filters.annotator}
-            onChange={(event) =>
-              setFilters((previous) => ({ ...previous, annotator: event.target.value, offset: 0 }))
-            }
-          />
-          <input
-            aria-label="Rubric version"
-            className={selectClass()}
-            value={filters.rubricVersion}
-            onChange={(event) =>
-              setFilters((previous) => ({
-                ...previous,
-                rubricVersion: event.target.value,
-                offset: 0,
-              }))
-            }
-          />
-          {filters.mode === 'assisted' ? (
-            <input
-              aria-label="Run ID"
-              className={selectClass()}
-              value={filters.runId ?? ''}
-              placeholder="Run ID (optional)"
-              onChange={(event) =>
-                setFilters((previous) => ({
-                  ...previous,
-                  runId: event.target.value.trim() || undefined,
-                  offset: 0,
-                }))
-              }
-            />
-          ) : (
-            <div className={`${selectClass()} text-xs text-violet-700`}>
-              Run/arm hidden in Calibration
-            </div>
-          )}
-        </div>
-        <ReviewFilterPresets
-          filters={filters}
-          onApply={(presetFilters) => setFilters(() => presetFilters)}
-        />
-        <p className="text-[11px] text-slate-500">
-          The page URL is the current filter source of truth, so this queue can be bookmarked or
-          shared.
-        </p>
+        <ReviewQueueFiltersPopover filters={filters} onSetFilters={setFilters} />
       </header>
 
       {queue.error ? (
@@ -283,13 +144,14 @@ export function ReviewQueue({
       ) : null}
       <ol
         aria-busy={queue.isFetching}
-        className="max-h-[calc(100vh-18rem)] divide-y divide-slate-100 overflow-auto"
+        className="max-h-[calc(100vh-13rem)] min-h-0 flex-1 divide-y divide-slate-100 overflow-auto"
       >
         {queue.data?.items.map((item) => (
           <li key={`${item.subject.traceUid}:${item.subject.mode}`}>
             <button
               type="button"
               aria-pressed={selectedTraceUid === item.subject.traceUid}
+              title={reviewQueueItemTooltip(item)}
               onClick={() => onSelect?.(item.subject, item)}
               className={`w-full p-3 text-left hover:bg-slate-50 ${
                 selectedTraceUid === item.subject.traceUid ? 'bg-blue-50' : ''
@@ -316,33 +178,20 @@ export function ReviewQueue({
                   .filter(Boolean)
                   .join(' · ') || item.subject.runId}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-                {item.priority !== 'none' ? (
-                  <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">
-                    {item.priority}
-                  </span>
-                ) : null}
-                {item.hasDisagreement ? (
-                  <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-700">
-                    disagreement
-                  </span>
-                ) : null}
-                {item.rootCauseTags.map((tag) => (
-                  <span key={tag} className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
-                    {tag}
-                  </span>
-                ))}
-                {item.automatic?.outcome ? (
-                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700">
-                    {item.automatic.outcome}
-                  </span>
-                ) : null}
-                {item.automatic?.detectorAnalysis?.status === 'unavailable' ? (
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">
-                    detectors unavailable
-                  </span>
-                ) : null}
-              </div>
+              {item.priority !== 'none' || item.hasDisagreement ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  {item.priority !== 'none' ? (
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">
+                      {item.priority}
+                    </span>
+                  ) : null}
+                  {item.hasDisagreement ? (
+                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-700">
+                      disagreement
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </button>
           </li>
         ))}

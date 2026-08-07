@@ -81,6 +81,30 @@ export function reviewQueuePageWindow(
 }
 
 /**
+ * One filter edit from the Filters popover: merge the patch, keep every other
+ * parameter (q, tags, disagreement, …) untouched, and restart at page one.
+ */
+export function patchReviewQueueFilters(
+  filters: ReviewQueueFilters,
+  patch: Partial<ReviewQueueFilters>,
+): ReviewQueueFilters {
+  return { ...filters, ...patch, offset: 0 }
+}
+
+/** How many narrowing filters are active, for the Filters button badge. */
+export function activeReviewQueueFilterCount(filters: ReviewQueueFilters): number {
+  return [
+    filters.state,
+    filters.priority,
+    filters.corpusId,
+    filters.runId,
+    filters.q,
+    filters.tags?.length ? 'tags' : undefined,
+    filters.disagreement !== undefined ? 'disagreement' : undefined,
+  ].filter((value) => value !== undefined).length
+}
+
+/**
  * Only explicit review-queue parameters are accepted. In particular, model,
  * arm, grade, detector, and judge query parameters can never enter the queue
  * state used by blind Calibration.
