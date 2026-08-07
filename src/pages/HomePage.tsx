@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { AceDashboard } from '../components/ace/AceDashboard'
 import { EmptyState } from '../components/common/EmptyState'
 import { AnalysisPanel } from '../components/home/AnalysisPanel'
@@ -71,38 +71,6 @@ export default function HomePage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <RunStatusBar params={params} />
         <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-3">
-          <nav className="flex justify-end gap-2 text-xs">
-            <Link
-              to="/ace/lab"
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-slate-600 hover:bg-slate-50"
-            >
-              Interactive lab
-            </Link>
-            <Link
-              to="/ace/experiments"
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-slate-600 hover:bg-slate-50"
-            >
-              Experiment matrix
-            </Link>
-            <Link
-              to="/ace/tasks"
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-slate-600 hover:bg-slate-50"
-            >
-              Task explorer
-            </Link>
-            <Link
-              to="/ace"
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-slate-600 hover:bg-slate-50"
-            >
-              ACE runs
-            </Link>
-            <Link
-              to="/reviews"
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-slate-600 hover:bg-slate-50"
-            >
-              Human review
-            </Link>
-          </nav>
           <AceDashboard />
           {hasActiveSelection(params) ? (
             <>

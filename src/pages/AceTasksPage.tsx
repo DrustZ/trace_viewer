@@ -616,18 +616,6 @@ export default function AceTasksPage() {
     <div className="min-h-screen bg-slate-50 px-5 py-4">
       <div className="mx-auto max-w-[1500px] space-y-4">
         <header className="flex flex-wrap items-center gap-3">
-          <Link to="/" className="text-xs text-blue-600 hover:underline">
-            ← Traces
-          </Link>
-          <Link to="/ace" className="text-xs text-blue-600 hover:underline">
-            ACE runs
-          </Link>
-          <Link to="/ace/experiments" className="text-xs text-blue-600 hover:underline">
-            Experiment matrix
-          </Link>
-          <Link to="/reviews" className="text-xs text-blue-600 hover:underline">
-            Human review
-          </Link>
           <h1 className="text-base font-semibold text-slate-900">ACE task explorer</h1>
           <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
             Read only

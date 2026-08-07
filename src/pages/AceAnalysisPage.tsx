@@ -359,15 +359,6 @@ export default function AceAnalysisPage() {
     <main className="min-h-screen bg-slate-50 px-5 py-4">
       <div className="mx-auto max-w-[1500px] space-y-4">
         <header className="flex flex-wrap items-center gap-3">
-          <Link to="/" className="text-xs text-blue-600 hover:underline">
-            ← Traces
-          </Link>
-          <Link to="/ace" className="text-xs text-blue-600 hover:underline">
-            ACE runs
-          </Link>
-          <Link to="/ace/tasks" className="text-xs text-blue-600 hover:underline">
-            Task explorer
-          </Link>
           <h1 className="text-base font-semibold text-slate-900">ACE aggregate analysis</h1>
           <span className="ml-auto text-[11px] text-slate-500">
             {allMode

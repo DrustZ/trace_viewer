@@ -208,24 +208,6 @@ export default function AceRunsPage() {
     <div className="min-h-screen bg-slate-50 px-5 py-4">
       <div className="mx-auto max-w-7xl space-y-4">
         <header className="flex flex-wrap items-center gap-3">
-          <Link to="/" className="text-xs text-blue-600 hover:underline">
-            ← Traces
-          </Link>
-          <Link to="/reviews" className="text-xs text-blue-600 hover:underline">
-            Human review
-          </Link>
-          <Link to="/ace/tasks" className="text-xs text-blue-600 hover:underline">
-            Task explorer
-          </Link>
-          <Link to="/ace/analysis" className="text-xs text-blue-600 hover:underline">
-            Aggregate analysis
-          </Link>
-          <Link to="/ace/experiments" className="text-xs text-blue-600 hover:underline">
-            Experiment matrix
-          </Link>
-          <Link to="/ace/lab" className="text-xs text-violet-600 hover:underline">
-            Interactive lab
-          </Link>
           <h1 className="text-base font-semibold text-slate-900">ACE runs</h1>
           <select
             value={selected ?? ''}

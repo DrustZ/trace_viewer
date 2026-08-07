@@ -6,7 +6,7 @@ import {
   reviewSubjectKey,
 } from '@shared/reviews/types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { fetchReviewQueue, type ReviewQueueFilters } from '../api/reviews'
 import { CalibrationStatsPanel } from '../components/review/CalibrationStatsPanel'
 import { type ReviewNavigationGuard, ReviewPanel } from '../components/review/ReviewPanel'
@@ -303,12 +303,6 @@ export function ReviewPage() {
   return (
     <main className="min-h-screen bg-slate-50 p-4">
       <div className="mx-auto mb-4 flex max-w-[1600px] items-center gap-3">
-        <Link to="/" className="text-xs text-blue-600 hover:underline">
-          ← Traces
-        </Link>
-        <Link to="/ace" className="text-xs text-blue-600 hover:underline">
-          ACE runs
-        </Link>
         <h1 className="text-base font-semibold text-slate-900">Human review workspace</h1>
       </div>
       <div className="mx-auto grid max-w-[1600px] gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">

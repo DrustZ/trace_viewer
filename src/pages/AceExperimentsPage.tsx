@@ -269,15 +269,6 @@ export default function AceExperimentsPage() {
     <div className="min-h-screen bg-slate-50 px-5 py-4">
       <div className="mx-auto max-w-6xl space-y-4">
         <header className="flex flex-wrap items-center gap-3">
-          <Link to="/" className="text-xs text-blue-600 hover:underline">
-            ← Traces
-          </Link>
-          <Link to="/ace" className="text-xs text-blue-600 hover:underline">
-            ACE runs
-          </Link>
-          <Link to="/ace/tasks" className="text-xs text-blue-600 hover:underline">
-            Task explorer
-          </Link>
           <h1 className="text-base font-semibold text-slate-900">ACE Experiment Matrix</h1>
           <span
             className={`rounded px-2 py-1 text-[10px] font-medium ${available ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}

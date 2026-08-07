@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import { LiveUpdates } from './api/live'
+import NavRail from './components/common/NavRail'
 import ThemeToggle from './components/common/ThemeToggle'
 import AceAnalysisPage from './pages/AceAnalysisPage'
 import AceExperimentsPage from './pages/AceExperimentsPage'
@@ -16,18 +17,23 @@ export default function App() {
     <>
       <LiveUpdates />
       <ThemeToggle />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/trace/:traceId" element={<TracePage />} />
-        <Route path="/compare" element={<ComparePage />} />
-        <Route path="/ace" element={<AceRunsPage />} />
-        <Route path="/ace/analysis" element={<AceAnalysisPage />} />
-        <Route path="/ace/experiments" element={<AceExperimentsPage />} />
-        <Route path="/ace/lab" element={<AceInteractiveLabPage />} />
-        <Route path="/ace/tasks" element={<AceTasksPage />} />
-        <Route path="/ace/tasks/:scenarioId" element={<AceTasksPage />} />
-        <Route path="/reviews" element={<ReviewPage />} />
-      </Routes>
+      <div className="flex min-h-screen">
+        <NavRail />
+        <div className="min-w-0 flex-1">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/trace/:traceId" element={<TracePage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/ace" element={<AceRunsPage />} />
+            <Route path="/ace/analysis" element={<AceAnalysisPage />} />
+            <Route path="/ace/experiments" element={<AceExperimentsPage />} />
+            <Route path="/ace/lab" element={<AceInteractiveLabPage />} />
+            <Route path="/ace/tasks" element={<AceTasksPage />} />
+            <Route path="/ace/tasks/:scenarioId" element={<AceTasksPage />} />
+            <Route path="/reviews" element={<ReviewPage />} />
+          </Routes>
+        </div>
+      </div>
     </>
   )
 }
