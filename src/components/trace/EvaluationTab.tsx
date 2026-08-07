@@ -2,6 +2,7 @@ import type { Trace } from '@shared/schema/types'
 import { useMemo } from 'react'
 import { type UnifiedFailure, unifiedFailures } from './failureSource'
 import { failureChipLabel } from './MessageCard'
+import { WorldStateSections } from './StateToolsTab'
 
 // Re-exported so existing imports keep resolving; the implementation moved to
 // the unified failure source module.
@@ -302,6 +303,8 @@ export function EvaluationTab({
           )}
         </div>
       )}
+      {/* World diff + tool ledger are evaluation evidence, not a separate tab. */}
+      <WorldStateSections evaluation={evaluation} />
     </div>
   )
 }

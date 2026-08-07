@@ -1,15 +1,13 @@
-import type { Trace } from '@shared/schema/types'
+import type { Trace, TraceEvaluation } from '@shared/schema/types'
 
-export function StateToolsTab({ trace }: { trace: Trace }) {
-  const evaluation = trace.evaluation
-  if (!evaluation)
-    return (
-      <div className="p-8 text-center text-sm text-slate-500">
-        No ACE world-state or ledger artifact is attached to this trace.
-      </div>
-    )
+/**
+ * World diff + tool ledger evidence sections. Rendered inside the Evaluation
+ * tab (state is evaluation evidence); StateToolsTab remains as a standalone
+ * wrapper for direct embedding.
+ */
+export function WorldStateSections({ evaluation }: { evaluation: TraceEvaluation }) {
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-5">
+    <>
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <h2 className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
           World diff · {evaluation.worldDiff.length}
@@ -142,6 +140,21 @@ export function StateToolsTab({ trace }: { trace: Trace }) {
           </div>
         )}
       </section>
+    </>
+  )
+}
+
+export function StateToolsTab({ trace }: { trace: Trace }) {
+  const evaluation = trace.evaluation
+  if (!evaluation)
+    return (
+      <div className="p-8 text-center text-sm text-slate-500">
+        No ACE world-state or ledger artifact is attached to this trace.
+      </div>
+    )
+  return (
+    <div className="mx-auto max-w-6xl space-y-4 p-5">
+      <WorldStateSections evaluation={evaluation} />
     </div>
   )
 }

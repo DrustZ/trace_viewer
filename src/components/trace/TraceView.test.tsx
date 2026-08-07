@@ -82,13 +82,26 @@ function makeTrace(): Trace {
 }
 
 describe('TraceView cockpit integration', () => {
-  it('renders Replay & Fork from the canonical trace without falling through to playground', () => {
+  it('renders the rerun tab with real replay/fork primary and LLM-only as a labeled secondary mode', () => {
     const html = renderToStaticMarkup(
-      <TraceView trace={makeTrace()} tab="replay" onTabChange={() => undefined} variant="page" />,
+      <TraceView trace={makeTrace()} tab="rerun" onTabChange={() => undefined} variant="page" />,
     )
 
     expect(html).toContain('simulation:run-a:uid-1')
+    expect(html).toContain('data-testid="rerun-mode-fork"')
+    expect(html).toContain('data-testid="rerun-mode-llm-only"')
+    expect(html).toContain('LLM-only continuation · no tool execution')
+    // Fork mode is the default; the stand-in continuation renders only after opting in.
     expect(html).not.toContain('playground-content')
+  })
+
+  it('renders metadata as a section of the raw tab', () => {
+    const html = renderToStaticMarkup(
+      <TraceView trace={makeTrace()} tab="raw" onTabChange={() => undefined} variant="page" />,
+    )
+    expect(html).toContain('Trace metadata')
+    expect(html).toContain('metadata-content')
+    expect(html).toContain('raw-content')
   })
 
   it('keeps trace-embedded review Assisted and routes blind Calibration to its isolated page', () => {

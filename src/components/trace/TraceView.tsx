@@ -6,10 +6,8 @@ import { ConversationView } from './ConversationView'
 import { EvaluationTab } from './EvaluationTab'
 import { EvolutionTab } from './EvolutionTab'
 import { MetadataTab } from './MetadataTab'
-import { PlaygroundTab } from './PlaygroundTab'
 import { RawTab } from './RawTab'
-import { ReplayTab } from './ReplayTab'
-import { StateToolsTab } from './StateToolsTab'
+import { RerunTab } from './RerunTab'
 import { TraceChat } from './TraceChat'
 import { TraceHeader, type TraceTab } from './TraceHeader'
 
@@ -98,19 +96,10 @@ export function TraceView({
             />
           </div>
         )}
-        {tab === 'state' && (
+        {tab === 'rerun' && (
           <div className="h-full overflow-y-auto">
-            <StateToolsTab trace={trace} />
-          </div>
-        )}
-        {tab === 'replay' && (
-          <div className="h-full overflow-y-auto">
-            <ReplayTab key={traceUid} trace={trace} />
-          </div>
-        )}
-        {tab === 'metadata' && (
-          <div className="h-full overflow-y-auto">
-            <MetadataTab trace={trace} />
+            {/* Keyed by trace: replay/continuation controls are trace-specific state. */}
+            <RerunTab key={traceUid} trace={trace} />
           </div>
         )}
         {tab === 'evolution' && (
@@ -118,13 +107,22 @@ export function TraceView({
             <EvolutionTab trace={trace} onNavigate={onNavigate} />
           </div>
         )}
-        {tab === 'playground' && (
-          <div className="h-full overflow-y-auto">
-            {/* Keyed by trace: controls (cut message id, step) are trace-specific state. */}
-            <PlaygroundTab key={traceUid} trace={trace} />
+        {tab === 'raw' && (
+          <div className="flex h-full flex-col">
+            {/* Metadata is a section of the raw view, not its own tab. */}
+            <details className="shrink-0 border-b border-slate-200 bg-slate-50">
+              <summary className="cursor-pointer px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900">
+                Trace metadata
+              </summary>
+              <div className="max-h-96 overflow-y-auto">
+                <MetadataTab trace={trace} />
+              </div>
+            </details>
+            <div className="min-h-0 flex-1">
+              <RawTab traceId={traceUid} active />
+            </div>
           </div>
         )}
-        {tab === 'raw' && <RawTab traceId={traceUid} active />}
       </div>
       <TraceChat traceId={traceUid} />
     </div>

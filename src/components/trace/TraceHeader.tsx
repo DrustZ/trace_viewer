@@ -6,30 +6,41 @@ import { type ListParams, useNeighbors } from '../../api/hooks'
 import { formatDuration, formatNumber, formatPercent } from '../common/format'
 import { ScoreBadge } from '../common/ScoreBadge'
 import { StatusPill } from '../common/StatusPill'
+import { unifiedFailures } from './failureSource'
 
-export const TRACE_TABS = [
-  'conversation',
-  'evaluation',
-  'review',
-  'state',
-  'replay',
-  'metadata',
-  'evolution',
-  'playground',
-  'raw',
-] as const
-export type TraceTab = (typeof TRACE_TABS)[number]
+/** The five primary tabs (evolution stays reachable behind More when it has data). */
+export const TRACE_TABS = ['conversation', 'evaluation', 'rerun', 'review', 'raw'] as const
+export type TraceTab = (typeof TRACE_TABS)[number] | 'evolution'
 
 const TAB_LABELS: Record<TraceTab, string> = {
   conversation: 'Conversation',
   evaluation: 'Evaluation',
+  rerun: 'Rerun & Fork',
   review: 'Human Review',
-  state: 'State & Tools',
-  replay: 'Replay & Fork',
-  metadata: 'Metadata',
-  evolution: 'Evolution',
-  playground: 'LLM-only continuation',
   raw: 'Raw',
+  evolution: 'Evolution',
+}
+
+/**
+ * 9→5 consolidation: legacy `?tab=` deep links keep resolving.
+ * state → evaluation (world diff/ledger are evaluation evidence),
+ * replay/playground → rerun (exact fork vs LLM-only are modes of one surface),
+ * metadata → raw (metadata is a section of the raw view).
+ */
+export const LEGACY_TRACE_TAB_MAP: Record<string, TraceTab> = {
+  state: 'evaluation',
+  replay: 'rerun',
+  playground: 'rerun',
+  metadata: 'raw',
+}
+
+/** Resolve any current or legacy `?tab=` value; unknown values fall back to conversation. */
+export function resolveTraceTab(raw: string | null | undefined): TraceTab {
+  if (!raw) return 'conversation'
+  if ((TRACE_TABS as readonly string[]).includes(raw) || raw === 'evolution') {
+    return raw as TraceTab
+  }
+  return LEGACY_TRACE_TAB_MAP[raw] ?? 'conversation'
 }
 
 const LIST_KEYS = ['split', 'step', 'component', 'status', 'filters', 'q', 'sort', 'order'] as const
@@ -74,15 +85,18 @@ export function TraceHeader({
   const showStep = hasRecordedCheckpoint(meta)
   const showSplit = !(isImported && meta.sourceFormat !== 'native')
 
-  // Cheap tab counts only: messages are already loaded. (Profiling spans now live
-  // inside the Conversation view's Timeline sub-mode, not a standalone tab.)
+  // Cheap tab counts only: messages (and their metadata) are already loaded.
+  // Evaluation counts the unified failure list — the same source the tab renders.
+  const failureCount = useMemo(
+    () => (trace.evaluation ? unifiedFailures(trace).length : undefined),
+    [trace],
+  )
   const tabCounts: Partial<Record<TraceTab, number>> = {
     conversation: trace.messages.length,
-    evaluation: trace.evaluation?.failures.length,
-    state: trace.evaluation
-      ? trace.evaluation.worldDiff.length + trace.evaluation.ledger.length
-      : undefined,
+    ...(failureCount !== undefined ? { evaluation: failureCount } : {}),
   }
+  // Evolution needs a recorded checkpoint; without one the tab is pure noise.
+  const showEvolution = hasRecordedCheckpoint(meta)
 
   const backSearch = useMemo(() => {
     const p = new URLSearchParams(listSearch)
@@ -236,6 +250,37 @@ export function TraceHeader({
               )}
             </button>
           ))}
+          {showEvolution && (
+            <details className="relative" data-testid="trace-tabs-more">
+              <summary
+                className={`cursor-pointer list-none border-b-2 pb-2 text-sm ${
+                  activeTab === 'evolution'
+                    ? 'border-slate-800 font-medium text-slate-900'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                More ▾
+              </summary>
+              <div className="absolute right-0 z-20 mt-1 w-36 rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  data-testid="trace-tab-evolution"
+                  onClick={(event) => {
+                    const details = event.currentTarget.closest('details')
+                    if (details) details.open = false
+                    onTabChange('evolution')
+                  }}
+                  className={`block w-full px-3 py-1.5 text-left text-sm ${
+                    activeTab === 'evolution'
+                      ? 'font-medium text-slate-900'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {TAB_LABELS.evolution}
+                </button>
+              </div>
+            </details>
+          )}
         </nav>
       </div>
     </header>

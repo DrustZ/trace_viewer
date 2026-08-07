@@ -2,17 +2,15 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useTrace } from '../api/hooks'
 import { ErrorState, LoadingState } from '../components/common/EmptyState'
-import { TRACE_TABS, type TraceTab } from '../components/trace/TraceHeader'
+import { resolveTraceTab, type TraceTab } from '../components/trace/TraceHeader'
 import { TraceView } from '../components/trace/TraceView'
 
 export default function TracePage() {
   const { traceId } = useParams()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const rawTab = searchParams.get('tab')
-  const tab: TraceTab = TRACE_TABS.includes(rawTab as TraceTab)
-    ? (rawTab as TraceTab)
-    : 'conversation'
+  // Legacy deep links (state/replay/playground/metadata) map onto the five tabs.
+  const tab: TraceTab = resolveTraceTab(searchParams.get('tab'))
   const trace = useTrace(traceId)
 
   const onTabChange = (next: TraceTab) => {
