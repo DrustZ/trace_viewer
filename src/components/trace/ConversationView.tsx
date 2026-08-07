@@ -2,6 +2,7 @@ import type { Trace } from '@shared/schema/types'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CompactMode } from './CompactMode'
+import { type RoleFilter, visibleUnitIndices } from './conversationFilter'
 import { ConversationToolbar } from './ConversationToolbar'
 import { failuresByMessage } from './failureSource'
 import { buildCallNameMap, MessageCard } from './MessageCard'
@@ -82,6 +83,8 @@ export function ConversationView({
   const [listOffset, setListOffset] = useState(0)
   const [query, setQuery] = useState('')
   const [matchPos, setMatchPos] = useState(0)
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
+  const [failuresOnly, setFailuresOnly] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(readTimelineOpen)
   const [compact, setCompact] = useState(readCompact)
   const [following, setFollowing] = useState(true)
@@ -135,6 +138,17 @@ export function ConversationView({
     return map
   }, [units, messages.length])
 
+  // Toolbar filters project the unit list; search operates within the projection.
+  const visibleUnits = useMemo(
+    () => visibleUnitIndices(units, roleFilter, failuresOnly, failureIndex),
+    [units, roleFilter, failuresOnly, failureIndex],
+  )
+  const visiblePosByUnit = useMemo(() => {
+    const map = new Map<number, number>()
+    visibleUnits.forEach((unitIndex, pos) => map.set(unitIndex, pos))
+    return map
+  }, [visibleUnits])
+
   // Message indices matching the in-trace search. Diagnostic fields are
   // searchable too: tool names, malformed-JSON parse errors, judge output —
   // what the page visibly renders must be findable.
@@ -144,6 +158,7 @@ export function ConversationView({
     const found: number[] = []
     for (let i = 0; i < messages.length && found.length < MATCH_CAP; i++) {
       const m = messages[i]
+      if (!visiblePosByUnit.has(unitOfMessage[i])) continue
       if (
         m.content.toLowerCase().includes(q) ||
         m.judgeOutput?.toLowerCase().includes(q) ||
@@ -160,7 +175,7 @@ export function ConversationView({
       }
     }
     return found
-  }, [messages, query])
+  }, [messages, query, visiblePosByUnit, unitOfMessage])
 
   const toggleFold = useCallback(
     (id: string) => {
@@ -270,19 +285,24 @@ export function ConversationView({
   }, [compact])
 
   const virtualizer = useVirtualizer({
-    count: units.length,
+    count: visibleUnits.length,
     getScrollElement: () => parentRef.current,
-    getItemKey: (index) => units[index]?.id ?? index,
+    getItemKey: (index) => {
+      const unitIndex = visibleUnits[index]
+      return unitIndex !== undefined ? (units[unitIndex]?.id ?? index) : index
+    },
     estimateSize: () => 120,
     overscan: 8,
     scrollMargin: listOffset,
   })
 
   const jumpToLatest = useCallback(() => {
-    if (units.length > 0) virtualizer.scrollToIndex(units.length - 1, { align: 'end' })
+    if (visibleUnits.length > 0) {
+      virtualizer.scrollToIndex(visibleUnits.length - 1, { align: 'end' })
+    }
     setFollowing(true)
     setNewUnitCount(0)
-  }, [units.length, virtualizer])
+  }, [visibleUnits.length, virtualizer])
 
   const onConversationScroll = useCallback(() => {
     const element = parentRef.current
@@ -309,6 +329,8 @@ export function ConversationView({
     (msgIndex: number) => {
       const unitIndex = unitOfMessage[msgIndex]
       if (unitIndex === undefined) return
+      const visiblePos = visiblePosByUnit.get(unitIndex)
+      if (visiblePos === undefined) return
       const unit = units[unitIndex]
       if (unit.kind === 'step') {
         setStepOverrides((prev) => {
@@ -319,9 +341,9 @@ export function ConversationView({
           setReasoningOpen((prev) => (prev.get(unit.id) ? prev : new Map(prev).set(unit.id, true)))
         }
       }
-      virtualizer.scrollToIndex(unitIndex, { align: 'center' })
+      virtualizer.scrollToIndex(visiblePos, { align: 'center' })
     },
-    [unitOfMessage, units, messages, stepDefault, virtualizer],
+    [unitOfMessage, visiblePosByUnit, units, messages, stepDefault, virtualizer],
   )
 
   useEffect(() => {
@@ -376,6 +398,11 @@ export function ConversationView({
         timeOrderAvailable={timeOrderAvailable}
         timestampRegressionCount={regressionCount}
         untimestampedMessageCount={untimestampedMessageCount}
+        roleFilter={roleFilter}
+        onRoleFilterChange={setRoleFilter}
+        failuresOnly={failuresOnly}
+        onToggleFailuresOnly={() => setFailuresOnly((v) => !v)}
+        failureCount={failureIndex.size}
       />
       <div className="relative min-h-0 flex-1">
         {compact ? (
@@ -400,8 +427,10 @@ export function ConversationView({
                   style={{ height: virtualizer.getTotalSize() }}
                 >
                   {virtualizer.getVirtualItems().map((item) => {
-                    const unit = units[item.index]
-                    const isCurrentMatch = currentMatchUnit === item.index
+                    const unitIndex = visibleUnits[item.index]
+                    if (unitIndex === undefined) return null
+                    const unit = units[unitIndex]
+                    const isCurrentMatch = currentMatchUnit === unitIndex
                     return (
                       // Chat-style alignment: assistant steps right, everything else left.
                       <div

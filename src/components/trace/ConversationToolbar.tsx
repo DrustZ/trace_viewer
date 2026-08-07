@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
+import { ROLE_FILTERS, type RoleFilter } from './conversationFilter'
 
 const DEBOUNCE_MS = 250
+
+const ROLE_LABELS: Record<RoleFilter, string> = {
+  all: 'All roles',
+  user: 'User',
+  assistant: 'Assistant',
+  tool: 'Tool',
+}
 
 function ToggleButton({
   pressed,
@@ -40,11 +48,13 @@ function ActionButton({
   onClick,
   testId,
   disabled = false,
+  title,
   children,
 }: {
   onClick: () => void
   testId: string
   disabled?: boolean
+  title?: string
   children: string
 }) {
   return (
@@ -53,6 +63,7 @@ function ActionButton({
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40"
     >
       {children}
@@ -78,6 +89,11 @@ export function ConversationToolbar({
   timeOrderAvailable,
   timestampRegressionCount,
   untimestampedMessageCount,
+  roleFilter,
+  onRoleFilterChange,
+  failuresOnly,
+  onToggleFailuresOnly,
+  failureCount,
 }: {
   /** Receives the debounced query; must be referentially stable (e.g. a setState). */
   onQueryChange: (query: string) => void
@@ -101,6 +117,14 @@ export function ConversationToolbar({
   timeOrderAvailable: boolean
   timestampRegressionCount: number
   untimestampedMessageCount: number
+  /** Show only units carrying (or produced by) this role. */
+  roleFilter: RoleFilter
+  onRoleFilterChange: (role: RoleFilter) => void
+  /** Show only failure-anchored messages ±1 unit of context. */
+  failuresOnly: boolean
+  onToggleFailuresOnly: () => void
+  /** Message-anchored failure count; 0 disables the failures-only toggle. */
+  failureCount: number
 }) {
   const [value, setValue] = useState('')
 
@@ -113,8 +137,11 @@ export function ConversationToolbar({
     'h-7 w-7 rounded border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-40'
 
   // Both focus modes replace the searchable virtualized list, so search + expand
-  // controls are inert there.
+  // + filter controls are inert there.
   const busy = compact || timelineOpen
+  const busyReason = compact
+    ? 'Unavailable in Compact mode — it replaces the filterable message list'
+    : 'Unavailable in Timeline mode — it replaces the filterable message list'
   const timeOrderTitle = !timeOrderAvailable
     ? 'Time order needs at least two valid message timestamps'
     : timeOrdered
@@ -140,7 +167,7 @@ export function ConversationToolbar({
           placeholder="Search in trace…"
           data-testid="trace-search"
           disabled={busy}
-          title={busy ? 'Search is unavailable in this view' : undefined}
+          title={busy ? busyReason : undefined}
           className="h-7 w-64 max-w-full rounded border border-slate-200 px-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none disabled:bg-slate-50 disabled:opacity-50"
         />
         {value !== '' && !busy && (
@@ -175,10 +202,50 @@ export function ConversationToolbar({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <ActionButton onClick={onExpandAll} testId="expand-all" disabled={busy}>
+        <select
+          value={roleFilter}
+          onChange={(event) => onRoleFilterChange(event.target.value as RoleFilter)}
+          disabled={busy}
+          title={busy ? busyReason : 'Show only messages of one role'}
+          data-testid="role-filter"
+          className="h-7 rounded border border-slate-200 bg-white px-1.5 text-xs text-slate-600 disabled:opacity-40"
+        >
+          {ROLE_FILTERS.map((role) => (
+            <option key={role} value={role}>
+              {ROLE_LABELS[role]}
+            </option>
+          ))}
+        </select>
+        <ToggleButton
+          pressed={failuresOnly}
+          onClick={onToggleFailuresOnly}
+          testId="failures-only"
+          disabled={busy || failureCount === 0}
+          title={
+            busy
+              ? busyReason
+              : failureCount === 0
+                ? 'No failure-anchored messages in this trace'
+                : `Show only the ${failureCount} failure-anchored message(s) ±1 unit of context`
+          }
+        >
+          Failures only
+        </ToggleButton>
+        <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
+        <ActionButton
+          onClick={onExpandAll}
+          testId="expand-all"
+          disabled={busy}
+          title={busy ? busyReason : undefined}
+        >
           Expand all
         </ActionButton>
-        <ActionButton onClick={onCollapseAll} testId="collapse-all" disabled={busy}>
+        <ActionButton
+          onClick={onCollapseAll}
+          testId="collapse-all"
+          disabled={busy}
+          title={busy ? busyReason : undefined}
+        >
           Collapse all
         </ActionButton>
         <span className="mx-0.5 h-4 w-px bg-slate-200" aria-hidden="true" />
@@ -206,6 +273,7 @@ export function ConversationToolbar({
           onClick={onToggleTimeline}
           testId="toggle-timeline"
           disabled={compact}
+          title={compact ? 'Turn off Compact mode first — the two focus modes are exclusive' : undefined}
         >
           Timeline
         </ToggleButton>
@@ -214,6 +282,7 @@ export function ConversationToolbar({
           onClick={onToggleCompact}
           testId="toggle-compact"
           disabled={timelineOpen}
+          title={timelineOpen ? 'Turn off Timeline mode first — the two focus modes are exclusive' : undefined}
         >
           Compact
         </ToggleButton>
