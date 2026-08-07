@@ -67,7 +67,10 @@ export default defineConfig({
       deny: PRIVATE_FS_DENY,
     },
     proxy: {
-      '/api': `http://localhost:${process.env.PORT ?? 8787}`,
+      // Pin IPv4: the API server binds 127.0.0.1, and `localhost` resolves to
+      // ::1 first whenever any other app (observed: Cursor) squats the same
+      // port on IPv6 — every /api call then 404s against the stranger.
+      '/api': `http://127.0.0.1:${process.env.PORT ?? 8787}`,
     },
   },
 })
