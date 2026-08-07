@@ -2,6 +2,14 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// The watcher polls (no per-file kqueue fds — see WATCH_POLL_INTERVAL_MS in
+// scan.ts). Pin a fast interval before ./scan is imported so event-timing
+// assertions (450ms negative windows, 2s waits) keep their original meaning.
+vi.hoisted(() => {
+  process.env.TRACE_VIEWER_WATCH_POLL_MS = '60'
+})
+
 import { getScanProgress, scanAll, scanFile, watch } from './scan'
 import { TraceStore } from './traceStore'
 

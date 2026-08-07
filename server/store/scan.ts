@@ -33,6 +33,25 @@ const BATCH_FILE = 'batch.json'
 
 const DEBOUNCE_MS = 300
 
+/**
+ * Watch transport interval. File watching on macOS (kqueue via fs.watch)
+ * costs one file descriptor per watched file, and once any fd number reaches
+ * OPEN_MAX (10240) `posix_spawn` fails with EBADF for the entire process —
+ * measured on this machine: spawn still works with 10,000 watched files and
+ * fails at 10,441. A grown episodes corpus therefore silently killed every
+ * ACE bridge launch ("spawn EBADF") while plain HTTP kept working. Stat
+ * polling holds no descriptors, so the corpus can grow without wedging
+ * spawn; the added latency stays inside the Playground's own 1.5s client
+ * poll fallback. Set TRACE_VIEWER_WATCH_POLL_MS=0 to restore fd-based
+ * watching, or to another value to tune the interval.
+ */
+const WATCH_POLL_INTERVAL_MS = (() => {
+  const raw = process.env.TRACE_VIEWER_WATCH_POLL_MS
+  if (raw === undefined || raw.trim() === '') return 1_000
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 1_000
+})()
+
 interface ResolvedRoot extends DataRoot {
   mode: ScanRootMode
 }
@@ -665,9 +684,17 @@ export function watch(store: TraceStore, roots: string[] = DEFAULT_ROOTS): FSWat
       // A data root is a containment boundary. A symlink below it must never
       // make the watcher read a file from outside that boundary.
       followSymlinks: false,
-      // Only connector extensions are interesting; everything else (*.png, *.pid, ...) is noise.
+      // Poll instead of holding one kqueue fd per file (see WATCH_POLL_INTERVAL_MS).
+      usePolling: WATCH_POLL_INTERVAL_MS > 0,
+      ...(WATCH_POLL_INTERVAL_MS > 0
+        ? { interval: WATCH_POLL_INTERVAL_MS, binaryInterval: WATCH_POLL_INTERVAL_MS }
+        : {}),
+      // Only connector extensions are interesting; everything else (*.png, *.pid, ...)
+      // is noise. Checkpoint archives are also excluded: rescan() discards their
+      // events unread, so watching them only burns descriptors/stat calls.
       ignored: (p, stats) =>
-        (stats?.isFile() ?? false) && !TRACE_EXTENSIONS.has(path.extname(p).toLowerCase()),
+        isCheckpointArchive(p) ||
+        ((stats?.isFile() ?? false) && !TRACE_EXTENSIONS.has(path.extname(p).toLowerCase())),
     },
   )
   watcher.on('add', (p) => schedule(p, () => rescan(p)))
