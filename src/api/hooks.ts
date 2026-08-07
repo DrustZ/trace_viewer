@@ -22,7 +22,7 @@ import type {
 import { type UseQueryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 // Type-only import — erased at build time, so the client bundle never pulls in server code.
 import type { AnalysisResponse } from '../../server/ai/analyst'
-import { apiGet, apiPost } from './client'
+import { apiFetch, apiGet, apiPost } from './client'
 
 /** Canonical list-query params, serialized identically for every endpoint that filters. */
 export interface ListParams {
@@ -115,7 +115,7 @@ export function useTraceRaw(traceId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: ['trace-raw', traceId],
     queryFn: async () => {
-      const res = await fetch(`/api/traces/${encodeURIComponent(traceId ?? '')}/raw`)
+      const res = await apiFetch(`/api/traces/${encodeURIComponent(traceId ?? '')}/raw`)
       if (!res.ok) throw new Error(`raw unavailable (${res.status})`)
       return res.text()
     },

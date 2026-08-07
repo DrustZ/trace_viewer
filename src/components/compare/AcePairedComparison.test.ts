@@ -1,5 +1,26 @@
+import type { AceBatchEpisode } from '@shared/schema/ace'
 import { describe, expect, it } from 'vitest'
-import { pairedTraceHref } from './AcePairedComparison'
+import { pairAceRuns, pairedPassInterval, pairedTraceHref } from './AcePairedComparison'
+
+function episode(
+  pairKey: string,
+  outcome: AceBatchEpisode['outcome'],
+  suffix: string,
+): AceBatchEpisode {
+  return {
+    scenarioId: `scenario-${suffix}`,
+    seed: 1,
+    sourceTraceId: `trace-${suffix}`,
+    status: 'completed',
+    outcome,
+    failedChecks: [],
+    flagsMajor: 0,
+    flagsMinor: 0,
+    invalidUserSim: false,
+    environmentSeed: 1,
+    pairKey,
+  }
+}
 
 describe('ACE matched-pair links', () => {
   it('opens both exact durable traces without losing run identity', () => {
@@ -27,5 +48,56 @@ describe('ACE matched-pair links', () => {
     expect(url.searchParams.get('instance')).toBe('task-1')
     expect(url.searchParams.has('traceA')).toBe(false)
     expect(url.searchParams.has('traceB')).toBe(false)
+  })
+
+  it('excludes a pair key entirely when it is duplicated on either arm', () => {
+    const uniqueKey = 'schedule:unique:1'
+    const duplicateAKey = 'schedule:duplicate-a:1'
+    const duplicateBKey = 'schedule:duplicate-b:1'
+    const result = pairAceRuns(
+      [
+        episode(duplicateAKey, 'pass', 'a-duplicate-1'),
+        episode(duplicateAKey, 'fail', 'a-duplicate-2'),
+        episode(duplicateBKey, 'pass', 'a-counterpart'),
+        episode(uniqueKey, 'fail', 'a-unique'),
+      ],
+      [
+        episode(duplicateAKey, 'pass', 'b-counterpart'),
+        episode(duplicateBKey, 'pass', 'b-duplicate-1'),
+        episode(duplicateBKey, 'fail', 'b-duplicate-2'),
+        episode(uniqueKey, 'pass', 'b-unique'),
+      ],
+    )
+
+    expect(result.pairs).toHaveLength(1)
+    expect(result.pairs[0]).toMatchObject({ key: uniqueKey, delta: 'improvement' })
+    expect(result.integrity).toEqual({
+      duplicateKeysA: [duplicateAKey],
+      duplicateKeysB: [duplicateBKey],
+      excludedDuplicatePairKeys: [duplicateAKey, duplicateBKey],
+      excludedRowsA: 3,
+      excludedRowsB: 3,
+      unmatchedUniqueA: 0,
+      unmatchedUniqueB: 0,
+    })
+    expect(pairedPassInterval(result.pairs)).toEqual({ delta: 1, low: null, high: null })
+  })
+
+  it('reports unmatched unique keys without counting them as duplicate exclusions', () => {
+    const result = pairAceRuns(
+      [episode('schedule:only-a:1', 'pass', 'only-a')],
+      [episode('schedule:only-b:1', 'fail', 'only-b')],
+    )
+
+    expect(result.pairs).toEqual([])
+    expect(result.integrity).toEqual({
+      duplicateKeysA: [],
+      duplicateKeysB: [],
+      excludedDuplicatePairKeys: [],
+      excludedRowsA: 0,
+      excludedRowsB: 0,
+      unmatchedUniqueA: 1,
+      unmatchedUniqueB: 1,
+    })
   })
 })

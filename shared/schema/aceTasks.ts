@@ -78,8 +78,8 @@ export interface AceTaskObservedScoringContract {
   runIds: string[]
   outcomes: AceTaskOutcomeCounts
   latestTraceAt: string | null
-  /** Null when a source conflict prevents one current contract from being selected. */
-  matchesCurrentCheckSemantics: boolean | null
+  /** Shape only: names + gating flags; this cannot prove grader implementation semantics. */
+  matchesCurrentCheckShape: boolean | null
 }
 
 export interface AceTaskPersona {
@@ -95,7 +95,10 @@ export interface AceTaskPersona {
 }
 
 export interface AceTaskTraceCoverage {
+  /** Formal scored (or legacy unknown-kind) simulation traces only. */
   traceCount: number
+  /** Debug/counterfactual traces deliberately excluded from task-status metrics. */
+  exploratoryTraceCount: number
   runCount: number
   runIds: string[]
   /** Unique matched-seed pair keys represented in at least two runs. */

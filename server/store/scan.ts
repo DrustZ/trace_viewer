@@ -662,6 +662,9 @@ export function watch(store: TraceStore, roots: string[] = DEFAULT_ROOTS): FSWat
     resolvedRoots.map((root) => root.path),
     {
       ignoreInitial: true,
+      // A data root is a containment boundary. A symlink below it must never
+      // make the watcher read a file from outside that boundary.
+      followSymlinks: false,
       // Only connector extensions are interesting; everything else (*.png, *.pid, ...) is noise.
       ignored: (p, stats) =>
         (stats?.isFile() ?? false) && !TRACE_EXTENSIONS.has(path.extname(p).toLowerCase()),

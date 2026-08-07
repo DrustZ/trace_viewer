@@ -1,10 +1,51 @@
 import { execFileSync, spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { isIP } from 'node:net'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tailscale = process.env.TAILSCALE_BIN || '/usr/local/bin/tailscale'
+
+function withinProject(candidate) {
+  const relative = path.relative(projectRoot, candidate)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+function persistentAccessToken() {
+  const configured = process.env.TRACE_VIEWER_ACCESS_TOKEN?.trim()
+  if (configured) return { token: configured, tokenPath: null }
+  const tokenPath = path.resolve(
+    process.env.TRACE_VIEWER_ACCESS_TOKEN_FILE ||
+      path.join(os.homedir(), '.trace-viewer', 'access-token'),
+  )
+  if (withinProject(tokenPath)) {
+    throw new Error('TRACE_VIEWER_ACCESS_TOKEN_FILE must be outside the served project directory')
+  }
+  try {
+    const existing = readFileSync(tokenPath, 'utf8').trim()
+    if (existing.length >= 32) return { token: existing, tokenPath }
+    throw new Error(`access-token file is too short: ${tokenPath}`)
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') throw error
+  }
+  mkdirSync(path.dirname(tokenPath), { recursive: true, mode: 0o700 })
+  const generated = randomBytes(32).toString('base64url')
+  try {
+    writeFileSync(tokenPath, `${generated}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+    return { token: generated, tokenPath }
+  } catch (error) {
+    // Two service starts can race. The process that lost the exclusive create
+    // uses the winner's complete token instead of replacing it.
+    if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+      const existing = readFileSync(tokenPath, 'utf8').trim()
+      if (existing.length >= 32) return { token: existing, tokenPath }
+    }
+    throw error
+  }
+}
 
 function tailscaleIdentity() {
   const configured = process.env.TRACE_VIEWER_TAILSCALE_IP?.trim()
@@ -19,14 +60,22 @@ function tailscaleIdentity() {
 }
 
 const { address, dnsName } = tailscaleIdentity()
+const { token: accessToken, tokenPath } = persistentAccessToken()
 const webEnvironment = {
   ...process.env,
   ...(dnsName ? { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: dnsName } : {}),
 }
+delete webEnvironment.TRACE_VIEWER_ACCESS_TOKEN
+delete webEnvironment.TRACE_VIEWER_ACCESS_TOKEN_FILE
 const children = [
   spawn(process.execPath, ['./node_modules/tsx/dist/cli.mjs', 'watch', 'server/index.ts'], {
     cwd: projectRoot,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: '8787' },
+    env: {
+      ...process.env,
+      HOST: '127.0.0.1',
+      PORT: '8787',
+      TRACE_VIEWER_ACCESS_TOKEN: accessToken,
+    },
     stdio: 'inherit',
   }),
   spawn(
@@ -38,6 +87,11 @@ const children = [
 
 console.log(`[tailscale] Trace Viewer available at http://${address}:5173/`)
 if (dnsName) console.log(`[tailscale] Stable URL: http://${dnsName}:5173/`)
+console.log(
+  tokenPath
+    ? '[tailscale] API access protection enabled; token stored outside the served project root'
+    : '[tailscale] API access protection enabled; token supplied by environment',
+)
 
 let stopping = false
 function stop(signal = 'SIGTERM', exitCode = 0) {

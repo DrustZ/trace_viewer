@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ParsedTrace } from '../../shared/connectors/types'
+import type { LiveEvent } from '../../shared/schema/events'
 import { SearchIndex } from '../search/searchIndex'
 import { TraceStore } from '../store/traceStore'
 import type { RouteCtx } from './context'
-import { eventsRoutes, LiveEventJournal } from './events'
+import { eventsRoutes, LiveEventJournal, subscribeToLiveEvents } from './events'
 
 function fixture(traceId: string): ParsedTrace {
   return {
@@ -76,6 +77,76 @@ describe('LiveEventJournal', () => {
     expect(subscriber.mock.calls[0][0]).toMatchObject({ id: 1, dataVersion: 1 })
   })
 
+  it('buffers a publish at the replay/subscribe boundary without loss or duplication', () => {
+    const journal = new LiveEventJournal()
+    journal.publish({ type: 'store.reset', dataVersion: 1 })
+    journal.publish({ type: 'store.reset', dataVersion: 2 })
+    const delivered: number[] = []
+
+    const unsubscribe = journal.replayAndSubscribe(0, {
+      onGap: () => {
+        throw new Error('unexpected replay gap')
+      },
+      onEvent: (event) => {
+        delivered.push(event.id)
+        if (event.id === 1) journal.publish({ type: 'store.reset', dataVersion: 3 })
+      },
+    })
+    journal.publish({ type: 'store.reset', dataVersion: 4 })
+    unsubscribe()
+
+    expect(delivered).toEqual([1, 2, 3, 4])
+    expect(new Set(delivered).size).toBe(delivered.length)
+  })
+
+  it('keeps re-entrant publication ordered for every subscriber', () => {
+    const journal = new LiveEventJournal()
+    const firstClient: number[] = []
+    const secondClient: number[] = []
+    journal.subscribe((event) => {
+      firstClient.push(event.id)
+      if (event.id === 1) journal.publish({ type: 'store.reset', dataVersion: 2 })
+    })
+    journal.subscribe((event) => secondClient.push(event.id))
+
+    journal.publish({ type: 'store.reset', dataVersion: 1 })
+
+    expect(firstClient).toEqual([1, 2])
+    expect(secondClient).toEqual([1, 2])
+  })
+
+  it('reports an evicted cursor only to that client and does not journal the snapshot signal', () => {
+    const journal = new LiveEventJournal()
+    for (let index = 1; index <= 1_002; index += 1) {
+      journal.publish({ type: 'store.reset', dataVersion: index })
+    }
+    const currentClient: LiveEvent[] = []
+    const laggingClient: LiveEvent[] = []
+    subscribeToLiveEvents(
+      journal,
+      1_002,
+      () => 1_002,
+      (event) => currentClient.push(event),
+    )
+    subscribeToLiveEvents(
+      journal,
+      1,
+      () => 1_002,
+      (event) => laggingClient.push(event),
+    )
+
+    expect(currentClient).toEqual([])
+    expect(laggingClient).toEqual([
+      expect.objectContaining({ id: 1_002, type: 'snapshot.required', dataVersion: 1_002 }),
+    ])
+    expect(journal.since(1_002).events).toEqual([])
+
+    journal.publish({ type: 'trace.upserted', traceUid: 'fresh', dataVersion: 1_003 })
+    expect(currentClient.map((event) => event.id)).toEqual([1_003])
+    expect(laggingClient.map((event) => event.id)).toEqual([1_002, 1_003])
+    expect(journal.since(1_002).events.map((event) => event.type)).toEqual(['trace.upserted'])
+  })
+
   it('publishes only committed TraceStore mutations with canonical trace uids', () => {
     const store = new TraceStore()
     const journal = new LiveEventJournal()
@@ -94,6 +165,7 @@ describe('LiveEventJournal', () => {
     ])
     expect(events[0].traceUid).toBe(trace.meta.traceUid)
     expect(events[0].traceUid).not.toBe('same-producer-id')
+    expect(events.map((event) => event.runId)).toEqual(['run-a', 'run-a', 'run-a'])
     expect(events.map((event) => event.dataVersion)).toEqual([1, 2, 3])
   })
 

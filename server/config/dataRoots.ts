@@ -30,6 +30,24 @@ export const DEFAULT_DATA_ROOTS = [
 ]
 
 /**
+ * UI-added folders are intentionally constrained to explicit workspace
+ * parents.  The default covers this repository and sibling projects (such as
+ * ac_express) without granting a browser access to the whole home directory.
+ */
+export function resolveAllowedDataParents(
+  value = process.env.TRACE_VIEWER_ALLOWED_DATA_PARENTS,
+  baseDir = PROJECT_ROOT,
+): string[] {
+  const configured = value
+    ?.split(path.delimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+  return (configured && configured.length > 0 ? configured : [path.dirname(PROJECT_ROOT)]).map(
+    (entry) => path.resolve(baseDir, entry),
+  )
+}
+
+/**
  * Parse one root spec. `run-name=/path/to/corpus` pins every trace to a run;
  * an unlabelled spec is just a path. The first `=` is treated as a label separator
  * only when its left-hand side is a valid run name.

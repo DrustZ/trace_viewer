@@ -319,7 +319,8 @@ export function traceCoverageFor(
   traces: readonly TraceSummary[],
   currentDefinitionDigests: readonly string[] = [],
 ): AceTaskTraceCoverage {
-  const matching = matchingTaskTraces(scenarioId, traces)
+  const allMatching = allMatchingTaskTraces(scenarioId, traces)
+  const matching = allMatching.filter(isFormalTaskTrace)
   const runIds = [...new Set(matching.map((trace) => trace.meta.runId ?? 'run-a'))].sort()
   const byPair = new Map<string, Set<string>>()
   for (const trace of matching) {
@@ -333,6 +334,7 @@ export function traceCoverageFor(
     .map((runs) => [...runs].sort())
   return {
     traceCount: matching.length,
+    exploratoryTraceCount: allMatching.length - matching.length,
     runCount: runIds.length,
     runIds,
     matchedPairCount: matchedRunSets.length,
@@ -341,7 +343,10 @@ export function traceCoverageFor(
   }
 }
 
-function matchingTaskTraces(scenarioId: string, traces: readonly TraceSummary[]): TraceSummary[] {
+function allMatchingTaskTraces(
+  scenarioId: string,
+  traces: readonly TraceSummary[],
+): TraceSummary[] {
   return traces.filter((trace) => {
     if (trace.meta.instanceId !== scenarioId) return false
     // Store-normalized ACE simulations have corpusId=simulation. Retain
@@ -349,6 +354,15 @@ function matchingTaskTraces(scenarioId: string, traces: readonly TraceSummary[])
     // collision change task status.
     return trace.meta.corpusId === undefined || trace.meta.corpusId === 'simulation'
   })
+}
+
+function isFormalTaskTrace(trace: TraceSummary): boolean {
+  const runKind = trace.meta.extra?.run_kind ?? trace.meta.extra?.runKind
+  return runKind !== 'debug' && runKind !== 'counterfactual'
+}
+
+function matchingTaskTraces(scenarioId: string, traces: readonly TraceSummary[]): TraceSummary[] {
+  return allMatchingTaskTraces(scenarioId, traces).filter(isFormalTaskTrace)
 }
 
 function emptyOutcomes(): AceTaskOutcomeCounts {
@@ -527,7 +541,7 @@ function observedScoringContractsFor(
           .filter(Boolean)
           .sort()
           .at(-1) ?? null,
-      matchesCurrentCheckSemantics: matchesCurrentChecks(checks, variants),
+      matchesCurrentCheckShape: matchesCurrentChecks(checks, variants),
     }))
     .sort((a, b) => b.traceCount - a.traceCount || a.fingerprint.localeCompare(b.fingerprint))
 }

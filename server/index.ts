@@ -1,7 +1,12 @@
 import 'dotenv/config'
 import pkg from '../package.json'
 import { createApp } from './app'
-import { LOCAL_DATA_ROOTS_FILE, loadLocalDataRoots, resolveDataRoots } from './config/dataRoots'
+import {
+  LOCAL_DATA_ROOTS_FILE,
+  loadLocalDataRoots,
+  resolveAllowedDataParents,
+  resolveDataRoots,
+} from './config/dataRoots'
 import { DataRootManager } from './store/dataRootManager'
 import { TraceStore } from './store/traceStore'
 
@@ -20,6 +25,7 @@ const store = new TraceStore()
 const dataRootManager = new DataRootManager(store, dataRoots, {
   persistenceFile: LOCAL_DATA_ROOTS_FILE,
   localRoots,
+  allowedParents: resolveAllowedDataParents(),
 })
 const app = createApp({ store, version: pkg.version, dataRoots, dataRootManager })
 

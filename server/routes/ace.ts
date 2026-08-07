@@ -4,18 +4,27 @@ import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { Router } from 'express'
 import type {
+  AceBatchSummary,
   AceEvaluationOutcome,
+  AceRunKind,
   AceRunLineage,
   AceRunTraceSummary,
 } from '../../shared/schema/ace'
+import { parseAceRegressionScenarioSnapshot } from '../../shared/schema/aceRegression'
 import type { Trace } from '../../shared/schema/types'
 import { type AppliedAnalysisBundle, applyAceAnalysisBundle } from '../ace/analysisBundle'
 import { productionAnalysisSourceFingerprint } from '../ace/analysisSource'
 import { AceBridgeClient, type AceBridgeCommand } from '../ace/bridge'
 import { buildAceDashboard } from '../ace/dashboard'
 import { AceLaunchLineageStore } from '../ace/launchLineageStore'
-import { AceRequestError, parseAceRunRequest, parseControlRequest } from '../ace/requests'
+import {
+  AceRequestError,
+  aceMaxRunCostUsd,
+  parseAceRunRequest,
+  parseControlRequest,
+} from '../ace/requests'
 import { AceRunCatalog } from '../ace/runCatalog'
+import { compareAceRunConfig } from '../ace/runConfigFidelity'
 import { loadAceTaskCatalog } from '../ace/taskCatalog'
 import { PROJECT_ROOT } from '../config/dataRoots'
 import { getScanProgress } from '../store/scan'
@@ -23,9 +32,15 @@ import { asyncHandler, type RouteCtx } from './context'
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/
-const MAX_COST_CAP_USD = 100_000
 const MAX_INLINE_TEXT = 1_000_000
 const MAX_DASHBOARD_RUNS = 64
+const MAX_TRIAGE_OFFSET = 1_000_000
+const MAX_TRIAGE_LIMIT = 250
+const PROMPT_PRESET_FILES: Record<string, string> = {
+  baseline: 'baseline_beta.md',
+  improved: 'improved_beta.md',
+  optimized: 'optimized_beta.md',
+}
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -126,16 +141,40 @@ export function parseDashboardRunIds(value: unknown): string[] | undefined {
   return result
 }
 
-function forkCostCap(value: unknown): number {
+function dashboardPageInteger(
+  value: unknown,
+  name: string,
+  minimum: number,
+  maximum: number,
+  fallback: number,
+): number {
+  if (value === undefined) return fallback
   if (
-    typeof value !== 'number' ||
-    !Number.isFinite(value) ||
-    value < 0.01 ||
-    value > MAX_COST_CAP_USD
+    typeof value !== 'string' ||
+    !/^\d+$/.test(value) ||
+    !Number.isSafeInteger(Number(value)) ||
+    Number(value) < minimum ||
+    Number(value) > maximum
   ) {
-    throw new AceRequestError(
-      `costCapUsd must be between 0.01 and ${MAX_COST_CAP_USD} for checkpoint forks`,
-    )
+    throw new AceRequestError(`${name} must be an integer between ${minimum} and ${maximum}`)
+  }
+  return Number(value)
+}
+
+export function parseDashboardTriagePage(
+  offsetValue: unknown,
+  limitValue: unknown,
+): { offset: number; limit: number } {
+  return {
+    offset: dashboardPageInteger(offsetValue, 'triageOffset', 0, MAX_TRIAGE_OFFSET, 0),
+    limit: dashboardPageInteger(limitValue, 'triageLimit', 1, MAX_TRIAGE_LIMIT, 250),
+  }
+}
+
+function forkCostCap(value: unknown): number {
+  const maximum = aceMaxRunCostUsd()
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.01 || value > maximum) {
+    throw new AceRequestError(`costCapUsd must be between 0.01 and ${maximum} for checkpoint forks`)
   }
   return value
 }
@@ -152,6 +191,37 @@ function childRunId(): string {
     .replace(/[-:TZ.]/g, '')
     .slice(0, 14)
   return `fork-${stamp}-${randomBytes(3).toString('hex')}`
+}
+
+function bridgeFreshRunLineage(lineage: AceRunLineage): Record<string, unknown> {
+  return {
+    relation: 'fresh_task_rerun',
+    parent_trace_uid: lineage.parentTraceUid,
+    parent_source_trace_id: lineage.parentSourceTraceId,
+    parent_run_id: lineage.parentRunId,
+    fidelity: lineage.fidelity,
+    state_exact: lineage.stateExact,
+    config_exact: lineage.configExact,
+    llm_exact: lineage.llmExact,
+    ...(lineage.policyChanged !== undefined ? { policy_changed: lineage.policyChanged } : {}),
+  }
+}
+
+async function effectiveChildPromptText(
+  bridgeParams: Record<string, unknown>,
+  projectRoot: string,
+): Promise<string | undefined> {
+  if (typeof bridgeParams.promptText === 'string') return bridgeParams.promptText
+  if (typeof bridgeParams.promptPreset !== 'string') return undefined
+  const file = PROMPT_PRESET_FILES[bridgeParams.promptPreset]
+  if (!file) return undefined
+  try {
+    return await fs.readFile(path.join(projectRoot, 'configs', 'prompts', file), 'utf8')
+  } catch {
+    // The bridge remains the authority for missing preset files. Fidelity falls back
+    // conservatively to the recorded preset identity in lightweight/test worktrees.
+    return undefined
+  }
 }
 
 function regressionScenarioSnapshot(trace: Trace): Record<string, unknown> | undefined {
@@ -186,7 +256,7 @@ function regressionCapability(trace: Trace, sourcePath: string | undefined, proj
     missing,
     explanation: runnable
       ? 'A trace-bound Scenario snapshot is available. Saving creates an immutable single-item scenario pack using observed user turns; it is a fresh rerun, not checkpoint- or LLM-exact replay.'
-      : 'No trace-bound Scenario snapshot is available. Saving creates a clearly marked non-runnable draft with the transcript prefix and required Scenario fields.',
+      : 'No trace-bound Scenario snapshot is available. Complete a validated Scenario definition to create a runnable synthetic rerun, or save a clearly marked non-runnable draft.',
   } as const
 }
 
@@ -358,10 +428,15 @@ export function aceRoutes(
 
   const batchesWithTraceUids = async () => {
     const recordedLineage = await launchLineage.all()
-    const simulation = ctx.store.list().filter((summary) => summary.meta.corpusId === 'simulation')
-    const byRun = new Map<string, typeof simulation>()
-    const byRunAndSource = new Map<string, typeof simulation>()
-    for (const summary of simulation) {
+    const aceTraces = ctx.store
+      .list()
+      .filter(
+        (summary) =>
+          summary.meta.corpusId === 'simulation' || summary.meta.corpusId === 'production',
+      )
+    const byRun = new Map<string, typeof aceTraces>()
+    const byRunAndSource = new Map<string, typeof aceTraces>()
+    for (const summary of aceTraces) {
       const runId = summary.meta.runId ?? 'unknown'
       const sourceTraceId = summary.meta.sourceTraceId ?? summary.meta.traceId
       const runRows = byRun.get(runId)
@@ -373,7 +448,7 @@ export function aceRoutes(
       else byRunAndSource.set(sourceKey, [summary])
     }
 
-    const traceProjection = (summary: (typeof simulation)[number]): AceRunTraceSummary => {
+    const traceProjection = (summary: (typeof aceTraces)[number]): AceRunTraceSummary => {
       const traceUid = summary.meta.traceUid ?? summary.meta.traceId
       const evaluation = summary.evaluation
       const full = ctx.store.getFull(traceUid)
@@ -404,14 +479,130 @@ export function aceRoutes(
       }
     }
 
-    const batches = (await runCatalog.list(config.runRoot)).map((batch) => {
-      const traces = (byRun.get(batch.runId) ?? [])
+    const sortedTraceProjections = (summaries: typeof aceTraces) =>
+      summaries
         .map(traceProjection)
         .sort(
           (left, right) =>
             right.timestamp.localeCompare(left.timestamp) ||
             left.sourceTraceId.localeCompare(right.sourceTraceId),
         )
+
+    const counted = (values: readonly string[]) => {
+      const counts = new Map<string, number>()
+      for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1)
+      return [...counts.entries()]
+        .map(([code, count]) => ({ code, count }))
+        .sort((left, right) => right.count - left.count || left.code.localeCompare(right.code))
+    }
+
+    const synthesizedRun = (
+      runId: string,
+      summaries: typeof aceTraces,
+      options: {
+        controlsAvailable: boolean
+        lifecycle?: AceBatchSummary['lifecycle']
+        updatedAt?: string
+      },
+    ): AceBatchSummary => {
+      const traces = sortedTraceProjections(summaries)
+      const outcomes = summaries.map((summary) => summary.evaluation?.outcome ?? 'ungraded')
+      const passed = outcomes.filter((value) => value === 'pass').length
+      const failedGrade = outcomes.filter((value) => value === 'fail').length
+      const runtimeErrors = outcomes.filter((value) => value === 'runtime_error').length
+      const invalidUserSim = outcomes.filter((value) => value === 'invalid').length
+      const executed = passed + failedGrade
+      const corpusIds = new Set(summaries.map((summary) => summary.meta.corpusId))
+      const explicitKinds = new Set<AceRunKind>(
+        summaries.flatMap((summary) => {
+          const value = summary.meta.extra?.run_kind
+          return value === 'scored' || value === 'debug' || value === 'counterfactual'
+            ? [value]
+            : []
+        }),
+      )
+      const runKind: AceRunKind =
+        corpusIds.size === 1 && corpusIds.has('production')
+          ? 'production'
+          : explicitKinds.size === 1
+            ? ([...explicitKinds][0] ?? 'unknown')
+            : 'unknown'
+      const lifecycleStates = summaries.map(
+        (summary) => summary.evaluation?.lifecycle.state ?? summary.meta.status,
+      )
+      const lifecycle =
+        options.lifecycle ??
+        (lifecycleStates.some((state) => state === 'executing') ? 'running' : 'completed')
+      const updatedAt =
+        options.updatedAt ??
+        summaries
+          .map((summary) => summary.meta.timestamp)
+          .sort()
+          .at(-1) ??
+        new Date(0).toISOString()
+      const failedChecks = summaries.flatMap((summary) =>
+        (summary.evaluation?.checks ?? [])
+          .filter((check) => check.gating && !check.ok)
+          .map((check) => check.name),
+      )
+      const terminations = summaries.flatMap((summary) =>
+        summary.evaluation?.lifecycle.termination ? [summary.evaluation.lifecycle.termination] : [],
+      )
+      const flags = summaries.flatMap((summary) => summary.evaluation?.flags ?? [])
+      return {
+        runId,
+        runKind,
+        schemaVersion: 0,
+        manifestAvailable: false,
+        controlsAvailable: options.controlsAvailable,
+        lifecycle,
+        updatedAt,
+        ...(recordedLineage.get(runId) ? { lineage: recordedLineage.get(runId) } : {}),
+        spec: {},
+        totals: {
+          episodes: traces.length,
+          passed,
+          failedGrade,
+          runtimeErrors,
+          invalidUserSim,
+          userSimAttempts: null,
+          invalidUserSimAttempts: null,
+          passRate: executed > 0 ? passed / executed : null,
+          userSimValidityRate: null,
+          userSimAttemptValidityRate: null,
+          avgUserTurns:
+            summaries.length > 0
+              ? summaries.reduce((sum, summary) => sum + summary.stats.turns, 0) / summaries.length
+              : null,
+          avgToolCalls:
+            summaries.length > 0
+              ? summaries.reduce((sum, summary) => sum + summary.stats.toolUses, 0) /
+                summaries.length
+              : null,
+          flagsMajor: flags.filter(
+            (flag) => flag.severity === 'major' || flag.severity === 'critical',
+          ).length,
+          flagsMinor: flags.filter((flag) => flag.severity === 'minor').length,
+          costUsd: null,
+        },
+        failureChecks: counted(failedChecks),
+        terminations: counted(terminations),
+        episodes: [],
+        traces,
+        reconciliation: {
+          scheduledEpisodes: traces.length,
+          manifestEpisodes: 0,
+          ingestedTraces: traces.length,
+          matchedTraces: 0,
+          pendingTraceFiles: 0,
+          missingTerminalTraces: 0,
+          orphanTraces: traces.length,
+        },
+      }
+    }
+
+    const batches: AceBatchSummary[] = (await runCatalog.list(config.runRoot)).map((batch) => {
+      const traces = sortedTraceProjections(byRun.get(batch.runId) ?? [])
       const episodes = (batch.episodes ?? []).map((episode) => {
         const candidates = byRunAndSource.get(`${batch.runId}\0${episode.sourceTraceId}`) ?? []
         return {
@@ -456,53 +647,32 @@ export function aceRoutes(
     for (const runId of bridge.activeRunIds()) {
       if (existing.has(runId)) continue
       const active = bridge.active(runId)
-      batches.unshift({
-        runId,
-        runKind: 'unknown' as const,
-        schemaVersion: 3,
-        lifecycle: 'queued' as const,
-        updatedAt: active?.startedAt ?? new Date().toISOString(),
-        spec: {},
-        ...(recordedLineage.get(runId) ? { lineage: recordedLineage.get(runId) } : {}),
-        totals: {
-          episodes: 0,
-          passed: 0,
-          failedGrade: 0,
-          runtimeErrors: 0,
-          invalidUserSim: 0,
-          userSimAttempts: null,
-          invalidUserSimAttempts: null,
-          passRate: null,
-          userSimValidityRate: null,
-          userSimAttemptValidityRate: null,
-          avgUserTurns: null,
-          avgToolCalls: null,
-          flagsMajor: 0,
-          flagsMinor: 0,
-          costUsd: null,
-        },
-        failureChecks: [],
-        terminations: [],
-        episodes: [],
-        traces: [],
-        reconciliation: {
-          scheduledEpisodes: 0,
-          manifestEpisodes: 0,
-          ingestedTraces: 0,
-          matchedTraces: 0,
-          pendingTraceFiles: 0,
-          missingTerminalTraces: 0,
-          orphanTraces: 0,
-        },
-      })
+      const summaries = byRun.get(runId) ?? []
+      batches.push(
+        synthesizedRun(runId, summaries, {
+          controlsAvailable: true,
+          ...(summaries.length === 0 ? { lifecycle: 'queued' as const } : {}),
+          updatedAt: active?.startedAt ?? new Date().toISOString(),
+        }),
+      )
+      existing.add(runId)
     }
-    return batches
+    for (const [runId, summaries] of byRun) {
+      if (existing.has(runId)) continue
+      batches.push(synthesizedRun(runId, summaries, { controlsAvailable: false }))
+      existing.add(runId)
+    }
+    return batches.sort(
+      (left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt) || left.runId.localeCompare(right.runId),
+    )
   }
 
   router.get(
     '/api/ace/dashboard',
     asyncHandler(async (req, res) => {
       const runIds = parseDashboardRunIds(req.query.runId)
+      const triagePage = parseDashboardTriagePage(req.query.triageOffset, req.query.triageLimit)
       // Detector output is an overlay on production traces. Await the shared,
       // cached load before taking the snapshot so a first-page request cannot
       // race and return a permanently detector-free aggregate. Simulation-only
@@ -517,7 +687,7 @@ export function aceRoutes(
         .then((catalog) => catalog.tasks)
         .catch(() => [])
       const batches = await batchesWithTraceUids()
-      res.json(buildAceDashboard(ctx.store, runIds, tasks, batches))
+      res.json(buildAceDashboard(ctx.store, runIds, tasks, batches, triagePage))
     }),
   )
 
@@ -650,6 +820,14 @@ export function aceRoutes(
           })
           return
         }
+        const promptText = await effectiveChildPromptText(parsed.bridgeParams, config.projectRoot)
+        const configComparison = compareAceRunConfig(
+          parentExtra.config_snapshot,
+          parsed.bridgeParams,
+          {
+            ...(promptText !== undefined ? { effectivePromptText: promptText } : {}),
+          },
+        )
         pendingLineage = {
           relation: 'fresh_task_rerun',
           parentTraceUid: source.traceUid,
@@ -657,13 +835,18 @@ export function aceRoutes(
           parentRunId: parent.meta.runId ?? 'unknown',
           fidelity: 'scenario_fresh_rerun_state_regenerated',
           stateExact: false,
-          configExact: false,
+          configExact: configComparison.configExact,
           llmExact: false,
-          policyChanged: parsed.request.runKind === 'counterfactual',
+          ...(configComparison.policyChanged !== undefined
+            ? { policyChanged: configComparison.policyChanged }
+            : {}),
         }
       }
       if (pendingLineage) await launchLineage.assertCompatible(parsed.runId, pendingLineage)
-      const started = bridge.start(parsed.runId, parsed.bridgeParams)
+      const started = bridge.start(parsed.runId, {
+        ...parsed.bridgeParams,
+        ...(pendingLineage ? { lineage: bridgeFreshRunLineage(pendingLineage) } : {}),
+      })
       // Starting the fixed bridge is the commit point. A spawn/duplicate-run
       // failure must never leave immutable ancestry attached to a run that did
       // not launch and may later be retried with a different parent.
@@ -682,6 +865,16 @@ export function aceRoutes(
     asyncHandler(async (req, res) => {
       const action = parseControlRequest(req.body)
       const runId = safeId(req.params.runId, 'runId')
+      const run = (await batchesWithTraceUids()).find((candidate) => candidate.runId === runId)
+      if (run?.controlsAvailable === false) {
+        res.status(409).json({
+          error: 'run is read-only because no controllable ACE manifest/bridge is available',
+          runId,
+          manifestAvailable: run.manifestAvailable,
+          controlsAvailable: false,
+        })
+        return
+      }
       const result = await bridge.call<{ run_id: string; control: Record<string, unknown> }>(
         'control',
         { runId, command: action },
@@ -784,7 +977,12 @@ export function aceRoutes(
     '/api/ace/regressions',
     asyncHandler(async (req, res) => {
       const body = record(req.body)
-      const allowed = new Set(['sourceTraceUid', 'boundaryMessageId', 'regressionId'])
+      const allowed = new Set([
+        'sourceTraceUid',
+        'boundaryMessageId',
+        'regressionId',
+        'scenarioSnapshot',
+      ])
       const unknown = Object.keys(body).filter((key) => !allowed.has(key))
       if (unknown.length > 0) {
         throw new AceRequestError(`unknown regression field(s): ${unknown.join(', ')}`)
@@ -821,7 +1019,30 @@ export function aceRoutes(
       const prefix = regressionPrefix(trace, boundaryMessageId)
       const extra = record(trace.meta.extra)
       const groundTruth = record(extra.groundTruth)
-      const scenarioSnapshot = regressionScenarioSnapshot(trace)
+      const recordedScenarioSnapshot = regressionScenarioSnapshot(trace)
+      let suppliedScenarioSnapshot:
+        | ReturnType<typeof parseAceRegressionScenarioSnapshot>
+        | undefined
+      if (body.scenarioSnapshot !== undefined) {
+        if (trace.meta.corpusId !== 'production') {
+          throw new AceRequestError(
+            'scenarioSnapshot may only complete a production trace without a recorded Scenario',
+          )
+        }
+        if (recordedScenarioSnapshot !== undefined) {
+          throw new AceRequestError(
+            'scenarioSnapshot cannot replace the immutable Scenario already recorded by this trace',
+          )
+        }
+        try {
+          suppliedScenarioSnapshot = parseAceRegressionScenarioSnapshot(body.scenarioSnapshot)
+        } catch (error) {
+          throw new AceRequestError(
+            error instanceof Error ? error.message : 'scenarioSnapshot is invalid',
+          )
+        }
+      }
+      const scenarioSnapshot = recordedScenarioSnapshot ?? suppliedScenarioSnapshot
       const configSnapshot = optionalRecord(extra.config_snapshot)
       const recordedWorld = optionalRecord(groundTruth.world)
       const worldDiff = trace.evaluation?.worldDiff ?? []
@@ -854,6 +1075,7 @@ export function aceRoutes(
         artifact: String(result.artifact),
         scenarioPack: typeof result.scenario_pack === 'string' ? result.scenario_pack : null,
         draft: typeof result.draft === 'string' ? result.draft : null,
+        scenarioId: typeof result.scenario_id === 'string' ? result.scenario_id : null,
         missingRequiredFields: Array.isArray(result.missing_required_fields)
           ? result.missing_required_fields
           : [],

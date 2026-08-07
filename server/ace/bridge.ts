@@ -1,5 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import path from 'node:path'
+import { aceChildEnvironment } from './childEnvironment'
 
 export type AceBridgeCommand =
   | 'start'
@@ -99,7 +100,7 @@ export class AceBridgeClient {
   ): { child: ChildProcessWithoutNullStreams; completion: Promise<T> } {
     const child = spawn(this.python, ['-m', 'ace.cockpit_bridge', command], {
       cwd: this.projectRoot,
-      env: process.env,
+      env: aceChildEnvironment(),
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
     })

@@ -323,12 +323,16 @@ describe('ACE artifacts', () => {
         checkpoint: { enabled: true, archive: 'episode.checkpoints.json' },
         usage: { cost_usd: 0.01 },
         lineage: {
+          relation: 'synthetic_regression_rerun',
           parent_trace_uid: 'trace-parent',
           checkpoint_id: 3,
           fork_message_count: 8,
           mode: 'counterfactual',
           policy_changed: true,
-          fidelity: 'state_exact_policy_changed_future_generation_nondeterministic',
+          fidelity: 'synthetic_regression_scenario_rerun_state_regenerated',
+          regression_id: 'reg-production',
+          synthetic: true,
+          formal_metrics_excluded: true,
         },
       },
     })
@@ -358,6 +362,7 @@ describe('ACE artifacts', () => {
     })
     expect(trace.meta.extra?.scenario_snapshot).not.toHaveProperty('canary')
     expect(trace.evaluation?.lineage).toMatchObject({
+      relation: 'synthetic_regression_rerun',
       parentTraceUid: 'trace-parent',
       checkpointId: '3',
       forkMessageCount: 8,
@@ -365,6 +370,31 @@ describe('ACE artifacts', () => {
       policyChanged: true,
       runKind: 'counterfactual',
       configDigest: 'config-v3',
+      regressionId: 'reg-production',
+      synthetic: true,
+      formalMetricsExcluded: true,
+    })
+  })
+
+  it('normalizes current ACE transport and prompt-digest aliases for aggregate dimensions', () => {
+    const trace = applyAceArtifacts(parsed(), {
+      meta: { extra: { scenario_id: 'scenario-current', environment_seed: 4 } },
+      evaluation: {
+        spec: {
+          agent_transport: 'responses',
+          prompt_digests: {
+            baseline_beta: 'bot-prompt-sha',
+            human_tier: 'human-prompt-sha',
+          },
+        },
+      },
+    })
+
+    expect(trace.meta.extra).toMatchObject({
+      transport: 'responses',
+      prompt: 'baseline_beta',
+      prompt_alias: 'baseline_beta',
+      prompt_digest: 'bot-prompt-sha',
     })
   })
 })

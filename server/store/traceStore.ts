@@ -173,7 +173,11 @@ export class TraceStore {
     const trace = this.materialize(parsed, sourcePath)
     this.set(trace, sourcePath, rawText)
     this.version += 1
-    this.publish({ type: 'trace.upserted', traceUid: trace.meta.traceUid })
+    this.publish({
+      type: 'trace.upserted',
+      traceUid: trace.meta.traceUid,
+      runId: trace.meta.runId,
+    })
     return trace
   }
 
@@ -184,19 +188,23 @@ export class TraceStore {
   replaceSource(parsed: ParsedTrace[], sourcePath: string): Trace[] {
     const traces = parsed.map((entry) => this.materialize(entry, sourcePath))
     const nextUids = new Set(traces.map((trace) => trace.meta.traceUid as string))
-    const removed: string[] = []
+    const removed: { traceUid: string; runId?: string }[] = []
     for (const [traceUid, stored] of this.byUid) {
       if (stored.sourcePath !== sourcePath || nextUids.has(traceUid)) continue
       this.byUid.delete(traceUid)
       this.deindex(traceUid, stored)
-      removed.push(traceUid)
+      removed.push({ traceUid, runId: stored.trace.meta.runId })
     }
     for (const trace of traces) this.set(trace, sourcePath)
     if (removed.length === 0 && traces.length === 0) return traces
     this.version += 1
-    for (const traceUid of removed) this.publish({ type: 'trace.removed', traceUid })
+    for (const item of removed) this.publish({ type: 'trace.removed', ...item })
     for (const trace of traces) {
-      this.publish({ type: 'trace.upserted', traceUid: trace.meta.traceUid })
+      this.publish({
+        type: 'trace.upserted',
+        traceUid: trace.meta.traceUid,
+        runId: trace.meta.runId,
+      })
     }
     return traces
   }
@@ -260,22 +268,22 @@ export class TraceStore {
     }
     this.byUid.set(traceUid, { ...stored, trace })
     this.version += 1
-    this.publish({ type: 'trace.upserted', traceUid })
+    this.publish({ type: 'trace.upserted', traceUid, runId: trace.meta.runId })
     return trace
   }
 
   /** Removes every trace loaded from the given source file. Returns the removed count. */
   remove(bySourcePath: string): number {
-    const removed: string[] = []
+    const removed: { traceUid: string; runId?: string }[] = []
     for (const [traceUid, stored] of this.byUid) {
       if (stored.sourcePath !== bySourcePath) continue
       this.byUid.delete(traceUid)
       this.deindex(traceUid, stored)
-      removed.push(traceUid)
+      removed.push({ traceUid, runId: stored.trace.meta.runId })
     }
     if (removed.length === 0) return 0
     this.version += 1
-    for (const traceUid of removed) this.publish({ type: 'trace.removed', traceUid })
+    for (const item of removed) this.publish({ type: 'trace.removed', ...item })
     return removed.length
   }
 

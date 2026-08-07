@@ -8,7 +8,12 @@ import { useAceCheckpoints, useAceRun, useAceRuns, useControlAceRun } from '../a
 import { useAceTask } from '../api/aceTasks'
 import { useTrace, useTraces } from '../api/hooks'
 import { AceRunLauncher } from '../components/ace/AceRunLauncher'
-import { taskScenarioFiles, traceEnvironmentSeed } from '../components/ace/interactiveLab'
+import {
+  taskScenarioFiles,
+  traceEnvironmentSeed,
+  traceRunFormOverrides,
+  traceRunRecordedConfig,
+} from '../components/ace/interactiveLab'
 import { ErrorState, LoadingState } from '../components/common/EmptyState'
 import { formatNumber, formatPercent } from '../components/common/format'
 
@@ -222,6 +227,10 @@ export default function AceInteractiveLabPage() {
     recordedSeed ?? (Number.isSafeInteger(requestedSeed) && requestedSeed >= 0 ? requestedSeed : 1)
   const checkpoints = useAceCheckpoints(requestedTraceUid)
   const sourceIsSimulation = sourceTrace?.meta.corpusId === 'simulation'
+  const sourceInitialValues =
+    sourceTrace && sourceIsSimulation ? traceRunFormOverrides(sourceTrace) : undefined
+  const sourceRecordedConfig =
+    sourceTrace && sourceIsSimulation ? traceRunRecordedConfig(sourceTrace) : undefined
   const traceBranchReady = Boolean(
     requestedTraceUid && sourceIsSimulation && scenarioFile && recordedSeed !== undefined,
   )
@@ -361,6 +370,8 @@ export default function AceInteractiveLabPage() {
             <AceRunLauncher
               key={`${requestedTraceUid ?? 'task'}:${scenarioFile}:${scenarioId}:${seed}`}
               title="Interactive task configuration"
+              initialValues={sourceInitialValues}
+              recordedConfig={sourceRecordedConfig}
               initialScenarioFile={scenarioFile}
               initialScenarioId={scenarioId}
               initialSeed={seed}

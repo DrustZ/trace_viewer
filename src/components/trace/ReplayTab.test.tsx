@@ -1,6 +1,7 @@
 import type { AceCheckpointResponse } from '@shared/schema/ace'
 import type { Trace } from '@shared/schema/types'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const aceMocks = vi.hoisted(() => ({
@@ -17,7 +18,15 @@ vi.mock('../../api/ace', () => ({
   useSaveAceRegression: aceMocks.saveRegression,
 }))
 
-import { historicalReplayRequest, historicalReplayUnavailableMessage, ReplayTab } from './ReplayTab'
+import {
+  checkpointForkMessageId,
+  historicalReplayRequest,
+  historicalReplayRows,
+  historicalReplayUnavailableMessage,
+  productionRegressionScenarioSeed,
+  ReplayTab,
+  validateRegressionScenarioDraft,
+} from './ReplayTab'
 
 function makeTrace(overrides: Partial<Trace['meta']> = {}): Trace {
   return {
@@ -130,6 +139,31 @@ describe('ReplayTab', () => {
           informative: 7,
           informative_matches: 6,
           skipped_orphans: 2,
+          records: [
+            {
+              tool: 'get_order_details',
+              index: 4,
+              raw_index: 7,
+              stratum: 'informative_read',
+              kind: 'state_mismatch',
+              detail: 'recorded status differs',
+            },
+            {
+              tool: 'escalate_to_human',
+              index: 5,
+              stratum: 'arg_echo',
+              kind: 'match',
+              detail: '',
+            },
+          ],
+          residuals: [
+            {
+              tool: 'fallback_should_not_replace_records',
+              index: 9,
+              stratum: 'informative_read',
+              kind: 'error_mismatch',
+            },
+          ],
         },
       },
     })
@@ -140,7 +174,139 @@ describe('ReplayTab', () => {
     expect(html).toContain('Informative')
     expect(html).toContain('Matches')
     expect(html).toContain('tool-only')
+    expect(html).toContain('get_order_details')
+    expect(html).toContain('chrono 4 · raw 7')
+    expect(html).toContain('informative_read')
+    expect(html).toContain('state_mismatch')
+    expect(html).toContain('recorded status differs')
+    expect(html).toContain('Showing 1/2 records')
+    expect(html).not.toContain('escalate_to_human')
+    expect(html).not.toContain('fallback_should_not_replace_records')
     expect(html).not.toContain('historical-replay-unavailable')
+  })
+
+  it('filters historical rows by replay stratum and falls back to residual-only output', () => {
+    const bridgeResult = {
+      residuals: [
+        {
+          tool: 'issue_refund',
+          chronological_index: 2,
+          rawIndex: 8,
+          stratum: 'informative_write',
+          kind: 'we_block_they_allow',
+          detail: 'policy gate differs',
+        },
+        {
+          tool: 'get_customer_orders',
+          index: 3,
+          stratum: 'arg_echo',
+          kind: 'match',
+        },
+      ],
+    }
+
+    expect(historicalReplayRows(bridgeResult, true)).toEqual([
+      {
+        tool: 'issue_refund',
+        chronologicalIndex: 2,
+        rawIndex: 8,
+        stratum: 'informative_write',
+        kind: 'we_block_they_allow',
+        detail: 'policy gate differs',
+      },
+    ])
+    expect(historicalReplayRows(bridgeResult, false)).toHaveLength(2)
+  })
+
+  it('maps checkpoint prefix length to its last chronological message without off-by-one', () => {
+    const trace = makeTrace()
+    trace.messages = [
+      {
+        id: 'raw-first-but-last',
+        role: 'assistant',
+        content: '',
+        rawIndex: 0,
+        chronologicalIndex: 2,
+      },
+      { id: 'chronological-first', role: 'user', content: '', rawIndex: 1, chronologicalIndex: 0 },
+      {
+        id: 'chronological-second',
+        role: 'assistant',
+        content: '',
+        rawIndex: 2,
+        chronologicalIndex: 1,
+      },
+    ]
+
+    expect(checkpointForkMessageId({ id: 3, phase: 'bot', message_count: 2 }, trace.messages)).toBe(
+      'chronological-second',
+    )
+    expect(
+      checkpointForkMessageId(
+        {
+          id: 3,
+          phase: 'bot',
+          message_count: 2,
+          fork_message_id: 'bridge-authoritative-boundary',
+        },
+        trace.messages,
+      ),
+    ).toBe('bridge-authoritative-boundary')
+    expect(
+      checkpointForkMessageId({ id: 0, phase: 'user', message_count: 0 }, trace.messages),
+    ).toBe(undefined)
+    expect(checkpointForkMessageId({ id: 9, phase: 'bot', message_count: 4 }, trace.messages)).toBe(
+      undefined,
+    )
+  })
+
+  it('displays the selected checkpoint boundary and returned immutable lineage', () => {
+    const trace = makeTrace({ corpusId: 'simulation', runId: 'parent-run' })
+    trace.messages = [
+      { id: 'm-chronological-0', role: 'user', content: 'hello', chronologicalIndex: 0 },
+      { id: 'm-chronological-1', role: 'assistant', content: 'hi', chronologicalIndex: 1 },
+    ]
+    aceMocks.checkpoints.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: capability({
+        available: true,
+        checkpoints: [
+          {
+            id: 7,
+            phase: 'bot',
+            message_count: 2,
+            branchable: true,
+            counterfactual_branchable: true,
+          },
+        ],
+      }),
+    })
+    aceMocks.replay.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+      data: {
+        result: {
+          child_run_id: 'child-run',
+          lineage: {
+            checkpoint_id: 7,
+            fork_message_id: 'm-chronological-1',
+          },
+        },
+      },
+    })
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ReplayTab trace={trace} />
+      </MemoryRouter>,
+    )
+
+    expect(html).toContain('Fork lineage · checkpoint')
+    expect(html).toContain('m-chronological-1')
+    expect(html).toContain('Recorded lineage · checkpoint')
+    expect(html).toContain('child-run')
   })
 
   it('explains draft fidelity and exposes raw plus chronological prefix anchors', () => {
@@ -174,5 +340,64 @@ describe('ReplayTab', () => {
     expect(html).toContain('chrono 0 · raw 1 · assistant')
     expect(html).toContain('chrono 1 · raw 0 · user')
     expect(html).toContain('does not call a model or tool')
+    expect(html).toContain('Complete production evidence as a Scenario')
+    expect(html).toContain('Synthetic reruns are always Debug/Counterfactual')
+    expect(html).toContain('scenario-validation-error')
+  })
+
+  it('seeds a production Scenario from transcript and tool metadata without inventing targets', () => {
+    const trace = makeTrace({
+      sourceTraceId: 'case/with unsafe chars',
+      extra: { issue: 'refund_payment', language: 'Spanish' },
+    })
+    trace.messages = [
+      { id: 'm-0', role: 'user', content: 'Please refund order_003.' },
+      {
+        id: 'm-1',
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          {
+            id: 'call-1',
+            name: 'issue_refund',
+            arguments: '{"order_id":"order_003"}',
+            parsedArguments: { order_id: 'order_003' },
+          },
+        ],
+      },
+    ]
+
+    const seed = productionRegressionScenarioSeed(trace)
+
+    expect(seed).toMatchObject({
+      scenario_id: 'production-case-with-unsafe-chars',
+      suite: 'regression',
+      card: {
+        issue: 'refund_payment',
+        language: 'es',
+        id_knowledge: 'exact',
+        order_id: 'order_003',
+        goal: 'Please refund order_003.',
+      },
+      expected_actions: [{ name: 'issue_refund', args_subset: { order_id: 'order_003' } }],
+      expected_outcome: 'refund',
+      reward_basis: ['ACTIONS', 'OUTCOME'],
+    })
+    expect(validateRegressionScenarioDraft(JSON.stringify(seed))).toEqual({
+      ok: true,
+      scenario: seed,
+    })
+  })
+
+  it('returns actionable production Scenario JSON errors before saving', () => {
+    expect(validateRegressionScenarioDraft('{not json')).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('Scenario JSON is invalid'),
+    })
+    const seed = productionRegressionScenarioSeed(makeTrace())
+    expect(validateRegressionScenarioDraft(JSON.stringify(seed))).toEqual({
+      ok: false,
+      error: 'scenarioSnapshot.card.order_id must be a non-empty string of at most 128 characters',
+    })
   })
 })

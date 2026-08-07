@@ -29,8 +29,8 @@ function variant(goal: string): AceTaskVariant {
     expectedOutcome: 'refunded',
     rewardBasis: ['ACTIONS'],
     authorizedEffects: [],
-    requiredInfo: [{ field: 'order_id' }],
-    expectedStateDelta: [{ path: 'payment.status', after: 'refunded' }],
+    requiredInfo: [{ kind: 'text', value: 'order_id' }],
+    expectedStateDelta: [{ order_id: 'order_069', field: 'payment.status', to: 'refunded' }],
     mustPrecede: [['get_order', 'refund_order']],
     consentRequired: true,
     promiseCheck: true,
@@ -53,6 +53,7 @@ function task(variants: AceTaskVariant[], conflict = false): AceTaskDetail {
     conflict,
     traceCoverage: {
       traceCount: 0,
+      exploratoryTraceCount: 0,
       runCount: 0,
       runIds: [],
       matchedPairCount: 0,
@@ -123,13 +124,21 @@ describe('TraceStore review source', () => {
     })
 
     expect((await source.list())[0]?.trace.groundTruth).toMatchObject({
-      currentDefinitionReference: { issue: 'refund', language: 'es' },
+      status: 'available',
+      authoritative: true,
+      source: 'current_task_catalog',
+      traceBound: false,
+      task: { issue: 'refund', language: 'es', personaGoal: 'Get the eligible refund.' },
     })
 
     current = catalog([cancelTask])
     current.source.catalogDigest = 'catalog-v2'
     expect((await source.list())[0]?.trace.groundTruth).toMatchObject({
-      currentDefinitionReference: { issue: 'cancel', language: 'en' },
+      status: 'available',
+      authoritative: true,
+      source: 'current_task_catalog',
+      traceBound: false,
+      task: { issue: 'cancel', language: 'en', personaGoal: 'Cancel the eligible order.' },
     })
   })
 
@@ -230,15 +239,6 @@ describe('TraceStore review source', () => {
       authoritative: false,
       reason: 'scenario_id_mismatch',
       scenarioId: 'scenario-7',
-      currentDefinitionReference: {
-        source: 'current_catalog_unverified',
-        authoritative: false,
-        scenarioId: 'scenario-7',
-        conflict: false,
-        issue: 'refund',
-        language: 'es',
-        personaGoal: 'Get the eligible refund.',
-      },
     })
     const blindGroundTruth = JSON.stringify({
       rubric: candidates[0]?.trace.rubric,
@@ -323,12 +323,17 @@ describe('TraceStore review source', () => {
       status: 'available',
       authoritative: true,
       source: 'trace_bound_episode_sidecar_scenario_snapshot',
+      traceBound: true,
       scenarioId: 'scenario-7',
       configDigest: 'trace-config-9310a2c',
-      definition: {
-        persona: { goal: 'Cancel order_028.' },
-        expectedActions: [{ name: 'cancel_order', args_subset: { order_id: 'order_028' } }],
+      task: {
+        issue: 'cancel',
+        language: 'en',
+        personaGoal: 'Cancel order_028.',
         expectedOutcome: 'cancelled',
+      },
+      policy: {
+        expectedActions: [{ name: 'cancel_order', argsSubset: { order_id: 'order_028' } }],
       },
     })
     const reviewDefinition = JSON.stringify({
@@ -337,9 +342,62 @@ describe('TraceStore review source', () => {
     })
     expect(reviewDefinition).toContain('order_028')
     expect(reviewDefinition).not.toContain('order_069')
-    expect(reviewDefinition).not.toContain('current_catalog_unverified')
+    expect(reviewDefinition).not.toContain('current_task_catalog')
     expect(reviewDefinition).not.toContain('CANARY')
     expect(reviewDefinition).not.toContain('AUTOMATIC_OK_LEAK')
+  })
+
+  it('fails closed instead of copying raw production extra.groundTruth', async () => {
+    const parsed: ParsedTrace = {
+      meta: {
+        traceId: 'production-ground-truth-canary',
+        corpusId: 'production',
+        runId: 'production',
+        instanceId: 'production-ground-truth-canary',
+        component: 'ace/support',
+        status: 'completed',
+        timestamp: '2026-08-06T00:00:00.000Z',
+        checkpointStep: 0,
+        split: 'test',
+        sourceFormat: 'ace-production',
+        extra: {
+          groundTruth: {
+            scenario: { expected_outcome: 'refund' },
+            model: 'RAW_MODEL_CANARY',
+            arm: 'RAW_ARM_CANARY',
+            grade: 'RAW_GRADE_CANARY',
+            judge: 'RAW_JUDGE_CANARY',
+            detector: 'RAW_DETECTOR_CANARY',
+            failures: ['RAW_FAILURE_CANARY'],
+            score: 1,
+          },
+        },
+      },
+      messages: [{ id: 'm-1', role: 'user', content: 'Please help.' }],
+      warnings: [],
+    }
+    const store = new TraceStore()
+    store.upsert(parsed, '/tmp/production-ground-truth-canary.json')
+
+    const [candidate] = await createTraceStoreReviewSource(store).list()
+
+    expect(candidate?.trace.groundTruth).toEqual({
+      status: 'unavailable',
+      authoritative: false,
+      reason: 'unsafe_ground_truth_shape',
+      scenarioId: 'production-ground-truth-canary',
+    })
+    const json = JSON.stringify(candidate?.trace.groundTruth)
+    for (const canary of [
+      'RAW_MODEL_CANARY',
+      'RAW_ARM_CANARY',
+      'RAW_GRADE_CANARY',
+      'RAW_JUDGE_CANARY',
+      'RAW_DETECTOR_CANARY',
+      'RAW_FAILURE_CANARY',
+    ]) {
+      expect(json).not.toContain(canary)
+    }
   })
 
   it('marks task-definition conflicts without selecting or exposing either variant', async () => {
@@ -384,16 +442,8 @@ describe('TraceStore review source', () => {
     expect(candidate?.trace.groundTruth).toEqual({
       status: 'unavailable',
       authoritative: false,
-      reason: 'trace_bound_scenario_snapshot_missing',
+      reason: 'task_catalog_definition_conflict',
       scenarioId: 'scenario-7',
-      currentDefinitionReference: {
-        source: 'current_catalog_unverified',
-        authoritative: false,
-        scenarioId: 'scenario-7',
-        conflict: true,
-        issue: 'refund',
-        language: 'es',
-      },
     })
     expect(JSON.stringify(candidate?.trace.groundTruth)).not.toContain('VARIANT_SECRET')
     expect(JSON.stringify(candidate?.trace.rubric)).not.toContain('GRADE_DETAIL_LEAK')

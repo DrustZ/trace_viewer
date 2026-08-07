@@ -11,6 +11,7 @@ import { CalibrationStatsPanel } from '../components/review/CalibrationStatsPane
 import { ReviewPanel } from '../components/review/ReviewPanel'
 import { ReviewQueue } from '../components/review/ReviewQueue'
 import {
+  calibrationFiltersForQueue,
   nextReviewSubject,
   reviewQueueFiltersFromSearchParams,
   reviewQueueFiltersToSearchParams,
@@ -91,18 +92,7 @@ export function ReviewPage() {
             onItemsChange={setQueueItems}
             onSelect={select}
           />
-          <CalibrationStatsPanel
-            filters={
-              selected
-                ? {
-                    annotator: selected.annotator,
-                    rubricVersion: selected.rubricVersion,
-                    corpusId: selected.corpusId,
-                    runId: selected.runId,
-                  }
-                : undefined
-            }
-          />
+          <CalibrationStatsPanel filters={calibrationFiltersForQueue(filters)} />
         </div>
         {selected ? (
           <div className="space-y-3">

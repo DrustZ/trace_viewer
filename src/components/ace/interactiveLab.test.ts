@@ -1,7 +1,14 @@
 import type { AceTaskDetail } from '@shared/schema/aceTasks'
 import type { Trace } from '@shared/schema/types'
 import { describe, expect, it } from 'vitest'
-import { interactiveLabHref, taskScenarioFiles, traceEnvironmentSeed } from './interactiveLab'
+import { buildAceRunRequest, DEFAULT_ACE_RUN_FORM } from './AceRunLauncher'
+import {
+  interactiveLabHref,
+  taskScenarioFiles,
+  traceEnvironmentSeed,
+  traceRunFormOverrides,
+  traceRunRecordedConfig,
+} from './interactiveLab'
 
 function trace(extra: Record<string, unknown> = {}): Trace {
   return {
@@ -57,5 +64,125 @@ describe('interactive lab launch helpers', () => {
       ],
     } as AceTaskDetail
     expect(taskScenarioFiles(task)).toEqual(['atomic.json', 'sealed.json'])
+  })
+
+  it('projects every recorded policy, harness, evaluator, fault, and checkpoint setting', () => {
+    const source = trace({
+      config_snapshot: {
+        runner: {
+          max_messages: 28,
+          concurrency: 3,
+          bot_opens: false,
+          state_scope: 'journey',
+          latent_refund_block_rate: 0.2,
+          tool_fail_before_rate: 0.1,
+          tool_response_lost_rate: 0.05,
+          judge_mode: 'sample',
+          judge_sample: 4,
+          semantic_verify_mode: 'sample',
+          semantic_verify_sample: 2,
+          checkpoint_enabled: true,
+        },
+        spec: {
+          prompt_source: { kind: 'preset', value: 'improved' },
+          prompt_snapshot: { bot: 'recorded prompt text' },
+          bot_model: 'assistant-recorded',
+          user_model: 'user-recorded',
+          bot_temperature: 0.4,
+          user_temperature: 1.1,
+          agent_transport: 'responses',
+          reasoning_effort: 'high',
+          bot: 'workflow',
+        },
+      },
+    })
+
+    expect(traceRunFormOverrides(source)).toEqual({
+      prompt: 'improved',
+      model: 'assistant-recorded',
+      userModel: 'user-recorded',
+      temperature: '0.4',
+      userTemperature: '1.1',
+      transport: 'responses',
+      reasoningEffort: 'high',
+      bot: 'workflow',
+      botOpens: 'false',
+      stateScope: 'journey',
+      maxMessages: '28',
+      concurrency: '3',
+      latentRefundBlockRate: '0.2',
+      failBefore: '0.1',
+      responseLost: '0.05',
+      judge: 'sample',
+      judgeSample: '4',
+      semantic: 'sample',
+      semanticSample: '2',
+    })
+    const recorded = traceRunRecordedConfig(source)
+    expect(recorded.missing).toEqual([])
+    expect(recorded.fields).toMatchObject({
+      prompt: { value: 'preset:improved' },
+      model: { value: 'assistant-recorded' },
+      transport: { value: 'responses' },
+      checkpoints: { value: true },
+    })
+
+    const built = buildAceRunRequest(
+      {
+        ...DEFAULT_ACE_RUN_FORM,
+        ...traceRunFormOverrides(source),
+        scenarioIds: 'task-1',
+        seeds: '7',
+        runKind: 'debug',
+      },
+      { sourceTraceUid: 'simulation:run-a:canonical' },
+    )
+    expect(built).toEqual({
+      ok: true,
+      request: expect.objectContaining({
+        prompt: 'improved',
+        model: 'assistant-recorded',
+        userModel: 'user-recorded',
+        transport: 'responses',
+        temperature: 0.4,
+        userTemperature: 1.1,
+        reasoningEffort: 'high',
+        bot: 'workflow',
+        botOpens: false,
+        maxMessages: 28,
+        concurrency: 3,
+        stateScope: 'journey',
+        latentRefundBlockRate: 0.2,
+        toolFailBeforeRate: 0.1,
+        toolResponseLostRate: 0.05,
+        judge: 'sample',
+        judgeSample: 4,
+        semanticVerify: 'sample',
+        semanticVerifySample: 2,
+        checkpoints: true,
+        sourceTraceUid: 'simulation:run-a:canonical',
+      }),
+    })
+  })
+
+  it('copies an inline/file prompt snapshot and leaves absent config explicitly missing', () => {
+    const source = trace({
+      config_snapshot: {
+        spec: {
+          prompt_source: { kind: 'file', value: 'configs/prompts/custom.md' },
+          prompt_snapshot: { bot: 'Full recorded custom policy.' },
+        },
+      },
+    })
+
+    expect(traceRunFormOverrides(source)).toEqual({
+      promptText: 'Full recorded custom policy.',
+    })
+    const recorded = traceRunRecordedConfig(source)
+    expect(recorded.fields.prompt).toMatchObject({
+      value: 'inline:Full recorded custom policy.',
+    })
+    expect(recorded.missing).toContain('model')
+    expect(recorded.missing).toContain('checkpoints')
   })
 })

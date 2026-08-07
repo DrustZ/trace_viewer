@@ -1,5 +1,5 @@
 import type { AceRunRequest } from '@shared/schema/ace'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAceCapabilities, useAceScenarios, useStartAceRun } from '../api/ace'
 import {
@@ -199,7 +199,10 @@ export default function AceExperimentsPage() {
   const available = capabilities.data?.available === true
   const preview = useMemo(() => buildExperimentMatrix(values), [values])
   const pending = startA.isPending || startB.isPending
-  const alreadySubmitted = launch?.experimentId === values.experimentId.trim()
+  const priorLaunch = launch?.experimentId === values.experimentId.trim() ? launch : null
+  // Lock the button only once BOTH variants started; a partial failure keeps
+  // the retry path open, and the retry skips the variant that already ran.
+  const alreadySubmitted = Boolean(priorLaunch?.a && priorLaunch?.b)
 
   const setShared = <Key extends keyof Omit<ExperimentMatrixValues, 'a' | 'b'>>(
     key: Key,
@@ -220,27 +223,42 @@ export default function AceExperimentsPage() {
     setValidationError(null)
   }
 
+  // isPending flips only on re-render; the ref closes the double-click window
+  // synchronously so a second click cannot start a second paid batch.
+  const launchInFlight = useRef(false)
   const launchPair = async () => {
+    if (launchInFlight.current) return
     const result = buildExperimentMatrix(values)
     if (!result.ok) {
       setValidationError(result.error)
       return
     }
     setValidationError(null)
-    const [a, b] = await Promise.allSettled([
-      startA.mutateAsync(result.plan.requests.a),
-      startB.mutateAsync(result.plan.requests.b),
-    ])
-    setLaunch({
-      experimentId: result.plan.experimentId,
-      instanceId: result.plan.instanceId,
-      ...(a.status === 'fulfilled' ? { a: a.value.runId } : {}),
-      ...(b.status === 'fulfilled' ? { b: b.value.runId } : {}),
-      errors: [
-        ...(a.status === 'rejected' ? [`Variant A: ${errorMessage(a.reason)}`] : []),
-        ...(b.status === 'rejected' ? [`Variant B: ${errorMessage(b.reason)}`] : []),
-      ],
-    })
+    launchInFlight.current = true
+    try {
+      // A variant that already started for this experiment id keeps its run;
+      // only the missing side is (re)launched, so a retry never double-spends.
+      const [a, b] = await Promise.allSettled([
+        priorLaunch?.a
+          ? Promise.resolve({ runId: priorLaunch.a })
+          : startA.mutateAsync(result.plan.requests.a),
+        priorLaunch?.b
+          ? Promise.resolve({ runId: priorLaunch.b })
+          : startB.mutateAsync(result.plan.requests.b),
+      ])
+      setLaunch({
+        experimentId: result.plan.experimentId,
+        instanceId: result.plan.instanceId,
+        ...(a.status === 'fulfilled' ? { a: a.value.runId } : {}),
+        ...(b.status === 'fulfilled' ? { b: b.value.runId } : {}),
+        errors: [
+          ...(a.status === 'rejected' ? [`Variant A: ${errorMessage(a.reason)}`] : []),
+          ...(b.status === 'rejected' ? [`Variant B: ${errorMessage(b.reason)}`] : []),
+        ],
+      })
+    } finally {
+      launchInFlight.current = false
+    }
   }
 
   const packOptions = [

@@ -85,6 +85,8 @@ describe('ACE live batch catalog', () => {
       runId: 'live-run',
       runKind: 'debug',
       schemaVersion: 3,
+      manifestAvailable: true,
+      controlsAvailable: true,
       lifecycle: 'running',
       updatedAt: '2026-08-06T02:03:04Z',
       lineage: {
@@ -177,11 +179,11 @@ describe('ACE live batch catalog', () => {
       failedGrade: 0,
       runtimeErrors: 1,
       invalidUserSim: 1,
-      userSimAttempts: 3,
-      invalidUserSimAttempts: 1,
+      userSimAttempts: null,
+      invalidUserSimAttempts: null,
       passRate: 1,
-      userSimValidityRate: 2 / 3,
-      userSimAttemptValidityRate: 2 / 3,
+      userSimValidityRate: null,
+      userSimAttemptValidityRate: null,
     })
     expect(batch.episodes?.map((row) => row.outcome)).toEqual([
       'pass',
@@ -190,6 +192,94 @@ describe('ACE live batch catalog', () => {
       'ungraded',
       'ungraded',
     ])
+  })
+
+  it('never lets a partial state array shrink the declared scheduled denominator', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ace-partial-schedule-'))
+    fixtures.push(directory)
+    const manifestPath = path.join(directory, 'batch.json')
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'partial-schedule',
+        run_kind: 'scored',
+        lifecycle: { status: 'running' },
+        totals: { episodes: 45 },
+        episode_states: Array.from({ length: 10 }, (_, index) => ({
+          scenario_id: `scenario-${index}`,
+          environment_seed: 1,
+          file: `scenario-${index}-s1.json`,
+          status: 'running',
+        })),
+        episodes: [],
+      }),
+    )
+
+    const batch = await readAceBatch(manifestPath)
+
+    expect(batch.totals.episodes).toBe(45)
+    expect(batch.episodes).toHaveLength(10)
+    expect(batch.lifecycle).toBe('running')
+  })
+
+  it('reports attempt totals only when every parsed episode has both counters', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ace-complete-attempts-'))
+    fixtures.push(directory)
+    const manifestPath = path.join(directory, 'batch.json')
+    const episode = (
+      id: string,
+      attempts: number | undefined,
+      invalidAttempts: number | undefined,
+    ) => ({
+      scenario_id: id,
+      environment_seed: 1,
+      file: `${id}-s1.json`,
+      status: 'completed',
+      grade: { passed: true, checks: [] },
+      ...(attempts === undefined ? {} : { user_sim_attempts: attempts }),
+      ...(invalidAttempts === undefined ? {} : { user_sim_invalid_attempts: invalidAttempts }),
+    })
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'complete-attempts',
+        run_kind: 'scored',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 2, user_sim_validity_rate: 0.99 },
+        episode_states: [],
+        episodes: [episode('a', 2, 1), episode('b', 1, 0)],
+      }),
+    )
+
+    const complete = await readAceBatch(manifestPath)
+    expect(complete.totals).toMatchObject({
+      userSimAttempts: 3,
+      invalidUserSimAttempts: 1,
+      userSimValidityRate: 2 / 3,
+      userSimAttemptValidityRate: 2 / 3,
+    })
+
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'partial-attempts',
+        run_kind: 'scored',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 2, user_sim_validity_rate: 0.99 },
+        episode_states: [],
+        episodes: [episode('a', 2, 1), episode('b', 1, undefined)],
+      }),
+    )
+    const partial = await readAceBatch(manifestPath)
+    expect(partial.totals).toMatchObject({
+      userSimAttempts: null,
+      invalidUserSimAttempts: null,
+      userSimValidityRate: null,
+      userSimAttemptValidityRate: null,
+    })
   })
 
   it('serves a last-good run snapshot during a temporary malformed manifest', async () => {

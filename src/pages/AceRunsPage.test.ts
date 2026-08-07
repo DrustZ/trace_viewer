@@ -1,6 +1,12 @@
 import type { AceBatchEpisode, AceRunTraceSummary } from '@shared/schema/ace'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { aceRunHeartbeat, filterAceRunEpisodes } from './AceRunsPage'
+import {
+  AceRunAccessStatus,
+  aceRunControlDisabled,
+  aceRunHeartbeat,
+  filterAceRunEpisodes,
+} from './AceRunsPage'
 
 function episode(overrides: Partial<AceBatchEpisode> = {}): AceBatchEpisode {
   return {
@@ -42,6 +48,22 @@ function trace(overrides: Partial<AceRunTraceSummary> = {}): AceRunTraceSummary 
 }
 
 describe('ACE run diagnostics helpers', () => {
+  it('labels trace-only runs read-only and disables every control action', () => {
+    const run = {
+      manifestAvailable: false,
+      controlsAvailable: false,
+      lifecycle: 'running' as const,
+    }
+    expect(renderToStaticMarkup(AceRunAccessStatus(run))).toContain('trace-only · read-only')
+    expect(aceRunControlDisabled(run, 'pause')).toBe(true)
+    expect(aceRunControlDisabled(run, 'resume')).toBe(true)
+    expect(aceRunControlDisabled(run, 'cancel')).toBe(true)
+
+    expect(aceRunControlDisabled({ controlsAvailable: true, lifecycle: 'running' }, 'pause')).toBe(
+      false,
+    )
+  })
+
   it('marks only active runs with a heartbeat older than two minutes as stale', () => {
     const now = Date.parse('2026-08-06T00:03:00Z')
     expect(aceRunHeartbeat('2026-08-06T00:00:00Z', 'running', now).stale).toBe(true)

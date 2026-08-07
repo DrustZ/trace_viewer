@@ -334,6 +334,7 @@ function normalizeLineage(value: unknown): ReplayLineage | undefined {
   if (!isRecord(value)) return undefined
   const rawCheckpointId = value.checkpoint_id ?? value.checkpointId
   const lineage: ReplayLineage = {
+    relation: stringValue(value.relation),
     parentTrace: stringValue(value.parent_trace) ?? stringValue(value.parentTrace),
     parentTraceUid: stringValue(value.parent_trace_uid) ?? stringValue(value.parentTraceUid),
     checkpointId:
@@ -346,6 +347,10 @@ function normalizeLineage(value: unknown): ReplayLineage | undefined {
     runKind: stringValue(value.run_kind) ?? stringValue(value.runKind),
     mode: stringValue(value.mode),
     policyChanged: booleanValue(value.policy_changed) ?? booleanValue(value.policyChanged),
+    regressionId: stringValue(value.regression_id) ?? stringValue(value.regressionId),
+    synthetic: booleanValue(value.synthetic),
+    formalMetricsExcluded:
+      booleanValue(value.formal_metrics_excluded) ?? booleanValue(value.formalMetricsExcluded),
   }
   return Object.values(lineage).some((item) => item !== undefined) ? lineage : undefined
 }
@@ -747,9 +752,23 @@ export function applyAceArtifacts(
           ...(worldDiff.length > 0 ? { worldDiff } : {}),
         }
       : undefined
+  const specPromptDigests = isRecord(spec?.prompt_digests) ? spec.prompt_digests : undefined
+  const provenancePromptDigests = isRecord(provenance.prompt_digests)
+    ? provenance.prompt_digests
+    : undefined
+  const promptDigests = specPromptDigests ?? provenancePromptDigests
+  const inferredPromptAlias = promptDigests
+    ? Object.keys(promptDigests)
+        .filter((key) => key !== 'human_tier')
+        .sort()[0]
+    : undefined
+  const promptAlias = stringValue(spec?.prompt) ?? inferredPromptAlias
+  const promptDigest = promptAlias ? stringValue(promptDigests?.[promptAlias]) : undefined
   const promoted = {
-    prompt: stringValue(spec?.prompt),
-    transport: stringValue(spec?.transport),
+    prompt: promptAlias,
+    prompt_alias: promptAlias,
+    prompt_digest: promptDigest,
+    transport: stringValue(spec?.transport) ?? stringValue(spec?.agent_transport),
     suite: stringValue(episode?.suite) ?? stringValue(sourceExtra.suite),
     journey_id:
       stringValue(episode?.journey_id) ??

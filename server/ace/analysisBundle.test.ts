@@ -44,6 +44,7 @@ function taskFixture(
     conflict: false,
     traceCoverage: {
       traceCount: 0,
+      exploratoryTraceCount: 0,
       runCount: 0,
       runIds: [],
       matchedPairCount: 0,
@@ -93,16 +94,24 @@ function traceFixture(options: {
   seed?: number
   evaluation?: TraceEvaluation
   runKind?: 'scored' | 'debug' | 'counterfactual'
+  configDigest?: string
+  pairKey?: string | null
 }): ParsedTrace {
   const traceEvaluation =
     options.evaluation ?? (options.outcome === undefined ? undefined : evaluation(options.outcome))
+  const runId = options.runId ?? 'run-a'
+  const instanceId = options.instanceId ?? options.traceId
+  const environmentSeed = options.seed ?? 1
   return {
     meta: {
       traceId: options.traceId,
       sourceTraceId: options.traceId,
       corpusId: options.corpusId ?? 'simulation',
-      runId: options.runId ?? 'run-a',
-      instanceId: options.instanceId ?? options.traceId,
+      runId,
+      instanceId,
+      ...(options.pairKey === null
+        ? {}
+        : { pairKey: options.pairKey ?? `schedule:${instanceId}:${environmentSeed}` }),
       component: 'ace/test',
       status: options.outcome === 'runtime_error' ? 'failed' : 'completed',
       timestamp: '2026-08-06T00:00:00.000Z',
@@ -110,7 +119,8 @@ function traceFixture(options: {
       split: 'test',
       sourceFormat: 'agent-conversation',
       extra: {
-        environment_seed: options.seed ?? 1,
+        environment_seed: environmentSeed,
+        config_digest: options.configDigest ?? 'config-a',
         prompt: 'baseline',
         transport: 'responses',
         ...(options.runKind ? { run_kind: options.runKind } : {}),
@@ -370,6 +380,178 @@ describe('buildAceDashboard', () => {
     expect(dashboard.passToK).toBe(0.5)
   })
 
+  it('computes the ACE per-scenario combinatorial reliability golden curve', () => {
+    const store = new TraceStore()
+    const add = (traceId: string, instanceId: string, seed: number, outcome: TraceOutcome) =>
+      store.upsert(traceFixture({ traceId, instanceId, seed, outcome }))
+
+    add('a-1', 'scenario-a', 1, 'pass')
+    add('a-2', 'scenario-a', 2, 'fail')
+    add('b-1', 'scenario-b', 1, 'pass')
+    add('b-2', 'scenario-b', 2, 'pass')
+
+    const dashboard = buildAceDashboard(store)
+    expect(dashboard.reliability.authority).toEqual({
+      metric: 'pass^k',
+      method: 'mean_per_scenario_combination_probability',
+      formula: 'mean_s(C(successes_s,k)/C(trials_s,k))',
+      source: 'ac_express/scripts/run_factorial.py::_task_pass_k',
+      trialPolicy: 'pass_fail_only',
+    })
+    expect(dashboard.reliability.cells).toEqual([
+      expect.objectContaining({
+        runId: 'run-a',
+        configDigest: 'config-a',
+        commonMaxK: 2,
+        coverage: {
+          inputTraceCount: 4,
+          gradedTraceCount: 4,
+          validTrialCount: 4,
+          scenarioDenominator: 2,
+          minTrialsPerScenario: 2,
+          maxTrialsPerScenario: 2,
+        },
+        curve: [
+          { k: 1, value: 0.75, scenarioDenominator: 2 },
+          { k: 2, value: 0.5, scenarioDenominator: 2 },
+        ],
+      }),
+    ])
+    expect(dashboard.passAt1).toBe(0.75)
+    expect(dashboard.passToK).toBe(0.5)
+  })
+
+  it('uses a common k across uneven scenario seed counts', () => {
+    const store = new TraceStore()
+    const add = (traceId: string, instanceId: string, seed: number, outcome: TraceOutcome) =>
+      store.upsert(traceFixture({ traceId, instanceId, seed, outcome }))
+
+    add('a-1', 'scenario-a', 1, 'pass')
+    add('a-2', 'scenario-a', 2, 'pass')
+    add('a-3', 'scenario-a', 3, 'fail')
+    add('b-1', 'scenario-b', 1, 'pass')
+    add('b-2', 'scenario-b', 2, 'fail')
+
+    const cell = buildAceDashboard(store).reliability.cells[0]
+    expect(cell).toMatchObject({
+      commonMaxK: 2,
+      coverage: {
+        validTrialCount: 5,
+        scenarioDenominator: 2,
+        minTrialsPerScenario: 2,
+        maxTrialsPerScenario: 3,
+      },
+    })
+    expect(cell?.curve[0]?.value).toBeCloseTo(7 / 12)
+    expect(cell?.curve[1]?.value).toBeCloseTo(1 / 6)
+  })
+
+  it('reports invalid/runtime/ungraded/missing-pair exclusions and rejects duplicate groups', () => {
+    const store = new TraceStore()
+    store.upsert(
+      traceFixture({ traceId: 'kept', instanceId: 'scenario-a', seed: 1, outcome: 'pass' }),
+    )
+    store.upsert(
+      traceFixture({ traceId: 'duplicate', instanceId: 'scenario-a', seed: 1, outcome: 'pass' }),
+    )
+    store.upsert(
+      traceFixture({
+        traceId: 'missing-pair',
+        instanceId: 'scenario-a',
+        seed: 2,
+        outcome: 'pass',
+        pairKey: null,
+      }),
+    )
+    store.upsert(
+      traceFixture({ traceId: 'invalid', instanceId: 'scenario-a', seed: 3, outcome: 'invalid' }),
+    )
+    store.upsert(
+      traceFixture({
+        traceId: 'runtime',
+        instanceId: 'scenario-a',
+        seed: 4,
+        outcome: 'runtime_error',
+      }),
+    )
+    store.upsert(
+      traceFixture({ traceId: 'ungraded', instanceId: 'scenario-a', seed: 5, outcome: 'ungraded' }),
+    )
+
+    const cell = buildAceDashboard(store).reliability.cells[0]
+    expect(cell).toMatchObject({
+      exclusions: {
+        invalid: 1,
+        runtimeError: 1,
+        ungraded: 1,
+        missingPairKey: 1,
+        duplicatePair: 2,
+      },
+      coverage: {
+        inputTraceCount: 6,
+        gradedTraceCount: 3,
+        validTrialCount: 0,
+        scenarioDenominator: 0,
+      },
+      commonMaxK: 0,
+      curve: [],
+    })
+  })
+
+  it('fail-closed excludes every row in a contradictory pass/fail duplicate group', () => {
+    const store = new TraceStore()
+    store.upsert(
+      traceFixture({
+        traceId: 'conflict-pass',
+        instanceId: 'scenario-conflict',
+        seed: 1,
+        outcome: 'pass',
+      }),
+    )
+    store.upsert(
+      traceFixture({
+        traceId: 'conflict-fail',
+        instanceId: 'scenario-conflict',
+        seed: 1,
+        outcome: 'fail',
+      }),
+    )
+
+    const cell = buildAceDashboard(store).reliability.cells[0]
+    expect(cell).toMatchObject({
+      exclusions: { duplicatePair: 2 },
+      coverage: {
+        inputTraceCount: 2,
+        gradedTraceCount: 2,
+        validTrialCount: 0,
+        scenarioDenominator: 0,
+      },
+      commonMaxK: 0,
+      curve: [],
+    })
+  })
+
+  it('keeps run/config cells separate and excludes exploratory traces from reliability', () => {
+    const store = new TraceStore()
+    store.upsert(
+      traceFixture({ traceId: 'a', runId: 'formal', outcome: 'pass', configDigest: 'config-a' }),
+    )
+    store.upsert(
+      traceFixture({ traceId: 'b', runId: 'formal', outcome: 'fail', configDigest: 'config-b' }),
+    )
+    store.upsert(
+      traceFixture({ traceId: 'debug', runId: 'debug', outcome: 'pass', runKind: 'debug' }),
+    )
+
+    const dashboard = buildAceDashboard(store, ['formal', 'debug'])
+    expect(dashboard.reliability.cells.map((cell) => [cell.runId, cell.configDigest])).toEqual([
+      ['formal', 'config-a'],
+      ['formal', 'config-b'],
+    ])
+    expect(dashboard.reliability.excludedNonFormalTraceCount).toBe(1)
+    expect(dashboard.passToK).toBeNull()
+  })
+
   it('scopes one or multiple exact run ids and reports unmatched selections', () => {
     const store = new TraceStore()
     store.upsert(traceFixture({ traceId: 'a-pass', runId: 'run-a', outcome: 'pass' }))
@@ -393,6 +575,8 @@ describe('buildAceDashboard', () => {
       ungraded: 2,
       executed: 1,
       passRateExecuted: 1,
+      scheduledEpisodes: 3,
+      formalScheduledEpisodes: 2,
       scope: {
         mode: 'selected',
         requestedRunIds: ['run-a', 'production', 'missing'],
@@ -496,6 +680,62 @@ describe('buildAceDashboard', () => {
     ])
     expect(dashboard.requiredEscalations).toBe(1)
     expect(dashboard.unnecessaryEscalations).toBe(1)
+    expect(dashboard.escalation).toMatchObject({
+      knownPairDenominator: 2,
+      requiredObserved: 1,
+      requiredNotObserved: 0,
+      notRequiredObserved: 1,
+      notRequiredNotObserved: 0,
+      requiredDenominator: 1,
+      notRequiredDenominator: 1,
+      observedDenominator: 2,
+      requiredHitRate: 1,
+      unnecessaryEscalationRate: 1,
+      observedPrecision: 0.5,
+    })
+  })
+
+  it('reports escalation misses, true negatives, and unknown denominator coverage', () => {
+    const store = new TraceStore()
+    store.upsert(
+      traceFixture({
+        traceId: 'required-missed',
+        instanceId: 'required',
+        outcome: 'pass',
+        evaluation: evaluation('pass', { metrics: { escalated: false } }),
+      }),
+    )
+    store.upsert(
+      traceFixture({
+        traceId: 'not-required-clean',
+        instanceId: 'not-required',
+        outcome: 'pass',
+        evaluation: evaluation('pass', { metrics: { escalated: false } }),
+      }),
+    )
+    store.upsert(traceFixture({ traceId: 'unknown', instanceId: 'unknown', outcome: 'pass' }))
+
+    const dashboard = buildAceDashboard(store, undefined, [
+      taskFixture('required', 'fraud', 'en', 'escalate'),
+      taskFixture('not-required', 'refund', 'en', 'resolve'),
+    ])
+    expect(dashboard.escalation).toEqual({
+      traceCount: 3,
+      knownPairDenominator: 2,
+      unknownRequirement: 1,
+      unknownObservation: 1,
+      requiredObserved: 0,
+      requiredNotObserved: 1,
+      notRequiredObserved: 0,
+      notRequiredNotObserved: 1,
+      requiredDenominator: 1,
+      notRequiredDenominator: 1,
+      observedDenominator: 0,
+      notObservedDenominator: 2,
+      requiredHitRate: 0,
+      unnecessaryEscalationRate: 0,
+      observedPrecision: null,
+    })
   })
 
   it('keeps debug/counterfactual runs out of the default formal aggregate but allows exact analysis', () => {
@@ -541,7 +781,73 @@ describe('buildAceDashboard', () => {
       total: 1,
       pass: 0,
       fail: 1,
+      formalScheduledEpisodes: 0,
       scope: { selectedRunIds: ['debug-run'] },
+    })
+  })
+
+  it('quarantines a run whose trace-level kinds mix formal and exploratory episodes', () => {
+    const store = new TraceStore()
+    store.upsert(
+      traceFixture({ traceId: 'formal', runId: 'mixed-run', outcome: 'pass', runKind: 'scored' }),
+    )
+    store.upsert(
+      traceFixture({ traceId: 'debug', runId: 'mixed-run', outcome: 'fail', runKind: 'debug' }),
+    )
+
+    const batch: AceBatchSummary = {
+      runId: 'mixed-run',
+      runKind: 'scored',
+      schemaVersion: 3,
+      lifecycle: 'completed',
+      updatedAt: '2026-08-06T00:00:00Z',
+      spec: {},
+      totals: {
+        episodes: 2,
+        passed: 1,
+        failedGrade: 1,
+        runtimeErrors: 0,
+        invalidUserSim: 0,
+        userSimAttempts: null,
+        invalidUserSimAttempts: null,
+        passRate: 0.5,
+        userSimValidityRate: null,
+        userSimAttemptValidityRate: null,
+        avgUserTurns: null,
+        avgToolCalls: null,
+        flagsMajor: 0,
+        flagsMinor: 0,
+        costUsd: null,
+      },
+      failureChecks: [],
+      terminations: [],
+    }
+
+    const defaultDashboard = buildAceDashboard(store, undefined, [], [batch])
+    expect(defaultDashboard).toMatchObject({
+      total: 0,
+      pass: 0,
+      fail: 0,
+      formalScheduledEpisodes: 0,
+      reliability: { cells: [] },
+      scope: {
+        defaultRunIds: [],
+        selectedRunIds: [],
+        availableRuns: [{ runId: 'mixed-run', runKind: 'unknown', includedByDefault: false }],
+      },
+    })
+
+    const explicitDashboard = buildAceDashboard(store, ['mixed-run'], [], [batch])
+    expect(explicitDashboard).toMatchObject({
+      total: 2,
+      pass: 1,
+      fail: 1,
+      scheduledEpisodes: 2,
+      formalScheduledEpisodes: 0,
+      reliability: {
+        excludedNonFormalTraceCount: 2,
+        cells: [],
+      },
     })
   })
 
@@ -604,6 +910,7 @@ describe('buildAceDashboard', () => {
       total: 0,
       ungraded: 0,
       scheduledEpisodes: 3,
+      formalScheduledEpisodes: 3,
       terminalEpisodes: 0,
       inProgressEpisodes: 3,
       awaitingTraceIngest: 0,
@@ -624,7 +931,7 @@ describe('buildAceDashboard', () => {
     })
   })
 
-  it('reports bounded triage previews without understating the total', () => {
+  it('paginates the complete deterministic triage queue without understating the total', () => {
     const store = new TraceStore()
     for (let index = 0; index < 251; index += 1) {
       store.upsert(
@@ -647,9 +954,30 @@ describe('buildAceDashboard', () => {
       )
     }
 
-    const dashboard = buildAceDashboard(store, ['large-triage-run'])
-    expect(dashboard.triage).toHaveLength(250)
-    expect(dashboard.triageTotal).toBe(251)
-    expect(dashboard.triageTruncated).toBe(true)
+    const first = buildAceDashboard(store, ['large-triage-run'])
+    expect(first.triage).toHaveLength(250)
+    expect(first.triageTotal).toBe(251)
+    expect(first).toMatchObject({
+      triageOffset: 0,
+      triageLimit: 250,
+      triageHasPrevious: false,
+      triageHasNext: true,
+      triageTruncated: true,
+    })
+
+    const second = buildAceDashboard(store, ['large-triage-run'], [], [], {
+      offset: 250,
+      limit: 250,
+    })
+    expect(second.triage).toHaveLength(1)
+    expect(second).toMatchObject({
+      triageTotal: 251,
+      triageOffset: 250,
+      triageLimit: 250,
+      triageHasPrevious: true,
+      triageHasNext: false,
+      triageTruncated: true,
+    })
+    expect(new Set([...first.triage, ...second.triage].map((item) => item.traceUid)).size).toBe(251)
   })
 })

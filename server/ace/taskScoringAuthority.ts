@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AceTaskEffectiveCheck } from '../../shared/schema/aceTasks'
+import { aceChildEnvironment } from './childEnvironment'
 
 const SCRIPT = fileURLToPath(new URL('./task_scoring_export.py', import.meta.url))
 const OUTPUT_LIMIT = 16 * 1024 * 1024
@@ -165,7 +166,7 @@ export const runAceTaskScoringExport: AceTaskScoringExporter = (projectRoot, sce
     const child = spawn(python, [SCRIPT], {
       cwd: path.resolve(projectRoot),
       env: {
-        ...process.env,
+        ...aceChildEnvironment(),
         PYTHONPATH: existingPythonPath
           ? `${path.resolve(projectRoot)}${path.delimiter}${existingPythonPath}`
           : path.resolve(projectRoot),

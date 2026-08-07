@@ -10,7 +10,7 @@ import type {
   SubmitReviewRequest,
 } from '@shared/reviews/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiError, apiGet, apiPost } from './client'
+import { ApiError, apiFetch, apiGet, apiPost } from './client'
 
 export interface ReviewQueueFilters {
   annotator: string
@@ -58,7 +58,7 @@ function subjectQuery(subject: ReviewSubject): string {
 }
 
 async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, {
+  const response = await apiFetch(path, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

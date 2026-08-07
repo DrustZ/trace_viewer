@@ -1,6 +1,12 @@
 import path from 'node:path'
 import express, { type ErrorRequestHandler, type Express } from 'express'
 import { loadAceTaskCatalog } from './ace/taskCatalog'
+import {
+  ACCESS_TOKEN_ENV,
+  createSessionHandler,
+  normalizeAccessToken,
+  requireAccessSession,
+} from './auth'
 import type { ReviewStore } from './reviews/reviewStore'
 import { createTraceStoreReviewSource } from './reviews/traceSource'
 import { aceRoutes } from './routes/ace'
@@ -41,6 +47,8 @@ export interface AppDeps {
   importDir?: string
   /** Append-only human labels + atomic drafts. Defaults to sibling ACE runs/labels. */
   reviewStore?: ReviewStore
+  /** Explicit override for focused tests. Undefined reads TRACE_VIEWER_ACCESS_TOKEN; null disables. */
+  accessToken?: string | null
 }
 
 /** Malformed JSON bodies arrive as body-parser errors with a 4xx status; everything else is a 500. */
@@ -64,14 +72,27 @@ export function createApp(deps: AppDeps = {}): Express {
     importDir: deps.importDir ?? 'data/imported',
   }
   const aceTaskProjectRoot = resolveAceTaskConfig().projectRoot
+  const accessToken = normalizeAccessToken(
+    deps.accessToken === undefined ? process.env[ACCESS_TOKEN_ENV] : deps.accessToken,
+  )
 
   const app = express()
   app.use(express.json({ limit: '5mb' }))
   app.use(express.text({ limit: '50mb', type: 'text/plain' }))
 
-  app.get('/api/health', (_req, res) => {
+  app.all('/api/health', (req, res, next) => {
+    // Express lets HEAD implicitly match GET routes. Keep the documented public exception exact.
+    if (req.method !== 'GET') {
+      next()
+      return
+    }
     res.json({ ok: true, version: deps.version ?? 'dev' })
   })
+  app.post('/api/auth/session', createSessionHandler(accessToken))
+
+  // The two public routes above are intentionally method-specific. Every other API request,
+  // including SSE and unknown /api paths, must present the derived session cookie when enabled.
+  app.use('/api', requireAccessSession(accessToken))
 
   app.use(metaRoutes(ctx))
   app.use(dataRootsRoutes(ctx))
@@ -99,7 +120,9 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use(aggregatesRoutes(ctx))
   app.use(evolutionRoutes(ctx))
   app.use(searchRoutes(ctx))
-  app.use(importRoutes(ctx))
+  // URL fetching is intentionally localhost-only. An authenticated shared/Tailnet server would
+  // otherwise still expose an outbound network primitive to every holder of its access token.
+  app.use(importRoutes(ctx, { urlImportEnabled: accessToken === undefined }))
   app.use(aiFilterRoutes(ctx))
   app.use(refreshRoutes(ctx))
 

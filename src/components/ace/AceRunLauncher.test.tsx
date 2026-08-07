@@ -94,6 +94,9 @@ describe('AceRunLauncher request contract', () => {
 
     expect(html).toContain('Saved regression:reg-abc_123')
     expect(html).toMatch(/<option value="regression:reg-abc_123" selected="">/)
+    expect(html).toContain('Synthetic rerun · formal metrics excluded')
+    expect(html).toMatch(/<option value="counterfactual" selected="">/)
+    expect(html).toMatch(/<option value="scored" disabled="">/)
   })
 
   it('labels and constrains a trace-derived launch as a fresh non-exact rerun', () => {
@@ -115,6 +118,32 @@ describe('AceRunLauncher request contract', () => {
     expect(html).toMatch(/value="9"/)
     expect(html).toMatch(/<option value="debug" selected="">/)
     expect(html).toMatch(/<option value="scored" disabled="">/)
+  })
+
+  it('merges recorded initial values and explains recorded, changed, and defaulted settings', () => {
+    const html = renderToStaticMarkup(
+      <AceRunLauncher
+        initialValues={{ model: 'recorded-model', transport: 'responses', temperature: '0.4' }}
+        recordedConfig={{
+          fields: {
+            model: { value: 'recorded-model', display: 'recorded-model' },
+            transport: { value: 'responses', display: 'responses' },
+            temperature: { value: 0.4, display: '0.4' },
+            checkpoints: { value: false, display: 'disabled' },
+          },
+          missing: [],
+        }}
+      />,
+    )
+
+    expect(html).toMatch(/value="recorded-model"/)
+    expect(html).toMatch(/<option value="responses" selected="">/)
+    expect(html).toMatch(/value="0.4"/)
+    expect(html).toContain('Best-effort source configuration')
+    expect(html).toContain('3 recorded · 1 changed · 16 missing/defaulted')
+    expect(html).toContain('Show recorded ↔ effective config')
+    expect(html).toContain('disabled')
+    expect(html).toContain('enabled (Viewer invariant)')
   })
 
   it('maps every newly exposed field into the AceRunRequest payload', () => {
@@ -270,6 +299,16 @@ describe('AceRunLauncher request contract', () => {
     ).toEqual({
       ok: false,
       error: 'A trace-derived branch requires exactly one Scenario ID and one seed.',
+    })
+  })
+
+  it('rejects a scored regression token even when form state is constructed directly', () => {
+    expect(
+      buildAceRunRequest(form({ scenarioFile: 'regression:reg-production', runKind: 'scored' })),
+    ).toEqual({
+      ok: false,
+      error:
+        'Synthetic regression reruns must be Debug or Counterfactual; formal metrics are excluded.',
     })
   })
 })

@@ -1,6 +1,7 @@
 import type { ReviewQueueItem, ReviewSubject } from '@shared/reviews/types'
 import { describe, expect, it } from 'vitest'
 import {
+  calibrationFiltersForQueue,
   DEFAULT_REVIEW_QUEUE_FILTERS,
   nextReviewSubject,
   reviewQueueFiltersFromSearchParams,
@@ -86,6 +87,34 @@ describe('review queue URL state', () => {
     expect(filters.corpusId).toBeUndefined()
     expect(reviewQueueFiltersToSearchParams(filters).get('state')).toBe('all')
     expect(reviewQueueFiltersToSearchParams(filters).get('corpusId')).toBe('all')
+  })
+})
+
+describe('calibration statistics filters', () => {
+  it('never leaks or filters by an opaque calibration run alias', () => {
+    expect(
+      calibrationFiltersForQueue({
+        ...DEFAULT_REVIEW_QUEUE_FILTERS,
+        mode: 'calibration',
+        runId: 'blind_run_0123456789abcdef0123',
+      }),
+    ).toEqual({ annotator: 'local', rubricVersion: 'judge_v2' })
+  })
+
+  it('can scope the calibration report to a visible assisted run and concrete corpus', () => {
+    expect(
+      calibrationFiltersForQueue({
+        ...DEFAULT_REVIEW_QUEUE_FILTERS,
+        mode: 'assisted',
+        corpusId: 'simulation',
+        runId: 'batch-a',
+      }),
+    ).toEqual({
+      annotator: 'local',
+      rubricVersion: 'judge_v2',
+      corpusId: 'simulation',
+      runId: 'batch-a',
+    })
   })
 })
 

@@ -1,3 +1,5 @@
+import type { AceRegressionScenarioSnapshot } from './aceRegression'
+
 export type AceRunLifecycle =
   | 'queued'
   | 'running'
@@ -97,6 +99,10 @@ export interface AceBatchSummary {
   runId: string
   runKind: AceRunKind
   schemaVersion: number
+  /** False for a read-only run synthesized from durable TraceStore records. */
+  manifestAvailable?: boolean
+  /** False when pause/resume/cancel cannot be safely forwarded for this run. */
+  controlsAvailable?: boolean
   lifecycle: AceRunLifecycle
   updatedAt: string
   lifecycleError?: string
@@ -122,7 +128,7 @@ export interface AceBatchSummary {
  * state; a checkpoint fork may restore state exactly up to its boundary.
  */
 export interface AceRunLineage {
-  relation?: 'fresh_task_rerun' | 'checkpoint_fork' | string
+  relation?: 'fresh_task_rerun' | 'synthetic_regression_rerun' | 'checkpoint_fork' | string
   parentTraceUid?: string
   parentSourceTraceId?: string
   parentRunId?: string
@@ -134,6 +140,9 @@ export interface AceRunLineage {
   configExact?: boolean
   llmExact?: boolean
   policyChanged?: boolean
+  regressionId?: string
+  synthetic?: boolean
+  formalMetricsExcluded?: boolean
 }
 
 export interface AceCapabilities {
@@ -197,6 +206,8 @@ export interface AceRunRequest {
 export interface AceReplayRequest {
   sourceTraceUid: string
   checkpointId?: number
+  /** Last message included in the selected checkpoint's chronological prefix. */
+  forkMessageId?: string
   mode: 'restore' | 'exact' | 'counterfactual' | 'historical_tools'
   childRunId?: string
   childTraceId?: string
@@ -212,6 +223,10 @@ export interface AceCheckpointSummary {
   phase: string
   reason?: string
   message_count?: number
+  /** Optional authoritative boundary emitted by newer ACE checkpoint inspectors. */
+  fork_message_id?: string
+  /** Camel-case compatibility for inspectors which already normalize bridge output. */
+  forkMessageId?: string
   branchable?: boolean
   counterfactual_branchable?: boolean
   capability_error?: string | null
@@ -252,6 +267,11 @@ export interface AceSaveRegressionRequest {
   boundaryMessageId?: string
   /** Optional immutable artifact id; the server never accepts an output path. */
   regressionId?: string
+  /**
+   * A validated Scenario definition is accepted only for production traces
+   * which have no trace-bound scenario snapshot.
+   */
+  scenarioSnapshot?: AceRegressionScenarioSnapshot
 }
 
 export interface AceRegressionResult {
@@ -263,6 +283,7 @@ export interface AceRegressionResult {
   artifact: string
   scenarioPack: string | null
   draft: string | null
+  scenarioId: string | null
   missingRequiredFields: string[]
   fidelity: Record<string, unknown>
   anchor: AceRegressionAnchor
@@ -319,6 +340,83 @@ export interface AceDashboardScope {
   availableRuns: AceDashboardRunScope[]
 }
 
+export interface AceReliabilityAuthority {
+  metric: 'pass^k'
+  /** Macro-average of each scenario's without-replacement all-success probability. */
+  method: 'mean_per_scenario_combination_probability'
+  formula: 'mean_s(C(successes_s,k)/C(trials_s,k))'
+  source: 'ac_express/scripts/run_factorial.py::_task_pass_k'
+  /** Only programmatically graded pass/fail trials enter the reliability curve. */
+  trialPolicy: 'pass_fail_only'
+}
+
+export interface AceReliabilityExclusions {
+  invalid: number
+  runtimeError: number
+  ungraded: number
+  /** Graded traces that could not be assigned a stable schedule/scenario/seed pair key. */
+  missingPairKey: number
+  /** Graded rows excluded because their pair key was non-unique within the run/config cell. */
+  duplicatePair: number
+}
+
+export interface AceReliabilityCoverage {
+  /** All formal simulation traces assigned to this run/config cell. */
+  inputTraceCount: number
+  /** Pass/fail traces before pair-key validation and deduplication. */
+  gradedTraceCount: number
+  /** Unique, non-conflicting graded pair keys used as trials in the curve. */
+  validTrialCount: number
+  /** Scenario macro-average denominator used by every point in this cell's curve. */
+  scenarioDenominator: number
+  minTrialsPerScenario: number
+  maxTrialsPerScenario: number
+}
+
+export interface AceReliabilityCurvePoint {
+  k: number
+  value: number
+  /** Number of scenario probabilities included in the macro-average. */
+  scenarioDenominator: number
+}
+
+export interface AceReliabilityCell {
+  runId: string
+  /** Null means the source and batch manifest did not record a config digest. */
+  configDigest: string | null
+  coverage: AceReliabilityCoverage
+  exclusions: AceReliabilityExclusions
+  /** Largest k supported by every scenario in this cell. Zero means no valid trials. */
+  commonMaxK: number
+  curve: AceReliabilityCurvePoint[]
+}
+
+export interface AceReliabilitySummary {
+  authority: AceReliabilityAuthority
+  /** Production and exploratory traces do not enter formal reliability cells. */
+  excludedNonFormalTraceCount: number
+  cells: AceReliabilityCell[]
+}
+
+export interface AceEscalationConfusionMatrix {
+  traceCount: number
+  /** Traces for which both required and observed escalation are known. */
+  knownPairDenominator: number
+  unknownRequirement: number
+  unknownObservation: number
+  requiredObserved: number
+  requiredNotObserved: number
+  notRequiredObserved: number
+  notRequiredNotObserved: number
+  requiredDenominator: number
+  notRequiredDenominator: number
+  observedDenominator: number
+  notObservedDenominator: number
+  requiredHitRate: number | null
+  unnecessaryEscalationRate: number | null
+  observedPrecision: number | null
+}
+
 export interface AceDashboardSummary {
   scope: AceDashboardScope
   total: number
@@ -327,7 +425,10 @@ export interface AceDashboardSummary {
   invalid: number
   runtimeError: number
   ungraded: number
+  /** Every scheduled episode in the selected scope, including production/exploratory runs. */
   scheduledEpisodes: number
+  /** Scheduled episodes from uncontaminated scored simulation runs only. */
+  formalScheduledEpisodes: number
   terminalEpisodes: number
   inProgressEpisodes: number
   awaitingTraceIngest: number
@@ -347,9 +448,18 @@ export interface AceDashboardSummary {
   userSimAttemptValidityRate: number | null
   /** Number of selected runs contributing complete attempt counters. */
   userSimAttemptRunCount: number
+  reliability: AceReliabilitySummary
+  /** @deprecated Use reliability.cells[].curve and its explicit k/coverage fields. */
   passAt1: number | null
+  /**
+   * @deprecated Last curve point only when exactly one reliability cell exists. Its k is not
+   * encoded here; new clients must use reliability.cells[].curve.
+   */
   passToK: number | null
+  escalation: AceEscalationConfusionMatrix
+  /** @deprecated Use escalation.requiredObserved and requiredDenominator. */
   requiredEscalations: number | null
+  /** @deprecated Use escalation.notRequiredObserved and notRequiredDenominator. */
   unnecessaryEscalations: number | null
   totalCostUsd: number | null
   costRunCount: number
@@ -366,6 +476,12 @@ export interface AceDashboardSummary {
   transports: AceBreakdownItem[]
   /** Total matching traces before the bounded response preview is applied. */
   triageTotal: number
+  /** Zero-based start of this triage page after deterministic severity/id sorting. */
+  triageOffset: number
+  /** Requested server-side page size (capped by the API). */
+  triageLimit: number
+  triageHasPrevious: boolean
+  triageHasNext: boolean
   triageTruncated: boolean
   triage: AceTriageItem[]
 }

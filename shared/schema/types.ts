@@ -171,6 +171,7 @@ export interface SemanticVerification {
 export type TraceOutcome = 'pass' | 'fail' | 'invalid' | 'runtime_error' | 'ungraded'
 
 export interface ReplayLineage {
+  relation?: string
   parentTrace?: string
   parentTraceUid?: string
   checkpointId?: string
@@ -181,6 +182,9 @@ export interface ReplayLineage {
   runKind?: 'scored' | 'debug' | 'counterfactual' | string
   mode?: 'exact' | 'counterfactual' | string
   policyChanged?: boolean
+  regressionId?: string
+  synthetic?: boolean
+  formalMetricsExcluded?: boolean
 }
 
 export interface TraceEvaluation {

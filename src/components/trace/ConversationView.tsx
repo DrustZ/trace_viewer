@@ -51,7 +51,13 @@ function recordedRegressionCount(trace: Trace): number {
   return timestampRegressionCount(trace.messages)
 }
 
-export function ConversationView({ trace }: { trace: Trace }) {
+export function ConversationView({
+  trace,
+  targetMessageId,
+}: {
+  trace: Trace
+  targetMessageId?: string
+}) {
   const parentRef = useRef<HTMLDivElement>(null)
   const headRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -313,6 +319,12 @@ export function ConversationView({ trace }: { trace: Trace }) {
     },
     [unitOfMessage, units, messages, stepDefault, virtualizer],
   )
+
+  useEffect(() => {
+    if (targetMessageId === undefined) return
+    const messageIndex = messages.findIndex((message) => message.id === targetMessageId)
+    if (messageIndex >= 0) revealMatch(messageIndex)
+  }, [messages, revealMatch, targetMessageId])
 
   const gotoMatch = useCallback(
     (pos: number) => {

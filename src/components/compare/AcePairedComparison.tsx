@@ -14,6 +14,24 @@ export interface AceEpisodePair {
   delta: AcePairDelta
 }
 
+export interface AcePairingIntegrity {
+  /** Keys repeated within arm A. Every row for these keys is excluded from pairing. */
+  duplicateKeysA: string[]
+  /** Keys repeated within arm B. Every row for these keys is excluded from pairing. */
+  duplicateKeysB: string[]
+  /** Union of duplicate keys across both arms. A key must be unique on both sides to pair. */
+  excludedDuplicatePairKeys: string[]
+  excludedRowsA: number
+  excludedRowsB: number
+  unmatchedUniqueA: number
+  unmatchedUniqueB: number
+}
+
+export interface AcePairingResult {
+  pairs: AceEpisodePair[]
+  integrity: AcePairingIntegrity
+}
+
 export function classifyAcePair(a: AceBatchEpisode, b: AceBatchEpisode): AcePairDelta {
   if (!['pass', 'fail'].includes(a.outcome) || !['pass', 'fail'].includes(b.outcome)) {
     return 'not_comparable'
@@ -23,23 +41,74 @@ export function classifyAcePair(a: AceBatchEpisode, b: AceBatchEpisode): AcePair
   return 'tie'
 }
 
-export function pairAceRuns(a: AceBatchEpisode[], b: AceBatchEpisode[]): AceEpisodePair[] {
-  const right = new Map(b.map((row) => [row.pairKey, row]))
-  return a.flatMap((left) => {
-    const match = right.get(left.pairKey)
-    return match
-      ? [
-          {
-            key: left.pairKey,
-            scenarioId: left.scenarioId,
-            seed: left.environmentSeed,
-            a: left,
-            b: match,
-            delta: classifyAcePair(left, match),
-          },
-        ]
-      : []
+function episodesByPairKey(rows: readonly AceBatchEpisode[]): Map<string, AceBatchEpisode[]> {
+  const grouped = new Map<string, AceBatchEpisode[]>()
+  for (const row of rows) {
+    const group = grouped.get(row.pairKey)
+    if (group) group.push(row)
+    else grouped.set(row.pairKey, [row])
+  }
+  return grouped
+}
+
+export function pairAceRuns(a: AceBatchEpisode[], b: AceBatchEpisode[]): AcePairingResult {
+  const leftByKey = episodesByPairKey(a)
+  const rightByKey = episodesByPairKey(b)
+  const duplicateKeysA = [...leftByKey]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([key]) => key)
+    .sort()
+  const duplicateKeysB = [...rightByKey]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([key]) => key)
+    .sort()
+  const duplicateKeySet = new Set([...duplicateKeysA, ...duplicateKeysB])
+  const excludedDuplicatePairKeys = [...duplicateKeySet].sort()
+
+  const pairs = a.flatMap((left) => {
+    if (duplicateKeySet.has(left.pairKey)) return []
+    const leftGroup = leftByKey.get(left.pairKey)
+    const rightGroup = rightByKey.get(left.pairKey)
+    if (leftGroup?.length !== 1 || rightGroup?.length !== 1) return []
+    const match = rightGroup[0]
+    if (!match) return []
+    return [
+      {
+        key: left.pairKey,
+        scenarioId: left.scenarioId,
+        seed: left.environmentSeed,
+        a: left,
+        b: match,
+        delta: classifyAcePair(left, match),
+      },
+    ]
   })
+
+  const uniqueUncontaminatedKeys = (grouped: ReadonlyMap<string, AceBatchEpisode[]>) =>
+    [...grouped]
+      .filter(([key, rows]) => rows.length === 1 && !duplicateKeySet.has(key))
+      .map(([key]) => key)
+  const uniqueLeftKeys = uniqueUncontaminatedKeys(leftByKey)
+  const uniqueRightKeys = uniqueUncontaminatedKeys(rightByKey)
+
+  return {
+    pairs,
+    integrity: {
+      duplicateKeysA,
+      duplicateKeysB,
+      excludedDuplicatePairKeys,
+      excludedRowsA: excludedDuplicatePairKeys.reduce(
+        (sum, key) => sum + (leftByKey.get(key)?.length ?? 0),
+        0,
+      ),
+      excludedRowsB: excludedDuplicatePairKeys.reduce(
+        (sum, key) => sum + (rightByKey.get(key)?.length ?? 0),
+        0,
+      ),
+      unmatchedUniqueA: uniqueLeftKeys.filter((key) => !rightByKey.has(key)).length,
+      unmatchedUniqueB: uniqueRightKeys.filter((key) => !leftByKey.has(key)).length,
+    },
+  }
 }
 
 /** Deep-link one matched unit into the exact two trace revisions when both are durable. */
@@ -78,10 +147,11 @@ export function pairedPassInterval(pairs: AceEpisodePair[]): {
 export function AcePairedComparison({ runA, runB }: { runA: string; runB: string }) {
   const a = useAceRun(runA)
   const b = useAceRun(runB)
-  const pairs = useMemo(
+  const pairing = useMemo(
     () => pairAceRuns(a.data?.episodes ?? [], b.data?.episodes ?? []),
     [a.data, b.data],
   )
+  const { pairs, integrity } = pairing
   if (a.isError || b.isError) return null
   if (a.isLoading || b.isLoading) {
     return (
@@ -91,10 +161,15 @@ export function AcePairedComparison({ runA, runB }: { runA: string; runB: string
     )
   }
   if (pairs.length === 0) {
+    const duplicateDetail =
+      integrity.excludedDuplicatePairKeys.length > 0
+        ? ` ${integrity.excludedDuplicatePairKeys.length} non-unique pair key(s) were excluded (${integrity.excludedRowsA} A row(s), ${integrity.excludedRowsB} B row(s)).`
+        : ''
     return (
       <p className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
         No matched units. Paired analysis requires the same schedule digest, scenario ID, and
         environment seed; use the unpaired per-run table above for unrelated batches.
+        {duplicateDetail}
       </p>
     )
   }
@@ -121,6 +196,15 @@ export function AcePairedComparison({ runA, runB }: { runA: string; runB: string
         {notComparable > 0 ? (
           <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">
             {notComparable} excluded (invalid/runtime/pending)
+          </span>
+        ) : null}
+        {integrity.excludedDuplicatePairKeys.length > 0 ? (
+          <span
+            className="rounded bg-amber-50 px-2 py-0.5 text-amber-700"
+            title={`Non-unique keys: ${integrity.excludedDuplicatePairKeys.join(', ')}`}
+          >
+            {integrity.excludedDuplicatePairKeys.length} duplicate key(s) excluded · A{' '}
+            {integrity.excludedRowsA} rows · B {integrity.excludedRowsB} rows
           </span>
         ) : null}
         <span className="ml-auto font-mono">

@@ -7,6 +7,14 @@ const SAFE_FILE =
 const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/
 const MAX_INLINE_PROMPT = 1_000_000
 const MAX_FILTER_VALUE = 256
+const DEFAULT_MAX_RUN_COST_USD = 100
+
+export function aceMaxRunCostUsd(): number {
+  const configured = Number(process.env.ACE_MAX_RUN_COST_USD ?? DEFAULT_MAX_RUN_COST_USD)
+  return Number.isFinite(configured) && configured >= 0.01
+    ? Math.min(configured, 100_000)
+    : DEFAULT_MAX_RUN_COST_USD
+}
 
 export class AceRequestError extends Error {
   readonly status = 400
@@ -161,6 +169,11 @@ export function parseAceRunRequest(value: unknown): {
   const runId = body.batchId === undefined ? generatedRunId() : String(body.batchId)
   if (!SAFE_ID.test(runId)) throw new AceRequestError('batchId is not a safe run identifier')
   const runKind = oneOf(body.runKind, 'runKind', ['scored', 'debug', 'counterfactual'] as const)
+  if (scenarioFile.startsWith('regression:') && runKind === 'scored') {
+    throw new AceRequestError(
+      'synthetic regression reruns must be debug or counterfactual; formal metrics are excluded',
+    )
+  }
   const prompt = oneOf(body.prompt, 'prompt', ['baseline', 'improved', 'optimized'] as const)
   const promptText = optionalPromptText(body.promptText)
   if (runKind === 'scored' && promptText !== undefined) {
@@ -168,7 +181,7 @@ export function parseAceRunRequest(value: unknown): {
   }
   const transport = oneOf(body.transport, 'transport', ['chat', 'responses'] as const)
   const maxMessages = integer(body.maxMessages, 'maxMessages', 2, 500)
-  const costCapUsd = finite(body.costCapUsd, 'costCapUsd', 0.01, 100_000)
+  const costCapUsd = finite(body.costCapUsd, 'costCapUsd', 0.01, aceMaxRunCostUsd())
   const temperature =
     body.temperature === undefined ? undefined : finite(body.temperature, 'temperature', 0, 2)
   const userTemperature =
@@ -243,6 +256,11 @@ export function parseAceRunRequest(value: unknown): {
     throw new AceRequestError('sourceTraceUid must be a non-empty opaque identifier')
   }
   if (body.sourceTraceUid !== undefined) {
+    if (scenarioFile.startsWith('regression:')) {
+      throw new AceRequestError(
+        'synthetic regression lineage is derived from its immutable artifact, not caller input',
+      )
+    }
     if (runKind === 'scored') {
       throw new AceRequestError('trace-derived fresh reruns must be debug or counterfactual')
     }

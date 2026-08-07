@@ -3,6 +3,9 @@ import type {
   AceBreakdownItem,
   AceDashboardRunScope,
   AceDashboardSummary,
+  AceEscalationConfusionMatrix,
+  AceReliabilityCell,
+  AceReliabilitySummary,
   AceRunKind,
   AceTriageItem,
 } from '../../shared/schema/ace'
@@ -107,15 +110,17 @@ function runScope(
   const corpusIds = [...new Set(traces.map((trace) => trace.meta.corpusId ?? 'unknown'))].sort()
   const explicitKinds = [...new Set(traces.flatMap((trace) => explicitRunKind(trace) ?? []))]
   const runKind: AceRunKind =
-    explicitKinds.length === 1
-      ? explicitKinds[0]
-      : batch?.runKind && batch.runKind !== 'unknown'
-        ? batch.runKind
-        : corpusIds.includes('production')
-          ? 'production'
-          : corpusIds.includes('simulation')
-            ? 'scored'
-            : 'unknown'
+    explicitKinds.length > 1
+      ? 'unknown'
+      : explicitKinds.length === 1
+        ? explicitKinds[0]
+        : batch?.runKind && batch.runKind !== 'unknown'
+          ? batch.runKind
+          : corpusIds.includes('production')
+            ? 'production'
+            : corpusIds.includes('simulation')
+              ? 'scored'
+              : 'unknown'
   const outcomes = traces.map((trace) => trace.evaluation?.outcome ?? 'ungraded')
   const pass = outcomes.filter((value) => value === 'pass').length
   const fail = outcomes.filter((value) => value === 'fail').length
@@ -155,6 +160,208 @@ function runScope(
   }
 }
 
+const RELIABILITY_AUTHORITY = {
+  metric: 'pass^k',
+  method: 'mean_per_scenario_combination_probability',
+  formula: 'mean_s(C(successes_s,k)/C(trials_s,k))',
+  source: 'ac_express/scripts/run_factorial.py::_task_pass_k',
+  trialPolicy: 'pass_fail_only',
+} as const
+
+function reliabilityConfigDigest(
+  summary: TraceSummary,
+  batch: AceBatchSummary | undefined,
+): string | null {
+  return extraString(summary, 'config_digest', 'configDigest') ?? batch?.configDigest ?? null
+}
+
+function reliabilityPairKey(summary: TraceSummary): string | null {
+  return summary.meta.pairKey ?? extraString(summary, 'pair_key', 'pairKey') ?? null
+}
+
+function allSuccessProbability(successes: number, trials: number, k: number): number {
+  if (k < 1 || successes < k || trials < k) return 0
+  let probability = 1
+  for (let offset = 0; offset < k; offset += 1) {
+    probability *= (successes - offset) / (trials - offset)
+  }
+  return probability
+}
+
+function buildReliability(
+  traces: readonly TraceSummary[],
+  availableByRun: ReadonlyMap<string, AceDashboardRunScope>,
+  batchByRun: ReadonlyMap<string, AceBatchSummary>,
+): AceReliabilitySummary {
+  const grouped = new Map<
+    string,
+    { runId: string; configDigest: string | null; traces: TraceSummary[] }
+  >()
+  let excludedNonFormalTraceCount = 0
+
+  for (const summary of traces) {
+    const runId = summary.meta.runId ?? 'unknown'
+    const traceRunKind = explicitRunKind(summary)
+    const formal =
+      summary.meta.corpusId === 'simulation' &&
+      availableByRun.get(runId)?.runKind === 'scored' &&
+      (traceRunKind === undefined || traceRunKind === 'scored')
+    if (!formal) {
+      excludedNonFormalTraceCount += 1
+      continue
+    }
+    const configDigest = reliabilityConfigDigest(summary, batchByRun.get(runId))
+    const key = `${runId}\0${configDigest ?? ''}`
+    const cell = grouped.get(key) ?? { runId, configDigest, traces: [] }
+    cell.traces.push(summary)
+    grouped.set(key, cell)
+  }
+
+  const cells: AceReliabilityCell[] = [...grouped.values()].map((cell) => {
+    const exclusions = {
+      invalid: 0,
+      runtimeError: 0,
+      ungraded: 0,
+      missingPairKey: 0,
+      duplicatePair: 0,
+    }
+    let gradedTraceCount = 0
+    const byPair = new Map<string, { scenarioId: string; traces: TraceSummary[] }>()
+    for (const summary of cell.traces) {
+      const outcome = summary.evaluation?.outcome ?? 'ungraded'
+      if (outcome === 'invalid') {
+        exclusions.invalid += 1
+        continue
+      }
+      if (outcome === 'runtime_error') {
+        exclusions.runtimeError += 1
+        continue
+      }
+      if (outcome !== 'pass' && outcome !== 'fail') {
+        exclusions.ungraded += 1
+        continue
+      }
+      gradedTraceCount += 1
+      const pairKey = reliabilityPairKey(summary)
+      if (!pairKey) {
+        exclusions.missingPairKey += 1
+        continue
+      }
+      // pairKey is the canonical schedule/scenario/seed identity. Group by it
+      // directly so inconsistent duplicate metadata cannot evade quarantine.
+      const pair = byPair.get(pairKey) ?? { scenarioId: summary.meta.instanceId, traces: [] }
+      pair.traces.push(summary)
+      byPair.set(pairKey, pair)
+    }
+
+    const byScenario = new Map<string, { trials: number; successes: number }>()
+    for (const pair of byPair.values()) {
+      // Reliability must be invariant to trace ordering. A non-unique pair key is
+      // an integrity failure, so fail closed and exclude every conflicting row.
+      if (pair.traces.length !== 1) {
+        exclusions.duplicatePair += pair.traces.length
+        continue
+      }
+      const selected = pair.traces[0]
+      if (!selected) continue
+      const scenario = byScenario.get(pair.scenarioId) ?? { trials: 0, successes: 0 }
+      scenario.trials += 1
+      if (selected.evaluation?.outcome === 'pass') scenario.successes += 1
+      byScenario.set(pair.scenarioId, scenario)
+    }
+
+    const scenarioStats = [...byScenario.values()]
+    const scenarioDenominator = scenarioStats.length
+    const trialCounts = scenarioStats.map((scenario) => scenario.trials)
+    const commonMaxK = trialCounts.length > 0 ? Math.min(...trialCounts) : 0
+    const curve = Array.from({ length: commonMaxK }, (_, index) => {
+      const k = index + 1
+      return {
+        k,
+        value:
+          scenarioStats.reduce(
+            (sum, scenario) => sum + allSuccessProbability(scenario.successes, scenario.trials, k),
+            0,
+          ) / scenarioDenominator,
+        scenarioDenominator,
+      }
+    })
+
+    return {
+      runId: cell.runId,
+      configDigest: cell.configDigest,
+      coverage: {
+        inputTraceCount: cell.traces.length,
+        gradedTraceCount,
+        validTrialCount: scenarioStats.reduce((sum, scenario) => sum + scenario.trials, 0),
+        scenarioDenominator,
+        minTrialsPerScenario: trialCounts.length > 0 ? Math.min(...trialCounts) : 0,
+        maxTrialsPerScenario: trialCounts.length > 0 ? Math.max(...trialCounts) : 0,
+      },
+      exclusions,
+      commonMaxK,
+      curve,
+    }
+  })
+
+  return {
+    authority: RELIABILITY_AUTHORITY,
+    excludedNonFormalTraceCount,
+    cells: cells.sort(
+      (a, b) =>
+        a.runId.localeCompare(b.runId) ||
+        (a.configDigest ?? '').localeCompare(b.configDigest ?? ''),
+    ),
+  }
+}
+
+function buildEscalationMatrix(
+  traces: readonly TraceSummary[],
+  taskByScenarioId: ReadonlyMap<string, AceTaskDetail>,
+): AceEscalationConfusionMatrix {
+  let unknownRequirement = 0
+  let unknownObservation = 0
+  let requiredObserved = 0
+  let requiredNotObserved = 0
+  let notRequiredObserved = 0
+  let notRequiredNotObserved = 0
+
+  for (const summary of traces) {
+    const required = escalationRequired(summary, taskByScenarioId.get(summary.meta.instanceId))
+    const observed = escalated(summary)
+    if (required === undefined) unknownRequirement += 1
+    if (observed === undefined) unknownObservation += 1
+    if (required === undefined || observed === undefined) continue
+    if (required && observed) requiredObserved += 1
+    else if (required) requiredNotObserved += 1
+    else if (observed) notRequiredObserved += 1
+    else notRequiredNotObserved += 1
+  }
+
+  const requiredDenominator = requiredObserved + requiredNotObserved
+  const notRequiredDenominator = notRequiredObserved + notRequiredNotObserved
+  const observedDenominator = requiredObserved + notRequiredObserved
+  const notObservedDenominator = requiredNotObserved + notRequiredNotObserved
+  return {
+    traceCount: traces.length,
+    knownPairDenominator: requiredDenominator + notRequiredDenominator,
+    unknownRequirement,
+    unknownObservation,
+    requiredObserved,
+    requiredNotObserved,
+    notRequiredObserved,
+    notRequiredNotObserved,
+    requiredDenominator,
+    notRequiredDenominator,
+    observedDenominator,
+    notObservedDenominator,
+    requiredHitRate: requiredDenominator > 0 ? requiredObserved / requiredDenominator : null,
+    unnecessaryEscalationRate:
+      notRequiredDenominator > 0 ? notRequiredObserved / notRequiredDenominator : null,
+    observedPrecision: observedDenominator > 0 ? requiredObserved / observedDenominator : null,
+  }
+}
+
 /**
  * Builds an ACE-only aggregate. `runIds === undefined` means all ACE runs;
  * passing ids opts into exact (never substring) run matching.
@@ -164,6 +371,7 @@ export function buildAceDashboard(
   runIds?: readonly string[],
   taskDefinitions: readonly AceTaskDetail[] = [],
   batches: readonly AceBatchSummary[] = [],
+  triagePage: { offset?: number; limit?: number } = {},
 ): AceDashboardSummary {
   // A TraceStore can also contain the viewer's bundled examples or user-added
   // generic corpora.  Those traces may have an evaluation object, but they are
@@ -211,29 +419,8 @@ export function buildAceDashboard(
   const userSimEpisodeDenominator = userSimValidEpisodes + invalid
   const taskByScenarioId = new Map(taskDefinitions.map((task) => [task.scenarioId, task]))
 
-  const scenarioGroups = new Map<string, TraceSummary[]>()
-  for (const summary of traces) {
-    if (summary.meta.corpusId !== 'simulation') continue
-    const outcome = summary.evaluation?.outcome
-    if (outcome !== 'pass' && outcome !== 'fail') continue
-    const key = `${summary.meta.runId ?? 'unknown'}\0${summary.meta.instanceId}`
-    const group = scenarioGroups.get(key)
-    if (group) group.push(summary)
-    else scenarioGroups.set(key, [summary])
-  }
-  const scenarioOutcomes = [...scenarioGroups.values()].map((group) =>
-    [...group].sort((a, b) => {
-      const aSeed = Number(a.meta.extra?.environment_seed ?? a.meta.extra?.seed ?? 0)
-      const bSeed = Number(b.meta.extra?.environment_seed ?? b.meta.extra?.seed ?? 0)
-      return aSeed - bSeed
-    }),
-  )
-
-  const requirements = traces.flatMap((summary) => {
-    const required = escalationRequired(summary, taskByScenarioId.get(summary.meta.instanceId))
-    const observed = escalated(summary)
-    return required === undefined || observed === undefined ? [] : [{ required, observed }]
-  })
+  const reliability = buildReliability(traces, availableByRun, batchByRun)
+  const escalation = buildEscalationMatrix(traces, taskByScenarioId)
 
   const failures = traces.flatMap((summary) => summary.evaluation?.failures ?? [])
   const flags = traces.flatMap((summary) => summary.evaluation?.flags ?? [])
@@ -243,9 +430,21 @@ export function buildAceDashboard(
       const severity = { critical: 3, major: 2, shadow: 1 } as const
       return (
         severity[b.severity as keyof typeof severity] -
-        severity[a.severity as keyof typeof severity]
+          severity[a.severity as keyof typeof severity] ||
+        a.runId.localeCompare(b.runId) ||
+        a.sourceTraceId.localeCompare(b.sourceTraceId) ||
+        a.traceUid.localeCompare(b.traceUid)
       )
     })
+  const requestedTriageLimit = Math.max(1, Math.min(250, Math.trunc(triagePage.limit ?? 250)))
+  const requestedTriageOffset = Math.max(0, Math.trunc(triagePage.offset ?? 0))
+  const triageOffset =
+    triage.length === 0
+      ? 0
+      : requestedTriageOffset < triage.length
+        ? requestedTriageOffset
+        : Math.floor((triage.length - 1) / requestedTriageLimit) * requestedTriageLimit
+  const triageItems = triage.slice(triageOffset, triageOffset + requestedTriageLimit)
   const selectedRuns = availableRuns.filter((run) => selectedSet.has(run.runId))
   const recordedCosts = selectedRuns.flatMap((run) => (run.costUsd === null ? [] : [run.costUsd]))
   const recordedAttemptRuns = selectedRuns.flatMap((run) => {
@@ -295,6 +494,9 @@ export function buildAceDashboard(
     runtimeError,
     ungraded,
     scheduledEpisodes: selectedRuns.reduce((sum, run) => sum + run.scheduledEpisodes, 0),
+    formalScheduledEpisodes: selectedRuns
+      .filter((run) => run.runKind === 'scored')
+      .reduce((sum, run) => sum + run.scheduledEpisodes, 0),
     terminalEpisodes: selectedRuns.reduce((sum, run) => sum + run.terminalEpisodes, 0),
     inProgressEpisodes: selectedRuns.reduce((sum, run) => sum + run.inProgressEpisodes, 0),
     awaitingTraceIngest: selectedRuns.reduce((sum, run) => sum + run.awaitingTraceIngest, 0),
@@ -311,25 +513,23 @@ export function buildAceDashboard(
     userSimAttempts,
     userSimInvalidAttempts,
     userSimAttemptRunCount: recordedAttemptRuns.length,
-    passAt1:
-      scenarioOutcomes.length > 0
-        ? scenarioOutcomes.filter((group) => group[0]?.evaluation?.outcome === 'pass').length /
-          scenarioOutcomes.length
-        : null,
+    reliability,
+    passAt1: (() => {
+      const points = reliability.cells.flatMap((cell) =>
+        cell.curve.filter((point) => point.k === 1),
+      )
+      const denominator = points.reduce((sum, point) => sum + point.scenarioDenominator, 0)
+      return denominator > 0
+        ? points.reduce((sum, point) => sum + point.value * point.scenarioDenominator, 0) /
+            denominator
+        : null
+    })(),
     passToK:
-      scenarioOutcomes.length > 0
-        ? scenarioOutcomes.filter((group) =>
-            group.every((summary) => summary.evaluation?.outcome === 'pass'),
-          ).length / scenarioOutcomes.length
-        : null,
-    requiredEscalations:
-      requirements.length > 0
-        ? requirements.filter((item) => item.required && item.observed).length
-        : null,
+      reliability.cells.length === 1 ? (reliability.cells[0]?.curve.at(-1)?.value ?? null) : null,
+    escalation,
+    requiredEscalations: escalation.knownPairDenominator > 0 ? escalation.requiredObserved : null,
     unnecessaryEscalations:
-      requirements.length > 0
-        ? requirements.filter((item) => !item.required && item.observed).length
-        : null,
+      escalation.knownPairDenominator > 0 ? escalation.notRequiredObserved : null,
     totalCostUsd:
       recordedCosts.length > 0 ? recordedCosts.reduce((sum, cost) => sum + cost, 0) : null,
     costRunCount: recordedCosts.length,
@@ -351,10 +551,7 @@ export function buildAceDashboard(
       traces.flatMap((summary) => summary.evaluation?.lifecycle.termination ?? []),
     ),
     issues: breakdown(
-      traces.flatMap((summary) => {
-        const issue = aceTraceDimensions(summary, taskByScenarioId).issue
-        return issue ? [issue] : []
-      }),
+      traces.flatMap((summary) => aceTraceDimensions(summary, taskByScenarioId).issues),
     ),
     languages: breakdown(
       traces.flatMap((summary) => {
@@ -367,7 +564,11 @@ export function buildAceDashboard(
     ),
     transports: breakdown(traces.flatMap((summary) => extraString(summary, 'transport') ?? [])),
     triageTotal: triage.length,
-    triageTruncated: triage.length > 250,
-    triage: triage.slice(0, 250),
+    triageOffset,
+    triageLimit: requestedTriageLimit,
+    triageHasPrevious: triageOffset > 0,
+    triageHasNext: triageOffset + triageItems.length < triage.length,
+    triageTruncated: triageOffset > 0 || triageOffset + triageItems.length < triage.length,
+    triage: triageItems,
   }
 }

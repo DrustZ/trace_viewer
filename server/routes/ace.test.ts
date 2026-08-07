@@ -8,7 +8,12 @@ import type { ParsedTrace } from '../../shared/connectors/types'
 import { AceLaunchLineageStore } from '../ace/launchLineageStore'
 import { SearchIndex } from '../search/searchIndex'
 import { TraceStore } from '../store/traceStore'
-import { type AceRouteBridge, type AceRouteConfig, aceRoutes } from './ace'
+import {
+  type AceRouteBridge,
+  type AceRouteConfig,
+  aceRoutes,
+  parseDashboardTriagePage,
+} from './ace'
 import type { RouteCtx } from './context'
 
 interface BridgeCall {
@@ -57,6 +62,7 @@ function traceFixture(
   traceId: string,
   corpusId: 'production' | 'simulation',
   runId: string,
+  extra: Record<string, unknown> = {},
 ): ParsedTrace {
   return {
     meta: {
@@ -71,7 +77,7 @@ function traceFixture(
       checkpointStep: 0,
       split: 'test',
       sourceFormat: 'agent-conversation',
-      extra: { environment_seed: 3 },
+      extra: { environment_seed: 3, ...extra },
     },
     messages: [{ id: 'm-0', role: 'user', content: 'help' }],
     warnings: [],
@@ -104,6 +110,14 @@ function buildApp(
 }
 
 describe('ACE cockpit routes', () => {
+  it('validates bounded, addressable dashboard triage pages', () => {
+    expect(parseDashboardTriagePage(undefined, undefined)).toEqual({ offset: 0, limit: 250 })
+    expect(parseDashboardTriagePage('250', '100')).toEqual({ offset: 250, limit: 100 })
+    expect(() => parseDashboardTriagePage('-1', '100')).toThrow(/triageOffset/)
+    expect(() => parseDashboardTriagePage('0', '251')).toThrow(/triageLimit/)
+    expect(() => parseDashboardTriagePage(['0', '1'], '100')).toThrow(/triageOffset/)
+  })
+
   let root: string
   let config: AceRouteConfig
   let store: TraceStore
@@ -131,6 +145,7 @@ describe('ACE cockpit routes', () => {
     runId: string,
     extension = '.json',
     aceOwned = false,
+    extra: Record<string, unknown> = {},
   ) {
     const sourcePath = aceOwned
       ? path.join(
@@ -142,7 +157,7 @@ describe('ACE cockpit routes', () => {
       : path.join(root, runId, `${traceId}${extension}`)
     await fs.mkdir(path.dirname(sourcePath), { recursive: true })
     await fs.writeFile(sourcePath, '{}')
-    const trace = store.upsert(traceFixture(traceId, corpusId, runId), sourcePath)
+    const trace = store.upsert(traceFixture(traceId, corpusId, runId, extra), sourcePath)
     return { sourcePath, traceUid: trace.meta.traceUid as string }
   }
 
@@ -195,6 +210,20 @@ describe('ACE cockpit routes', () => {
       { runId: 'run-a-long', traces: 1, corpusIds: ['simulation'], runKind: 'scored' },
     ])
     expect(bridge.calls.filter((call) => call.command === 'analyze')).toHaveLength(1)
+
+    const triagePage = await request(app).get(
+      '/api/ace/dashboard?runId=production&triageOffset=0&triageLimit=1',
+    )
+    expect(triagePage.status).toBe(200)
+    expect(triagePage.body).toMatchObject({
+      triageTotal: 1,
+      triageOffset: 0,
+      triageLimit: 1,
+      triageHasPrevious: false,
+      triageHasNext: false,
+      triageTruncated: false,
+      triage: [{ sourceTraceId: 'trace-production', severity: 'major' }],
+    })
 
     const missing = await request(app).get('/api/ace/dashboard?runId=missing')
     expect(missing.status).toBe(200)
@@ -251,6 +280,8 @@ describe('ACE cockpit routes', () => {
     expect(response.body).toMatchObject({
       runId: 'reconcile-run',
       runKind: 'debug',
+      manifestAvailable: true,
+      controlsAvailable: true,
       traces: [
         { traceUid: orphan.traceUid, sourceTraceId: 'orphan-s1' },
         { traceUid: scheduled.traceUid, sourceTraceId: 'scheduled-s1' },
@@ -267,6 +298,65 @@ describe('ACE cockpit routes', () => {
     })
     expect(response.body.episodes[0].traceUid).toBe(scheduled.traceUid)
     expect(response.body.episodes[1].traceUid).toBeUndefined()
+  })
+
+  it('makes production and trace-only runs reachable as read-only synthesized summaries', async () => {
+    const production = await addTrace('production-only', 'production', 'production')
+    const simulation = await addTrace('simulation-only', 'simulation', 'trace-only-simulation')
+    const app = buildApp(store, bridge, config)
+
+    const catalog = await request(app).get('/api/ace/runs')
+    expect(catalog.status).toBe(200)
+    expect(catalog.body.total).toBe(2)
+    expect(catalog.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          runId: 'production',
+          runKind: 'production',
+          schemaVersion: 0,
+          manifestAvailable: false,
+          controlsAvailable: false,
+          totals: expect.objectContaining({ episodes: 1 }),
+          traces: [
+            expect.objectContaining({
+              traceUid: production.traceUid,
+              sourceTraceId: 'production-only',
+            }),
+          ],
+          reconciliation: expect.objectContaining({
+            manifestEpisodes: 0,
+            ingestedTraces: 1,
+            orphanTraces: 1,
+          }),
+        }),
+        expect.objectContaining({
+          runId: 'trace-only-simulation',
+          manifestAvailable: false,
+          controlsAvailable: false,
+          traces: [expect.objectContaining({ traceUid: simulation.traceUid })],
+        }),
+      ]),
+    )
+
+    const detail = await request(app).get('/api/ace/runs/production')
+    expect(detail.status).toBe(200)
+    expect(detail.body).toMatchObject({
+      runId: 'production',
+      manifestAvailable: false,
+      controlsAvailable: false,
+      traces: [{ traceUid: production.traceUid }],
+    })
+
+    const rejectedControl = await request(app)
+      .post('/api/ace/runs/production/control')
+      .send({ action: 'cancel' })
+    expect(rejectedControl.status).toBe(409)
+    expect(rejectedControl.body).toMatchObject({
+      runId: 'production',
+      manifestAvailable: false,
+      controlsAvailable: false,
+    })
+    expect(bridge.calls.filter((call) => call.command === 'control')).toHaveLength(0)
   })
 
   it('exposes a scheduled running run before its first trace without calling it ungraded', async () => {
@@ -463,11 +553,20 @@ describe('ACE cockpit routes', () => {
         scenarioIds: ['scenario-01'],
         seeds: [3],
         runKind: 'counterfactual',
+        lineage: {
+          relation: 'fresh_task_rerun',
+          parent_trace_uid: parent.traceUid,
+          parent_source_trace_id: 'parent-trace',
+          parent_run_id: 'parent-run',
+          fidelity: 'scenario_fresh_rerun_state_regenerated',
+          state_exact: false,
+          config_exact: false,
+          llm_exact: false,
+        },
       },
     })
     expect(bridge.starts[0].params).not.toHaveProperty('checkpointPath')
     expect(bridge.starts[0].params).not.toHaveProperty('checkpointId')
-    expect(bridge.starts[0].params).not.toHaveProperty('lineage')
     expect(await launchLineage.get('fresh-child')).toEqual({
       relation: 'fresh_task_rerun',
       parentTraceUid: parent.traceUid,
@@ -477,7 +576,6 @@ describe('ACE cockpit routes', () => {
       stateExact: false,
       configExact: false,
       llmExact: false,
-      policyChanged: true,
     })
     bridge.activeEntries.set('fresh-child', {
       pid: 123,
@@ -545,6 +643,83 @@ describe('ACE cockpit routes', () => {
     expect(mismatchedSeed.status).toBe(422)
     expect(mismatchedSeed.body).toMatchObject({ sourceEnvironmentSeed: 3 })
     expect(bridge.starts).toHaveLength(1)
+  })
+
+  it('derives exact and policy-changed lineage from recorded effective config', async () => {
+    await fs.mkdir(path.join(root, 'configs', 'prompts'), { recursive: true })
+    await fs.writeFile(
+      path.join(root, 'configs', 'prompts', 'baseline_beta.md'),
+      'Exact baseline prompt bytes',
+    )
+    const configSnapshot = {
+      runner: {
+        max_messages: 20,
+        concurrency: 2,
+        bot_opens: true,
+        state_scope: 'episode',
+        latent_refund_block_rate: 0,
+        tool_fail_before_rate: 0,
+        tool_response_lost_rate: 0,
+        judge_mode: 'off',
+        judge_sample: 1,
+        semantic_verify_mode: 'off',
+        semantic_verify_sample: 1,
+        checkpoint_enabled: true,
+      },
+      spec: {
+        prompt_source: { kind: 'preset', value: 'baseline' },
+        prompt_snapshot: { bot: 'Exact baseline prompt bytes' },
+        bot_model: 'gpt-5-mini',
+        user_model: 'gpt-5-mini',
+        bot_temperature: 0.3,
+        user_temperature: 0.9,
+        agent_transport: 'responses',
+        reasoning_effort: 'low',
+        bot: 'baseline',
+      },
+    }
+    const parent = await addTrace('exact-parent', 'simulation', 'parent-run', '.json', false, {
+      config_snapshot: configSnapshot,
+    })
+    const launchLineage = new AceLaunchLineageStore(path.join(root, 'lineage-fidelity.jsonl'))
+    const app = buildApp(store, bridge, config, launchLineage)
+    const body = {
+      scenarioFile: 'atomic.json',
+      scenarioIds: ['scenario-01'],
+      seeds: [3],
+      runKind: 'debug' as const,
+      prompt: 'baseline',
+      transport: 'responses' as const,
+      maxMessages: 20,
+      costCapUsd: 5,
+      sourceTraceUid: parent.traceUid,
+    }
+
+    const exact = await request(app)
+      .post('/api/ace/runs')
+      .send({ ...body, batchId: 'config-exact-child' })
+    expect(exact.status).toBe(202)
+    expect(await launchLineage.get('config-exact-child')).toMatchObject({
+      configExact: true,
+      policyChanged: false,
+    })
+    expect(bridge.starts[0].params.lineage).toMatchObject({
+      config_exact: true,
+      policy_changed: false,
+    })
+
+    const changed = await request(app)
+      .post('/api/ace/runs')
+      .send({ ...body, batchId: 'policy-changed-child', prompt: 'optimized' })
+    expect(changed.status).toBe(202)
+    expect(await launchLineage.get('policy-changed-child')).toMatchObject({
+      configExact: false,
+      policyChanged: true,
+    })
+    expect(bridge.starts[1].params.lineage).toMatchObject({
+      config_exact: false,
+      policy_changed: true,
+    })
   })
 
   it('does not commit immutable lineage when the bridge rejects a launch', async () => {
@@ -620,7 +795,15 @@ describe('ACE cockpit routes', () => {
     const checkpointPath = sourcePath.replace(/\.json$/, '.checkpoints.json')
     await fs.writeFile(checkpointPath, '{}')
     bridge.responses.set('checkpoints', {
-      checkpoints: [{ id: 1, phase: 'await_user', branchable: true }],
+      checkpoints: [
+        {
+          id: 1,
+          phase: 'await_user',
+          message_count: 1,
+          fork_message_id: 'm-0',
+          branchable: true,
+        },
+      ],
       capabilities: { exact_fork: true },
       cockpit_fork: { missing: [] },
       source: {
@@ -637,7 +820,15 @@ describe('ACE cockpit routes', () => {
       traceUid,
       available: true,
       historicalReplayAvailable: false,
-      checkpoints: [{ id: 1, phase: 'await_user', branchable: true }],
+      checkpoints: [
+        {
+          id: 1,
+          phase: 'await_user',
+          message_count: 1,
+          fork_message_id: 'm-0',
+          branchable: true,
+        },
+      ],
       source: {
         checkpoint_path: 'episode-01.checkpoints.json',
         sidecarPath: 'private.meta.json',
@@ -671,7 +862,11 @@ describe('ACE cockpit routes', () => {
     const production = await addTrace('production-02', 'production', 'prod')
     bridge.responses.set('replay', { fidelity: 'state_exact_no_execution' })
     bridge.responses.set('fork', {
-      lineage: { parent_checkpoint: simulation.sourcePath.replace(/\.json$/, '.checkpoints.json') },
+      lineage: {
+        parent_checkpoint: simulation.sourcePath.replace(/\.json$/, '.checkpoints.json'),
+        checkpoint_id: 1,
+        fork_message_id: 'm-0',
+      },
     })
     bridge.responses.set('historical-replay', {
       fidelity: 'historical_tool_replay',
@@ -700,9 +895,14 @@ describe('ACE cockpit routes', () => {
       childRunId: 'fork-exact',
       childTraceId: 'child-1',
       costCapUsd: 2,
+      forkMessageId: 'm-0',
     })
     expect(exact.status).toBe(201)
     expect(JSON.stringify(exact.body)).not.toContain(root)
+    expect(exact.body.result.lineage).toMatchObject({
+      checkpoint_id: 1,
+      fork_message_id: 'm-0',
+    })
     expect(bridge.calls.at(-1)).toMatchObject({
       command: 'fork',
       timeoutMs: 1_800_000,
@@ -712,6 +912,7 @@ describe('ACE cockpit routes', () => {
         mode: 'exact',
         costCapUsd: 2,
         parentTraceUid: simulation.traceUid,
+        forkMessageId: 'm-0',
       },
     })
 
@@ -802,6 +1003,14 @@ describe('ACE cockpit routes', () => {
           mode: 'exact',
           costCapUsd: 1,
           childTraceId: '../escape',
+        },
+        status: 400,
+      },
+      {
+        body: {
+          sourceTraceUid: simulation.traceUid,
+          mode: 'exact',
+          costCapUsd: 100.01,
         },
         status: 400,
       },
@@ -989,6 +1198,155 @@ describe('ACE cockpit routes', () => {
       scenarioSnapshotAvailable: false,
     })
     expect(response.body.explanation).toContain('non-runnable draft')
+  })
+
+  it('completes production evidence as a validated runnable synthetic scenario', async () => {
+    const production = await addTrace(
+      'production-runnable-regression',
+      'production',
+      'prod',
+      '.json',
+      true,
+    )
+    bridge.responses.set('save-regression', {
+      regression_id: 'production-case',
+      artifact_kind: 'runnable_scenario_pack',
+      runnable: true,
+      deduplicated: false,
+      artifact: 'regressions/production-case/manifest.json',
+      scenario_pack: 'regressions/production-case/scenario.json',
+      draft: null,
+      scenario_id: 'production-case-scenario',
+      missing_required_fields: [],
+      fidelity: { synthetic_rerun: true, formal_metrics_excluded: true },
+      anchor: {
+        kind: 'full_trace',
+        index_space: 'chronological',
+        inclusive: true,
+        message_id: 'm-0',
+        raw_index: 0,
+        chronological_index: 0,
+      },
+    })
+    const app = buildApp(store, bridge, config)
+    const scenarioSnapshot = {
+      scenario_id: 'production-case-scenario',
+      suite: 'regression',
+      card: {
+        issue: 'order_status',
+        language: 'en',
+        id_knowledge: 'exact',
+        patience: 4,
+        persistence: 'accepts_refusal',
+        style: [],
+        order_id: 'order_003',
+        goal: 'Find the order status.',
+      },
+      expected_actions: [{ name: 'get_order_details', args_subset: { order_id: 'order_003' } }],
+      forbidden_actions: [],
+      expected_outcome: 'info',
+      reward_basis: ['ACTIONS', 'OUTCOME'],
+    }
+
+    const response = await request(app).post('/api/ace/regressions').send({
+      sourceTraceUid: production.traceUid,
+      regressionId: 'production-case',
+      scenarioSnapshot,
+    })
+
+    expect(response.status).toBe(201)
+    expect(response.body).toMatchObject({
+      runnable: true,
+      scenarioId: 'production-case-scenario',
+      fidelity: { synthetic_rerun: true, formal_metrics_excluded: true },
+    })
+    expect(bridge.calls.at(-1)).toMatchObject({
+      command: 'save-regression',
+      params: {
+        sourceTraceUid: production.traceUid,
+        corpusId: 'production',
+        scenarioSnapshot,
+      },
+    })
+  })
+
+  it('accepts caller Scenario data only for production traces lacking a recorded snapshot', async () => {
+    const simulation = await addTrace('simulation-no-snapshot', 'simulation', 'sim', '.json', true)
+    const production = await addTrace(
+      'production-with-snapshot',
+      'production',
+      'prod',
+      '.json',
+      true,
+      {
+        scenario_snapshot: {
+          scenario_id: 'recorded-scenario',
+          card: {
+            issue: 'order_status',
+            language: 'en',
+            id_knowledge: 'exact',
+            patience: 4,
+            persistence: 'accepts_refusal',
+            style: [],
+            order_id: 'order_003',
+            goal: 'status',
+          },
+        },
+      },
+    )
+    const app = buildApp(store, bridge, config)
+    const scenarioSnapshot = {
+      scenario_id: 'caller-scenario',
+      suite: 'regression',
+      card: {
+        issue: 'order_status',
+        language: 'en',
+        id_knowledge: 'exact',
+        patience: 4,
+        persistence: 'accepts_refusal',
+        style: [],
+        order_id: 'order_003',
+        goal: 'status',
+      },
+      expected_actions: [],
+      forbidden_actions: [],
+      expected_outcome: 'info',
+      reward_basis: ['OUTCOME'],
+    }
+
+    const simulationResponse = await request(app).post('/api/ace/regressions').send({
+      sourceTraceUid: simulation.traceUid,
+      scenarioSnapshot,
+    })
+    expect(simulationResponse.status).toBe(400)
+    expect(simulationResponse.body.error).toContain('only complete a production trace')
+
+    const replacement = await request(app).post('/api/ace/regressions').send({
+      sourceTraceUid: production.traceUid,
+      scenarioSnapshot,
+    })
+    expect(replacement.status).toBe(400)
+    expect(replacement.body.error).toContain('cannot replace')
+
+    const invalidProduction = await addTrace(
+      'production-invalid-snapshot',
+      'production',
+      'prod',
+      '.json',
+      true,
+    )
+    const invalid = await request(app)
+      .post('/api/ace/regressions')
+      .send({
+        sourceTraceUid: invalidProduction.traceUid,
+        scenarioSnapshot: {
+          ...scenarioSnapshot,
+          card: { ...scenarioSnapshot.card, order_id: '' },
+        },
+      })
+    expect(invalid.status).toBe(400)
+    expect(invalid.body.error).toContain('card.order_id')
+    expect(bridge.calls.filter((call) => call.command === 'save-regression')).toHaveLength(0)
   })
 
   it('does not advertise regression writes for viewer traces outside fixed ACE roots', async () => {

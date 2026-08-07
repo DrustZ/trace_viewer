@@ -140,6 +140,97 @@ export interface ReviewTranscriptMessage {
   timestamp?: string
 }
 
+export type ReviewGroundTruthValue = string | number | boolean | null
+
+export interface ReviewGroundTruthTask {
+  issue?: string
+  language?: string
+  personaGoal?: string
+  expectedOutcome?: string
+}
+
+export interface ReviewGroundTruthAction {
+  name: string
+  argsSubset?: Record<string, ReviewGroundTruthValue>
+}
+
+export interface ReviewGroundTruthAuthorizedEffect {
+  orderId: string
+  effects: string[]
+  refundCap?: number
+}
+
+export interface ReviewGroundTruthRequiredInfo {
+  kind: string
+  value: string | number
+}
+
+export interface ReviewGroundTruthStateDelta {
+  orderId: string
+  field: string
+  to: ReviewGroundTruthValue
+}
+
+export type ReviewGroundTruthPrecedence =
+  | [string, string]
+  | [string, string, Record<string, ReviewGroundTruthValue>]
+
+export interface ReviewGroundTruthPolicy {
+  expectedActions?: ReviewGroundTruthAction[]
+  forbiddenActions?: string[]
+  authorizedEffects?: ReviewGroundTruthAuthorizedEffect[]
+  mustPrecede?: ReviewGroundTruthPrecedence[]
+  consentRequired?: boolean
+}
+
+export interface ReviewGroundTruthDatabase {
+  requiredInfo?: ReviewGroundTruthRequiredInfo[]
+  expectedStateDelta?: ReviewGroundTruthStateDelta[]
+}
+
+export interface ReviewGroundTruthRubric {
+  rewardBasis?: string[]
+  promiseCheck?: boolean
+}
+
+export type ReviewGroundTruthUnavailableReason =
+  | 'trace_bound_scenario_snapshot_missing'
+  | 'snapshot_provenance_missing'
+  | 'scenario_id_mismatch'
+  | 'config_provenance_missing'
+  | 'config_digest_mismatch'
+  | 'task_catalog_definition_conflict'
+  | 'task_catalog_definition_invalid'
+  | 'unsafe_ground_truth_shape'
+
+export interface ReviewGroundTruthAvailable {
+  status: 'available'
+  authoritative: true
+  source:
+    | 'current_task_catalog'
+    | 'trace_bound_episode_sidecar_scenario_snapshot'
+    | 'trace_bound_batch_manifest_scenario_snapshot'
+  /** False means authoritative for the current task definition, not a historical-trace claim. */
+  traceBound: boolean
+  scenarioId: string
+  configDigest?: string
+  definitionDigest?: string
+  task?: ReviewGroundTruthTask
+  policy?: ReviewGroundTruthPolicy
+  database?: ReviewGroundTruthDatabase
+  rubric?: ReviewGroundTruthRubric
+}
+
+export interface ReviewGroundTruthUnavailable {
+  status: 'unavailable'
+  authoritative: false
+  reason: ReviewGroundTruthUnavailableReason
+  scenarioId?: string
+}
+
+/** Server-sanitized, task-definition-only context safe for blind Calibration. */
+export type ReviewGroundTruth = ReviewGroundTruthAvailable | ReviewGroundTruthUnavailable
+
 /** Safe-to-show context. It must never contain model, arm, or automatic verdicts. */
 export interface ReviewTraceContext {
   corpusId: string
@@ -156,7 +247,7 @@ export interface ReviewTraceContext {
   title?: string
   transcript?: ReviewTranscriptMessage[]
   rubric?: RubricDefinition[]
-  groundTruth?: unknown
+  groundTruth?: ReviewGroundTruth
 }
 
 export type ReviewQueueState = 'unreviewed' | 'draft' | 'submitted'

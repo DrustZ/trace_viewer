@@ -4,6 +4,7 @@ import type { AceBreakdownItem, AceDashboardScope, AceDashboardSummary } from '@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAceAnalysis, useAceDashboard } from '../api/ace'
+import { ReliabilityCurves } from '../components/ace/AceDashboard'
 import { EmptyState, LoadingState } from '../components/common/EmptyState'
 import { formatNumber, formatPercent } from '../components/common/format'
 import { AcePairedComparison } from '../components/compare/AcePairedComparison'
@@ -16,6 +17,20 @@ export function aceAnalysisSearchParams(runIds: readonly string[]): URLSearchPar
   const result = new URLSearchParams()
   for (const runId of [...new Set(runIds)].sort()) result.append('runId', runId)
   return result
+}
+
+export function aceAnalysisTriageOffset(params: URLSearchParams): number {
+  const raw = params.get('triageOffset')
+  if (raw === null || !/^\d+$/.test(raw)) return 0
+  const offset = Number(raw)
+  return Number.isSafeInteger(offset) ? offset : 0
+}
+
+function aceAnalysisPageHref(runIds: readonly string[], triageOffset: number): string {
+  const params = aceAnalysisSearchParams(runIds)
+  if (triageOffset > 0) params.set('triageOffset', String(triageOffset))
+  const query = params.toString()
+  return query ? `/ace/analysis?${query}` : '/ace/analysis'
 }
 
 /** Empty selection is the canonical URL representation for “all ACE runs”. */
@@ -146,7 +161,7 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
       filterKey: 'termination',
       operation: 'eq',
     },
-    { title: 'Issues', items: dashboard.issues, filterKey: 'issue', operation: 'eq' },
+    { title: 'Issues', items: dashboard.issues, filterKey: 'issue', operation: 'contains' },
     {
       title: 'Languages',
       items: dashboard.languages,
@@ -161,6 +176,10 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
       operation: 'eq',
     },
   ]
+  const triageStart = dashboard.triage.length > 0 ? dashboard.triageOffset + 1 : 0
+  const triageEnd = dashboard.triageOffset + dashboard.triage.length
+  const previousTriageOffset = Math.max(0, dashboard.triageOffset - dashboard.triageLimit)
+  const nextTriageOffset = dashboard.triageOffset + dashboard.triageLimit
 
   return (
     <div className="space-y-4">
@@ -177,7 +196,7 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
           />
           <Metric label="Ungraded" value={formatNumber(dashboard.ungraded)} />
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-7">
+        <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
           <Metric
             label="Pass rate"
             value={formatPercent(dashboard.passRateExecuted)}
@@ -198,28 +217,32 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
                 : 'No selected batch reports complete attempt counters'
             }
           />
-          <Metric label="Pass@1" value={formatPercent(dashboard.passAt1)} />
-          <Metric label="Pass^k" value={formatPercent(dashboard.passToK)} />
           <Metric
-            label="Required escalation"
-            value={
-              dashboard.requiredEscalations === null
-                ? '—'
-                : formatNumber(dashboard.requiredEscalations)
-            }
+            label="Required escalation hit"
+            value={formatPercent(dashboard.escalation.requiredHitRate)}
+            detail={`${dashboard.escalation.requiredObserved} / ${dashboard.escalation.requiredDenominator} required opportunities`}
           />
           <Metric
-            label="Unnecessary escalation"
-            value={
-              dashboard.unnecessaryEscalations === null
-                ? '—'
-                : formatNumber(dashboard.unnecessaryEscalations)
-            }
+            label="Unnecessary escalation rate"
+            value={formatPercent(dashboard.escalation.unnecessaryEscalationRate)}
+            detail={`${dashboard.escalation.notRequiredObserved} / ${dashboard.escalation.notRequiredDenominator} not-required opportunities`}
             tone="amber"
           />
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-5">
-          <Metric label="Scheduled" value={formatNumber(dashboard.scheduledEpisodes)} />
+        <div className="mt-2">
+          <ReliabilityCurves reliability={dashboard.reliability} />
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-6">
+          <Metric
+            label="Formal scheduled"
+            value={formatNumber(dashboard.formalScheduledEpisodes)}
+            detail="uncontaminated scored simulation runs"
+          />
+          <Metric
+            label="In-scope scheduled"
+            value={formatNumber(dashboard.scheduledEpisodes)}
+            detail="includes explicitly selected exploratory/production runs"
+          />
           <Metric label="Terminal" value={formatNumber(dashboard.terminalEpisodes)} />
           <Metric
             label="In progress"
@@ -247,15 +270,31 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
       </section>
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <header className="flex items-center border-b border-slate-200 px-3 py-2">
+        <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
           <h2 className="text-xs font-semibold text-slate-800">
             Major failures & judge disagreements
           </h2>
           <span className="ml-auto text-[11px] tabular-nums text-slate-400">
             {dashboard.triageTruncated
-              ? `showing ${dashboard.triage.length} of ${dashboard.triageTotal} traces`
+              ? `showing ${triageStart}–${triageEnd} of ${dashboard.triageTotal} traces`
               : `${dashboard.triageTotal} traces`}
           </span>
+          {dashboard.triageHasPrevious ? (
+            <Link
+              to={aceAnalysisPageHref(dashboard.scope.requestedRunIds, previousTriageOffset)}
+              className="rounded border border-slate-200 px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-50"
+            >
+              ← Previous
+            </Link>
+          ) : null}
+          {dashboard.triageHasNext ? (
+            <Link
+              to={aceAnalysisPageHref(dashboard.scope.requestedRunIds, nextTriageOffset)}
+              className="rounded border border-slate-200 px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-50"
+            >
+              Next →
+            </Link>
+          ) : null}
         </header>
         {dashboard.triage.length === 0 ? (
           <p className="p-6 text-center text-xs text-slate-400">
@@ -287,7 +326,8 @@ export function AceAnalysisReport({ dashboard }: { dashboard: AceDashboardSummar
 export default function AceAnalysisPage() {
   const [search, setSearch] = useSearchParams()
   const selectedRunIds = aceAnalysisRunIds(search)
-  const dashboard = useAceDashboard(selectedRunIds)
+  const triageOffset = aceAnalysisTriageOffset(search)
+  const dashboard = useAceDashboard(selectedRunIds, { triageOffset })
   const detectorAnalysis = useAceAnalysis()
   const availableRunIds = dashboard.data?.scope.availableRuns.map((run) => run.runId) ?? []
   const effectiveRunIds = dashboard.data?.scope.selectedRunIds ?? selectedRunIds

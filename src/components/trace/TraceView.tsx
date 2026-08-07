@@ -1,5 +1,6 @@
 import type { ReviewSubject } from '@shared/reviews/types'
 import type { Trace } from '@shared/schema/types'
+import { useCallback, useState } from 'react'
 import { ReviewPanel } from '../review/ReviewPanel'
 import { ConversationView } from './ConversationView'
 import { EvaluationTab } from './EvaluationTab'
@@ -31,6 +32,15 @@ export function TraceView({
   onClose?: () => void
 }) {
   const traceUid = trace.meta.traceUid ?? trace.meta.traceId
+  const [messageTarget, setMessageTarget] = useState<{ traceUid: string; messageId: string }>()
+  const targetMessageId = messageTarget?.traceUid === traceUid ? messageTarget.messageId : undefined
+  const jumpToMessage = useCallback(
+    (messageId: string) => {
+      setMessageTarget({ traceUid, messageId })
+      onTabChange('conversation')
+    },
+    [onTabChange, traceUid],
+  )
   const reviewSubject: ReviewSubject = {
     corpusId:
       trace.meta.corpusId ??
@@ -58,10 +68,12 @@ export function TraceView({
         blindReview={false}
       />
       <div className="min-h-0 flex-1">
-        {tab === 'conversation' && <ConversationView trace={trace} />}
+        {tab === 'conversation' && (
+          <ConversationView trace={trace} targetMessageId={targetMessageId} />
+        )}
         {tab === 'evaluation' && (
           <div className="h-full overflow-y-auto">
-            <EvaluationTab trace={trace} />
+            <EvaluationTab trace={trace} onJumpToMessage={jumpToMessage} />
           </div>
         )}
         {tab === 'review' && (

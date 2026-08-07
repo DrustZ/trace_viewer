@@ -1,6 +1,12 @@
 import type { AceTaskDetail } from '@shared/schema/aceTasks'
 import type { Trace } from '@shared/schema/types'
-import type { AceRunFormValues } from './AceRunLauncher'
+import {
+  ACE_RUN_FIDELITY_FIELDS,
+  type AceRunFidelityField,
+  type AceRunFormValues,
+  type AceRunRecordedConfig,
+  type AceRunRecordedSetting,
+} from './AceRunLauncher'
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -35,83 +41,216 @@ export function interactiveLabHref(trace: Pick<Trace, 'meta'>): string {
   return `/ace/lab?${new URLSearchParams({ trace: traceUid }).toString()}`
 }
 
-function finiteText(value: unknown): string | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? String(value) : undefined
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
-/** Clone only typed, user-visible runner settings; never infer missing config. */
-export function traceRunFormOverrides(trace: Trace): Partial<AceRunFormValues> {
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function firstDefined(...values: unknown[]): unknown {
+  return values.find((value) => value !== undefined)
+}
+
+function setting(value: string | number | boolean, display = String(value)): AceRunRecordedSetting {
+  return { value, display }
+}
+
+function sourceProjection(trace: Trace): {
+  initialValues: Partial<AceRunFormValues>
+  recordedConfig: AceRunRecordedConfig
+} {
   const extra = record(trace.meta.extra)
-  const spec = record(extra.spec)
   const snapshot = record(extra.config_snapshot)
   const runner = record(snapshot.runner)
+  // A versioned config snapshot is authoritative. `extra.spec` is retained only as a
+  // field-level fallback for older Viewer-produced sidecars.
+  const spec = { ...record(extra.spec), ...record(snapshot.spec) }
   const promptSource = record(spec.prompt_source)
-  const prompt =
+  const promptSnapshot = record(spec.prompt_snapshot)
+  const fields: AceRunRecordedConfig['fields'] = {}
+  const initialValues: Partial<AceRunFormValues> = {}
+
+  const preset =
     promptSource.kind === 'preset' &&
     typeof promptSource.value === 'string' &&
     ['baseline', 'improved', 'optimized'].includes(promptSource.value)
       ? promptSource.value
-      : undefined
+      : typeof spec.prompt === 'string' &&
+          ['baseline', 'improved', 'optimized'].includes(spec.prompt)
+        ? spec.prompt
+        : undefined
+  const promptText = stringValue(promptSnapshot.bot)
+  if (preset) {
+    initialValues.prompt = preset
+    fields.prompt = setting(`preset:${preset}`, `preset ${preset}`)
+  } else if (promptText) {
+    initialValues.promptText = promptText
+    fields.prompt = setting(
+      `inline:${promptText}`,
+      `${String(promptSource.kind ?? 'recorded')} prompt (${promptText.length} chars)`,
+    )
+  }
+
+  const transportRaw = firstDefined(spec.agent_transport, spec.transport)
   const transport =
-    spec.agent_transport === 'responses'
+    transportRaw === 'responses'
       ? 'responses'
-      : spec.agent_transport === 'chat_completions'
+      : transportRaw === 'chat_completions' || transportRaw === 'chat'
         ? 'chat'
         : undefined
-  const bot =
-    typeof spec.bot === 'string' && ['baseline', 'playbook', 'workflow'].includes(spec.bot)
-      ? (spec.bot as NonNullable<AceRunFormValues['bot']>)
-      : undefined
-  const reasoningEffort =
-    typeof spec.reasoning_effort === 'string' &&
-    ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'].includes(spec.reasoning_effort)
-      ? (spec.reasoning_effort as NonNullable<AceRunFormValues['reasoningEffort']>)
-      : undefined
-  const stateScope =
-    runner.state_scope === 'episode' || runner.state_scope === 'journey'
-      ? runner.state_scope
-      : undefined
-  const judge =
-    runner.judge_mode === 'off' || runner.judge_mode === 'all' || runner.judge_mode === 'sample'
-      ? runner.judge_mode
-      : undefined
-  const semantic =
-    runner.semantic_verify_mode === 'off' ||
-    runner.semantic_verify_mode === 'all' ||
-    runner.semantic_verify_mode === 'sample'
-      ? runner.semantic_verify_mode
-      : undefined
-  return {
-    ...(prompt ? { prompt } : {}),
-    ...(transport ? { transport } : {}),
-    ...(typeof spec.bot_model === 'string' ? { model: spec.bot_model } : {}),
-    ...(typeof spec.user_model === 'string' ? { userModel: spec.user_model } : {}),
-    ...(finiteText(spec.bot_temperature) ? { temperature: finiteText(spec.bot_temperature) } : {}),
-    ...(finiteText(spec.user_temperature)
-      ? { userTemperature: finiteText(spec.user_temperature) }
-      : {}),
-    ...(reasoningEffort ? { reasoningEffort } : {}),
-    ...(bot ? { bot } : {}),
-    ...(typeof runner.bot_opens === 'boolean'
-      ? { botOpens: runner.bot_opens ? 'true' : 'false' }
-      : {}),
-    ...(stateScope ? { stateScope } : {}),
-    ...(finiteText(runner.max_messages) ? { maxMessages: finiteText(runner.max_messages) } : {}),
-    ...(finiteText(runner.concurrency) ? { concurrency: finiteText(runner.concurrency) } : {}),
-    ...(finiteText(runner.latent_refund_block_rate)
-      ? { latentRefundBlockRate: finiteText(runner.latent_refund_block_rate) }
-      : {}),
-    ...(finiteText(runner.tool_fail_before_rate)
-      ? { failBefore: finiteText(runner.tool_fail_before_rate) }
-      : {}),
-    ...(finiteText(runner.tool_response_lost_rate)
-      ? { responseLost: finiteText(runner.tool_response_lost_rate) }
-      : {}),
-    ...(judge ? { judge } : {}),
-    ...(finiteText(runner.judge_sample) ? { judgeSample: finiteText(runner.judge_sample) } : {}),
-    ...(semantic ? { semantic } : {}),
-    ...(finiteText(runner.semantic_verify_sample)
-      ? { semanticSample: finiteText(runner.semantic_verify_sample) }
-      : {}),
+  if (transport) {
+    initialValues.transport = transport
+    fields.transport = setting(transport)
   }
+
+  const model = stringValue(firstDefined(spec.bot_model, spec.model))
+  if (model) {
+    initialValues.model = model
+    fields.model = setting(model)
+  }
+  const userModel = stringValue(firstDefined(spec.user_model, spec.userModel))
+  if (userModel) {
+    initialValues.userModel = userModel
+    fields.userModel = setting(userModel)
+  }
+  const temperature = numberValue(firstDefined(spec.bot_temperature, spec.temperature))
+  if (temperature !== undefined) {
+    initialValues.temperature = String(temperature)
+    fields.temperature = setting(temperature)
+  }
+  const userTemperature = numberValue(firstDefined(spec.user_temperature, spec.userTemperature))
+  if (userTemperature !== undefined) {
+    initialValues.userTemperature = String(userTemperature)
+    fields.userTemperature = setting(userTemperature)
+  }
+
+  const reasoning = stringValue(firstDefined(spec.reasoning_effort, spec.reasoningEffort))
+  if (reasoning && ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'].includes(reasoning)) {
+    initialValues.reasoningEffort = reasoning as NonNullable<AceRunFormValues['reasoningEffort']>
+    fields.reasoningEffort = setting(reasoning)
+  }
+  const bot = stringValue(spec.bot)
+  if (bot && ['baseline', 'playbook', 'workflow'].includes(bot)) {
+    initialValues.bot = bot as NonNullable<AceRunFormValues['bot']>
+    fields.bot = setting(bot)
+  }
+
+  const botOpens = booleanValue(firstDefined(runner.bot_opens, runner.botOpens))
+  if (botOpens !== undefined) {
+    initialValues.botOpens = botOpens ? 'true' : 'false'
+    fields.botOpens = setting(botOpens, botOpens ? 'bot opens' : 'user opens')
+  }
+  const stateScope = stringValue(
+    firstDefined(runner.state_scope, runner.stateScope, spec.state_scope, spec.stateScope),
+  )
+  if (stateScope === 'episode' || stateScope === 'journey') {
+    initialValues.stateScope = stateScope
+    fields.stateScope = setting(stateScope)
+  }
+
+  const numericMappings: Array<{
+    field: AceRunFidelityField
+    form: keyof AceRunFormValues
+    value: unknown
+  }> = [
+    {
+      field: 'maxMessages',
+      form: 'maxMessages',
+      value: firstDefined(runner.max_messages, runner.maxMessages),
+    },
+    {
+      field: 'concurrency',
+      form: 'concurrency',
+      value: runner.concurrency,
+    },
+    {
+      field: 'latentRefundBlockRate',
+      form: 'latentRefundBlockRate',
+      value: firstDefined(
+        runner.latent_refund_block_rate,
+        runner.latentRefundBlockRate,
+        spec.latent_refund_block_rate,
+      ),
+    },
+    {
+      field: 'toolFailBeforeRate',
+      form: 'failBefore',
+      value: firstDefined(
+        runner.tool_fail_before_rate,
+        runner.toolFailBeforeRate,
+        spec.tool_fail_before_rate,
+      ),
+    },
+    {
+      field: 'toolResponseLostRate',
+      form: 'responseLost',
+      value: firstDefined(
+        runner.tool_response_lost_rate,
+        runner.toolResponseLostRate,
+        spec.tool_response_lost_rate,
+      ),
+    },
+    {
+      field: 'judgeSample',
+      form: 'judgeSample',
+      value: firstDefined(runner.judge_sample, runner.judgeSample),
+    },
+    {
+      field: 'semanticVerifySample',
+      form: 'semanticSample',
+      value: firstDefined(runner.semantic_verify_sample, runner.semanticVerifySample),
+    },
+  ]
+  for (const mapping of numericMappings) {
+    const value = numberValue(mapping.value)
+    if (value === undefined) continue
+    ;(initialValues as Record<string, unknown>)[mapping.form] = String(value)
+    fields[mapping.field] = setting(value)
+  }
+
+  const judge = stringValue(firstDefined(runner.judge_mode, runner.judgeMode))
+  if (judge && ['off', 'all', 'sample'].includes(judge)) {
+    initialValues.judge = judge as AceRunFormValues['judge']
+    fields.judge = setting(judge)
+  }
+  const semantic = stringValue(firstDefined(runner.semantic_verify_mode, runner.semanticVerifyMode))
+  if (semantic && ['off', 'all', 'sample'].includes(semantic)) {
+    initialValues.semantic = semantic as AceRunFormValues['semantic']
+    fields.semanticVerify = setting(semantic)
+  }
+  const checkpoints = booleanValue(
+    firstDefined(
+      runner.checkpoint_enabled,
+      runner.checkpointEnabled,
+      spec.checkpoints,
+      spec.checkpoint_enabled,
+    ),
+  )
+  if (checkpoints !== undefined) {
+    fields.checkpoints = setting(checkpoints, checkpoints ? 'enabled' : 'disabled')
+  }
+
+  return {
+    initialValues,
+    recordedConfig: {
+      fields,
+      missing: ACE_RUN_FIDELITY_FIELDS.filter((field) => fields[field] === undefined),
+    },
+  }
+}
+
+/** Clone only typed, user-visible runner settings; never infer missing config. */
+export function traceRunFormOverrides(trace: Trace): Partial<AceRunFormValues> {
+  return sourceProjection(trace).initialValues
+}
+
+/** Recorded/missing values used by the launcher to explain best-effort rerun fidelity. */
+export function traceRunRecordedConfig(trace: Trace): AceRunRecordedConfig {
+  return sourceProjection(trace).recordedConfig
 }

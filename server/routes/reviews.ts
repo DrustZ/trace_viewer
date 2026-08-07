@@ -13,6 +13,7 @@ import {
   reviewSubjectKey,
 } from '../../shared/reviews/types'
 import { computeCalibrationStats, recordHasDisagreement } from '../reviews/calibration'
+import { sanitizeReviewGroundTruth } from '../reviews/groundTruth'
 import { ReviewStore, ReviewStoreError } from '../reviews/reviewStore'
 import type { ReviewTraceCandidate, ReviewTraceSource } from '../reviews/traceSource'
 import { parseSaveDraftRequest, parseSubmitRequest } from '../reviews/validation'
@@ -106,6 +107,7 @@ function blindTrace(
   candidate: ReviewTraceCandidate,
 ): ReviewTraceCandidate['trace'] {
   const trace = candidate.trace
+  const groundTruth = sanitizeReviewGroundTruth(trace.groundTruth, trace.instanceId)
   return {
     corpusId: trace.corpusId,
     runId: blindRunId(secret, candidate),
@@ -120,7 +122,7 @@ function blindTrace(
         }
       : {}),
     ...(trace.rubric ? { rubric: trace.rubric } : {}),
-    ...(trace.groundTruth !== undefined ? { groundTruth: trace.groundTruth } : {}),
+    ...(groundTruth !== undefined ? { groundTruth } : {}),
   }
 }
 

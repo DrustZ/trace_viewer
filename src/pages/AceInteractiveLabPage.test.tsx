@@ -27,12 +27,43 @@ vi.mock('../api/ace', () => ({
   useControlAceRun: mocks.control,
 }))
 vi.mock('../components/ace/AceRunLauncher', () => ({
-  AceRunLauncher: (props: Record<string, unknown>) => (
-    <div data-testid="launcher">
-      launcher:{String(props.initialScenarioFile)}:{String(props.initialScenarioId)}:
-      {String(props.initialSeed)}:{String(props.initialRunKind)}:{String(props.sourceTraceUid)}
-    </div>
-  ),
+  ACE_RUN_FIDELITY_FIELDS: [
+    'prompt',
+    'model',
+    'userModel',
+    'transport',
+    'temperature',
+    'userTemperature',
+    'reasoningEffort',
+    'bot',
+    'botOpens',
+    'maxMessages',
+    'concurrency',
+    'stateScope',
+    'latentRefundBlockRate',
+    'toolFailBeforeRate',
+    'toolResponseLostRate',
+    'judge',
+    'judgeSample',
+    'semanticVerify',
+    'semanticVerifySample',
+    'checkpoints',
+  ],
+  AceRunLauncher: (props: Record<string, unknown>) => {
+    const initial = (props.initialValues ?? {}) as Record<string, unknown>
+    const recorded = (props.recordedConfig ?? {}) as { missing?: unknown[] }
+    return (
+      <div data-testid="launcher">
+        launcher:{String(props.initialScenarioFile)}:{String(props.initialScenarioId)}:
+        {String(props.initialSeed)}:{String(props.initialRunKind)}:{String(props.sourceTraceUid)}
+        <span>
+          config:{String(initial.prompt)}:{String(initial.model)}:{String(initial.userModel)}:
+          {String(initial.transport)}:{String(initial.bot)}:{String(initial.stateScope)}:missing-
+          {String(recorded.missing?.length)}
+        </span>
+      </div>
+    )
+  },
 }))
 
 import AceInteractiveLabPage from './AceInteractiveLabPage'
@@ -52,7 +83,35 @@ function sourceTrace(): Trace {
       checkpointStep: 0,
       split: 'test',
       sourceFormat: 'agent-conversation',
-      extra: { environment_seed: 3 },
+      extra: {
+        environment_seed: 3,
+        config_snapshot: {
+          runner: {
+            max_messages: 32,
+            concurrency: 2,
+            bot_opens: true,
+            state_scope: 'journey',
+            latent_refund_block_rate: 0,
+            tool_fail_before_rate: 0,
+            tool_response_lost_rate: 0,
+            judge_mode: 'off',
+            judge_sample: 1,
+            semantic_verify_mode: 'off',
+            semantic_verify_sample: 1,
+            checkpoint_enabled: true,
+          },
+          spec: {
+            prompt_source: { kind: 'preset', value: 'baseline' },
+            bot_model: 'assistant-recorded',
+            user_model: 'user-recorded',
+            bot_temperature: 0.3,
+            user_temperature: 0.9,
+            agent_transport: 'responses',
+            reasoning_effort: 'low',
+            bot: 'baseline',
+          },
+        },
+      },
     },
     messages: [],
     stats: {
@@ -161,6 +220,9 @@ describe('ACE Interactive Lab page', () => {
     expect(html).toContain('LLM-only continuation · no ACE execution')
     expect(html).toContain(
       'launcher:atomic.json:scenario-01:3:debug:simulation:parent-run:episode-1',
+    )
+    expect(html).toContain(
+      'config:baseline:assistant-recorded:user-recorded:responses:baseline:journey:missing-0',
     )
     expect(html).toContain('Open checkpoint fork controls')
     expect(html).toContain('Compare parent run ↔ branch')

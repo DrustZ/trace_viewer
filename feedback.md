@@ -1,8 +1,56 @@
 # Code Review Feedback — ACE Cockpit (branch `codex/ace-trace-cockpit`)
 
 > 审查方：Claude（受 Ray 委托做周期性审查）。本文件每轮审查更新，newest round 在最上面。
-> 行号基于 2026-08-06 22:05 左右的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
+> 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
+
+## Round 2 — 2026-08-06 23:05
+
+### Round 1 响应验证（codex 已修，确认质量好）
+
+- **#1 Tailscale 暴露** ✅ 干净利落：`server/auth.ts`（HMAC session cookie、timing-safe 比较、httpOnly/sameSite strict）+ `serveTailscale.mjs` 自动生成持久 token（0600 文件、`wx` 防竞写、token 只注入 API 进程环境并从 web 进程环境删除）。`app.ts` 里只有 GET `/api/health` 和 POST `/api/auth/session` 公开，其余全部过 `requireAccessSession`，SSE 也覆盖。
+- **#2 dataRoots 校验** ✅ `TRACE_VIEWER_ALLOWED_DATA_PARENTS` allowlist，默认限制在项目根的父目录（覆盖 sibling 项目但不放开整个 home）。
+- **#8 SSE snapshot 广播** ✅ 改为按连接 `onGap` 回调，不再进全局 journal。
+- **#9 前端全量 invalidate** ✅ `src/api/liveInvalidation.ts`：事件→最小 query 家族映射 + 75ms debounce，方向正确。
+- **#14 SSRF redirect** ✅ `redirect:'manual'` + 每跳校验 + MAX_REDIRECTS。
+- bridge/probe 子进程环境统一收敛到 `childEnvironment.ts`，好。
+
+### Round 1 尚未处理（请继续）
+
+- **#4/#12 花钱路径 double-submit / 部分失败自锁** — **[已修复 by Claude]** 本轮我直接修了三处：
+  `AceRunLauncher.submit` 加同步 in-flight ref（`isPending` 要等 re-render，防不住快速双击）；
+  `AceExperimentsPage.launchPair` 同样加 ref，且部分失败后不再自锁——重试只补启动失败的
+  variant（成功的 variant 保留其 runId，不会重复花钱）；`ReplayTab.fork` 加 ref +
+  `onSettled` 复位。**server 端幂等 key 仍然值得做**（客户端防护挡不住网络重试）。
+- **#6 `POST /api/ace/runs` 202 之后的 start 失败仍只有 console.error** — client 侧看到
+  `queued` 然后行消失，无处可查。建议：launch 失败写进 run 目录或 lineage
+  （`lifecycle:"launch_failed"` + message），`/api/ace/runs` 返回它。
+- **#7 每请求 spawn Python scoring probe 仍在** — `loadAceTaskCatalog` 被 dashboard/tasks/
+  traces/reviews 每请求调用且无 memo/单飞；dashboard 轮询会堆 Python 进程。建议按
+  (pack digests + grader/db source digests) memoize + in-flight dedup；digest 你们已经算了，
+  缓存键是现成的。
+- Round 1 Minor 列表大部分未动（launchLineageStore 写队列毒化、bridge SIGKILL 升级、
+  scenarios 端点单文件容错、kappa undefined 判定、ReviewPanel autosave 竞态、
+  AceRunsPage 下拉丢 URL 参数、URL-state / 虚拟化约定漂移等），酌情排期。
+
+### Round 2 新发现
+
+- `server/auth.ts` — minor — session cookie 是 access token 的纯函数（HMAC 无过期戳、无
+  server 端会话表），意味着 30 天 maxAge 只是客户端约束，泄露的 cookie 在 token 轮换前
+  永久有效。本地工具可接受；若要收紧，HMAC 里加一个到期时间戳即可（无状态可验）。
+- `server/reviews/traceSource.ts:363` + `server/routes/reviews.test.ts:90` — **当前 tsc 不过**
+  （`groundTruth` 的 `{} | null` 不能赋给 `ReviewGroundTruth | undefined`；test 里 `order`
+  字段不在类型上）。看起来是你们正在进行的 ground-truth 类型重构的中间态，提醒别忘了收尾
+  ——`npm run check` 目前是红的。
+- `biome check` 仍未全绿（taskCatalog unused imports、若干 format）。建议收尾时跑一次
+  `biome check --write`。
+
+### 本轮 Claude 的直接修改（已验证 683 tests + 三文件 lint 干净）
+
+1. `src/components/ace/AceRunLauncher.tsx` — submit 同步 in-flight ref。
+2. `src/pages/AceExperimentsPage.tsx` — launchPair in-flight ref + 部分失败可重试
+   （只补失败侧，成功侧复用 runId）；按钮仅在 A、B 都启动后才锁。
+3. `src/components/trace/ReplayTab.tsx` — fork in-flight ref（`onSettled` 复位）。
 
 ## Round 1 — 2026-08-06 22:40
 

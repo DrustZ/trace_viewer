@@ -1,6 +1,8 @@
 import type { LiveEvent, LiveEventType } from '@shared/schema/events'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { apiFetch } from './client'
+import { createLiveInvalidationScheduler } from './liveInvalidation'
 
 const EVENT_TYPES: LiveEventType[] = [
   'trace.upserted',
@@ -15,7 +17,10 @@ export function LiveUpdates() {
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    const source = new EventSource('/api/events')
+    const invalidations = createLiveInvalidationScheduler(queryClient)
+    // Same-origin cookies are sent by default; withCredentials also keeps this correct if the
+    // frontend is later hosted on another trusted origin with credentialed CORS enabled.
+    const source = new EventSource('/api/events', { withCredentials: true })
     const onEvent = (raw: MessageEvent<string>) => {
       let event: LiveEvent
       try {
@@ -24,18 +29,20 @@ export function LiveUpdates() {
         return
       }
 
-      if (event.type === 'trace.upserted' && event.traceUid) {
-        void queryClient.invalidateQueries({ queryKey: ['trace', event.traceUid] })
-        void queryClient.invalidateQueries({ queryKey: ['trace-raw', event.traceUid] })
-      }
-      // Lists, aggregates, run state, compare, and review queues may all depend on the update.
-      void queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] !== 'trace-raw',
-      })
+      invalidations.schedule(event)
     }
 
     for (const type of EVENT_TYPES) source.addEventListener(type, onEvent as EventListener)
-    return () => source.close()
+    // EventSource does not expose an HTTP status. Probe a small protected endpoint on failure so
+    // an expired/missing session still opens the global unlock prompt; ordinary outages stay in
+    // EventSource's native reconnect loop without locking the UI.
+    source.onerror = () => {
+      void apiFetch('/api/meta').catch(() => undefined)
+    }
+    return () => {
+      invalidations.dispose()
+      source.close()
+    }
   }, [queryClient])
 
   return null

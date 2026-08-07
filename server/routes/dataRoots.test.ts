@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import request from 'supertest'
@@ -42,7 +50,7 @@ describe('local data-root API', () => {
     mkdirSync(target)
     writeTrace(target, 'first.json', 'folder-first')
     store = new TraceStore()
-    manager = new DataRootManager(store, [`taken=${initial}`])
+    manager = new DataRootManager(store, [`taken=${initial}`], { allowedParents: [fixture] })
     app = createApp({ store, dataRootManager: manager })
   })
 
@@ -80,6 +88,32 @@ describe('local data-root API', () => {
 
     expect(response.status, JSON.stringify(response.body)).toBe(status)
     expect(response.body.error).toEqual(expect.any(String))
+  })
+
+  it('rejects a readable folder outside the configured workspace boundary', async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), 'tv-outside-root-'))
+    try {
+      const response = await request(app).post('/api/data-roots').send({ path: outside })
+      expect(response.status).toBe(403)
+      expect(response.body.error).toContain('TRACE_VIEWER_ALLOWED_DATA_PARENTS')
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
+  })
+
+  it('does not ingest a symlink below a watched root that points outside it', async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), 'tv-symlink-target-'))
+    try {
+      writeTrace(outside, 'secret.json', 'outside-secret')
+      symlinkSync(outside, path.join(target, 'outside-link'), 'dir')
+      const added = await request(app)
+        .post('/api/data-roots')
+        .send({ path: target, label: 'symlink-safe' })
+      expect(added.status).toBe(201)
+      expect(store.lookup('outside-secret').kind).toBe('missing')
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
   })
 
   it('rejects malformed and duplicate labels', async () => {
@@ -172,7 +206,10 @@ describe('local data-root API', () => {
   it('atomically persists a UI-added root when a machine-local registry is configured', async () => {
     await manager.close()
     const registry = path.join(fixture, 'private', 'data-roots.json')
-    manager = new DataRootManager(store, [`taken=${initial}`], { persistenceFile: registry })
+    manager = new DataRootManager(store, [`taken=${initial}`], {
+      persistenceFile: registry,
+      allowedParents: [fixture],
+    })
     app = createApp({ store, dataRootManager: manager })
 
     const added = await request(app)

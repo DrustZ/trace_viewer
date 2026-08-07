@@ -369,6 +369,43 @@ def grade_atomic():
     })
   })
 
+  it('keeps debug and counterfactual traces out of formal task status', () => {
+    const formal = evaluatedTrace({
+      runId: 'formal',
+      outcome: 'pass',
+      timestamp: '2026-08-06T00:00:00.000Z',
+      checks: [],
+    })
+    formal.meta.pairKey = 'schedule:task-a:1'
+    const debug = evaluatedTrace({
+      runId: 'debug',
+      outcome: 'fail',
+      timestamp: '2026-08-06T00:00:01.000Z',
+      checks: [],
+    })
+    const exploratory = {
+      ...debug,
+      meta: {
+        ...debug.meta,
+        pairKey: 'schedule:task-a:2',
+        extra: { run_kind: 'debug' },
+      },
+    } as TraceSummary
+
+    const coverage = traceCoverageFor('task-a', [formal, exploratory])
+    expect(coverage).toMatchObject({
+      traceCount: 1,
+      exploratoryTraceCount: 1,
+      runIds: ['formal'],
+      status: {
+        status: 'all_pass',
+        outcomes: { pass: 1, fail: 0 },
+        scoredDenominator: 1,
+        passRate: 1,
+      },
+    })
+  })
+
   it('keeps recorded status and historical grader contracts separate from the current task', async () => {
     await writePack('graded.json', [{ ...complete, canary: 'CURRENT_SECRET' }])
     const currentChecks = [
@@ -431,12 +468,12 @@ def grade_atomic():
       expect.arrayContaining([
         expect.objectContaining({
           traceCount: 1,
-          matchesCurrentCheckSemantics: true,
+          matchesCurrentCheckShape: true,
           outcomes: expect.objectContaining({ pass: 1 }),
         }),
         expect.objectContaining({
           traceCount: 1,
-          matchesCurrentCheckSemantics: false,
+          matchesCurrentCheckShape: false,
           outcomes: expect.objectContaining({ fail: 1 }),
         }),
       ]),

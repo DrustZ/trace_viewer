@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useRunInstances, useRuns } from '../api/hooks'
 import { EmptyState } from '../components/common/EmptyState'
 import { AcePairedComparison } from '../components/compare/AcePairedComparison'
+import { AceTraceDiff } from '../components/compare/AceTraceDiff'
 import { DualEvolutionChart } from '../components/compare/DualEvolutionChart'
 import { RunColumn } from '../components/compare/RunColumn'
 import { CollapsibleSection } from '../components/home/CollapsibleSection'
@@ -210,6 +211,11 @@ export default function ComparePage() {
                 <DualEvolutionChart instanceId={instance} runA={runA} runB={runB} />
               </CollapsibleSection>
             </div>
+            {traceA !== '' && traceB !== '' && (
+              <div className="shrink-0">
+                <AceTraceDiff traceAId={traceA} traceBId={traceB} />
+              </div>
+            )}
             <div className="flex min-h-0 flex-1 gap-4">
               <RunColumn
                 run={runA}

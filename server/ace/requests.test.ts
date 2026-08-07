@@ -90,8 +90,16 @@ describe('parseAceRunRequest', () => {
       ...validRequest,
       scenarioFile: 'regression:reg-abc_123',
       scenarioIds: undefined,
+      runKind: 'debug',
     })
     expect(parsed.bridgeParams.scenariosFile).toBe('regression:reg-abc_123')
+    expect(() =>
+      parseAceRunRequest({
+        ...validRequest,
+        scenarioFile: 'regression:reg-abc_123',
+        scenarioIds: undefined,
+      }),
+    ).toThrow('synthetic regression reruns must be debug or counterfactual')
     expect(() =>
       parseAceRunRequest({ ...validRequest, scenarioFile: 'regression:../escape' }),
     ).toThrow(AceRequestError)
@@ -139,6 +147,13 @@ describe('parseAceRunRequest', () => {
     const parsed = parseAceRunRequest({ ...validRequest, batchId: undefined })
     expect(parsed.runId).toMatch(/^cockpit-\d{14}-[0-9a-f]{6}$/)
     expect(parsed.bridgeParams.runId).toBe(parsed.runId)
+  })
+
+  it('fails closed above the server spend ceiling', () => {
+    expect(() => parseAceRunRequest({ ...validRequest, costCapUsd: 100.01 })).toThrow(
+      'costCapUsd must be between 0.01 and 100',
+    )
+    expect(parseAceRunRequest({ ...validRequest, costCapUsd: 100 }).request.costCapUsd).toBe(100)
   })
 
   it('accepts canonical trace ancestry only for one-task non-scored fresh reruns', () => {

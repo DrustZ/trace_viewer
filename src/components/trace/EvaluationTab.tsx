@@ -16,7 +16,45 @@ function OutcomeBadge({ outcome }: { outcome: string }) {
   )
 }
 
-function FailureRow({ failure }: { failure: FailureV1 }) {
+export function failureMessageId(trace: Trace, failure: FailureV1): string | undefined {
+  if (failure.messageId !== undefined) {
+    return trace.messages.some((message) => message.id === failure.messageId)
+      ? failure.messageId
+      : undefined
+  }
+  if (failure.indexSpace === 'raw' && failure.rawIndex !== undefined) {
+    return trace.messages.find((message) => message.rawIndex === failure.rawIndex)?.id
+  }
+  if (failure.indexSpace === 'chronological' && failure.chronologicalIndex !== undefined) {
+    return trace.messages.find(
+      (message) => message.chronologicalIndex === failure.chronologicalIndex,
+    )?.id
+  }
+  return undefined
+}
+
+function failureAnchorLabel(failure: FailureV1): string {
+  if (failure.messageId !== undefined) return failure.messageId
+  if (failure.indexSpace === 'raw' && failure.rawIndex !== undefined) {
+    return `raw #${failure.rawIndex + 1}`
+  }
+  if (failure.indexSpace === 'chronological' && failure.chronologicalIndex !== undefined) {
+    return `chronological #${failure.chronologicalIndex + 1}`
+  }
+  return '—'
+}
+
+function FailureRow({
+  failure,
+  trace,
+  onJumpToMessage,
+}: {
+  failure: FailureV1
+  trace: Trace
+  onJumpToMessage?: (messageId: string) => void
+}) {
+  const targetMessageId = failureMessageId(trace, failure)
+  const anchorLabel = failureAnchorLabel(failure)
   return (
     <tr className="border-t border-slate-100 align-top">
       <td className="px-3 py-2">
@@ -29,8 +67,22 @@ function FailureRow({ failure }: { failure: FailureV1 }) {
       <td className="px-3 py-2 text-xs text-slate-500">{failure.origin}</td>
       <td className="px-3 py-2 font-mono text-xs text-slate-800">{failure.code}</td>
       <td className="px-3 py-2 text-xs text-slate-600">
-        {failure.messageId ??
-          (failure.rawIndex !== undefined ? `raw #${failure.rawIndex + 1}` : '—')}
+        {targetMessageId !== undefined && onJumpToMessage !== undefined ? (
+          <button
+            type="button"
+            onClick={() => onJumpToMessage(targetMessageId)}
+            className="font-mono text-violet-700 underline decoration-violet-300 underline-offset-2 hover:text-violet-900"
+            title="Open this message in the conversation"
+          >
+            {anchorLabel} ↗
+          </button>
+        ) : (
+          <span
+            title={anchorLabel === '—' ? 'No declared message index space' : 'Message not found'}
+          >
+            {anchorLabel}
+          </span>
+        )}
       </td>
       <td className="max-w-xl px-3 py-2 text-xs text-slate-600">
         {typeof failure.evidence === 'string'
@@ -69,7 +121,13 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   )
 }
 
-export function EvaluationTab({ trace }: { trace: Trace }) {
+export function EvaluationTab({
+  trace,
+  onJumpToMessage,
+}: {
+  trace: Trace
+  onJumpToMessage?: (messageId: string) => void
+}) {
   const evaluation = trace.evaluation
   if (!evaluation) {
     return (
@@ -102,6 +160,20 @@ export function EvaluationTab({ trace }: { trace: Trace }) {
           checks
         </span>
       </div>
+      {evaluation.lineage?.synthetic && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <b>Synthetic regression rerun · formal metrics excluded</b>
+          <p className="mt-1 text-amber-800">
+            Parent{' '}
+            <span className="font-mono">{evaluation.lineage.parentTraceUid ?? 'unknown'}</span>
+            {evaluation.lineage.regressionId
+              ? ` · regression ${evaluation.lineage.regressionId}`
+              : ''}
+            . Scenario evidence was reconstructed from production; environment state and future
+            generation were regenerated.
+          </p>
+        </div>
+      )}
       <Card title="Programmatic grade checks">
         {evaluation.checks.length === 0 ? (
           <p className="p-4 text-xs text-slate-500">No task grader was run.</p>
@@ -146,7 +218,12 @@ export function EvaluationTab({ trace }: { trace: Trace }) {
               </thead>
               <tbody>
                 {evaluation.failures.map((failure) => (
-                  <FailureRow key={failureKey(failure)} failure={failure} />
+                  <FailureRow
+                    key={failureKey(failure)}
+                    failure={failure}
+                    trace={trace}
+                    onJumpToMessage={onJumpToMessage}
+                  />
                 ))}
               </tbody>
             </table>

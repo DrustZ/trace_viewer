@@ -3,12 +3,34 @@ import type { TraceSummary } from '../../shared/schema/types'
 
 export interface AceTraceDimensions {
   issue?: string
+  /** Atomic labels; a production trace may carry more than one issue. */
+  issues: string[]
   language?: string
 }
 
 function explicitString(summary: TraceSummary, key: 'issue' | 'language'): string | undefined {
   const value = summary.meta.extra?.[key]
   return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+function explicitIssues(summary: TraceSummary): string[] {
+  const value = summary.meta.extra?.issues
+  if (Array.isArray(value)) {
+    return [
+      ...new Set(value.filter((item): item is string => typeof item === 'string' && item !== '')),
+    ]
+  }
+  const scalar = explicitString(summary, 'issue')
+  return scalar
+    ? [
+        ...new Set(
+          scalar
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean),
+        ),
+      ]
+    : []
 }
 
 /**
@@ -25,8 +47,11 @@ export function aceTraceDimensions(
     summary.meta.corpusId === 'simulation'
       ? taskByScenarioId.get(summary.meta.instanceId)
       : undefined
+  const recordedIssues = explicitIssues(summary)
+  const issues = recordedIssues.length > 0 ? recordedIssues : task?.issue ? [task.issue] : []
   return {
-    issue: explicitString(summary, 'issue') ?? task?.issue ?? undefined,
+    issue: issues[0],
+    issues,
     language: explicitString(summary, 'language') ?? task?.language ?? undefined,
   }
 }

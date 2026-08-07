@@ -4,7 +4,7 @@ import {
   type ReviewQueueItem,
   type ReviewSubject,
 } from '@shared/reviews/types'
-import type { ReviewQueueFilters } from '../../api/reviews'
+import type { CalibrationFilters, ReviewQueueFilters } from '../../api/reviews'
 
 export const DEFAULT_REVIEW_QUEUE_FILTERS: ReviewQueueFilters = {
   annotator: 'local',
@@ -88,6 +88,21 @@ export function reviewQueueFiltersToSearchParams(filters: ReviewQueueFilters): U
     search.set('disagreement', String(filters.disagreement))
   }
   return search
+}
+
+/**
+ * Calibration aliases deliberately hide the canonical run id before submit, so
+ * statistics must follow the visible queue filters rather than a selected blind
+ * subject. The synthetic "ace" corpus means production + simulation and cannot
+ * be sent as an exact server-side corpus id.
+ */
+export function calibrationFiltersForQueue(filters: ReviewQueueFilters): CalibrationFilters {
+  return {
+    annotator: filters.annotator,
+    rubricVersion: filters.rubricVersion,
+    ...(filters.corpusId && filters.corpusId !== 'ace' ? { corpusId: filters.corpusId } : {}),
+    ...(filters.mode === 'assisted' && filters.runId ? { runId: filters.runId } : {}),
+  }
 }
 
 /**

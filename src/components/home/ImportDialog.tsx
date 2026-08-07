@@ -18,6 +18,35 @@ const FORMATS = ['auto', 'native', 'harmony', 'openai-chat'] as const
 const INPUT_CLASS =
   'rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400'
 
+export const URL_IMPORT_LOCAL_ONLY_NOTICE =
+  'URL fetch is localhost-only and is disabled on access-token/shared servers. On those servers, download the trace and use File or Paste.'
+
+export function UrlImportInput({
+  value,
+  onChange,
+  onSubmit,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <input
+        type="url"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') onSubmit()
+        }}
+        placeholder="https://example.com/trace.json"
+        className={INPUT_CLASS}
+      />
+      <p className="text-[11px] leading-4 text-slate-500">{URL_IMPORT_LOCAL_ONLY_NOTICE}</p>
+    </div>
+  )
+}
+
 /** 4xx bodies are JSON like {"error": "...", "warnings": [...]}; fall back to the raw text. */
 function parseApiError(err: unknown): { message: string; warnings: string[] } {
   if (!(err instanceof Error)) return { message: 'import failed', warnings: [] }
@@ -219,16 +248,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
                 {tab === 'url' && (
-                  <input
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') submit()
-                    }}
-                    placeholder="https://example.com/trace.json"
-                    className={INPUT_CLASS}
-                  />
+                  <UrlImportInput value={url} onChange={setUrl} onSubmit={submit} />
                 )}
 
                 <div className="flex items-center justify-between gap-2">

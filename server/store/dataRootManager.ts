@@ -98,6 +98,8 @@ export interface DataRootManagerOptions {
   persistenceFile?: string
   /** Specs already loaded from persistenceFile at startup. */
   localRoots?: readonly string[]
+  /** Canonical parent directories within which the UI may add a folder. */
+  allowedParents?: readonly string[]
 }
 
 /** Owns mutable runtime roots and serializes every whole-corpus scan. */
@@ -107,6 +109,7 @@ export class DataRootManager {
   private readonly startupPaths = new Set<string>()
   private readonly locallyPersistentPaths = new Set<string>()
   private readonly localRootSpecs: string[]
+  private readonly allowedParents: string[] | undefined
   private readonly watchers: FSWatcher[] = []
   private operation: Promise<void> = Promise.resolve()
   private startPromise: Promise<ScanResult> | undefined
@@ -146,6 +149,7 @@ export class DataRootManager {
     for (const spec of initialRoots)
       this.startupPaths.add(path.resolve(parseDataRootSpec(spec).path))
     this.localRootSpecs = [...(options.localRoots ?? [])]
+    this.allowedParents = options.allowedParents?.map((parent) => path.resolve(parent))
     for (const spec of this.localRootSpecs) {
       this.locallyPersistentPaths.add(path.resolve(parseDataRootSpec(spec).path))
     }
@@ -210,6 +214,19 @@ export class DataRootManager {
   add(rawPath: unknown, rawLabel?: unknown): Promise<AddedDataRoot> {
     return this.enqueue(async () => {
       const canonical = await canonicalDirectory(rawPath)
+      if (this.allowedParents !== undefined) {
+        const allowedParents = await Promise.all(
+          this.allowedParents.map((parent) =>
+            fs.realpath(parent).catch(() => path.resolve(parent)),
+          ),
+        )
+        if (!allowedParents.some((parent) => isSameOrWithin(canonical, parent))) {
+          throw new DataRootRequestError(
+            'directory is outside TRACE_VIEWER_ALLOWED_DATA_PARENTS',
+            403,
+          )
+        }
+      }
       const label = normalizedLabel(rawLabel)
       const existing = await Promise.all(
         this.dataRoots.map(async (spec) => {

@@ -1,5 +1,5 @@
 import type { AceRunRequest } from '@shared/schema/ace'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useAceCapabilities, useAceScenarios, useStartAceRun } from '../../api/ace'
 
 const INPUT =
@@ -43,6 +43,67 @@ export interface AceRunFormValues {
   responseLost: string
 }
 
+export const ACE_RUN_FIDELITY_FIELDS = [
+  'prompt',
+  'model',
+  'userModel',
+  'transport',
+  'temperature',
+  'userTemperature',
+  'reasoningEffort',
+  'bot',
+  'botOpens',
+  'maxMessages',
+  'concurrency',
+  'stateScope',
+  'latentRefundBlockRate',
+  'toolFailBeforeRate',
+  'toolResponseLostRate',
+  'judge',
+  'judgeSample',
+  'semanticVerify',
+  'semanticVerifySample',
+  'checkpoints',
+] as const
+
+export type AceRunFidelityField = (typeof ACE_RUN_FIDELITY_FIELDS)[number]
+export type AceRunFidelityValue = string | number | boolean
+
+export interface AceRunRecordedSetting {
+  /** Normalized effective value, used only for an in-browser comparison. */
+  value: AceRunFidelityValue
+  /** Safe compact label; full custom prompts are never repeated in the diff table. */
+  display: string
+}
+
+export interface AceRunRecordedConfig {
+  fields: Partial<Record<AceRunFidelityField, AceRunRecordedSetting>>
+  missing: AceRunFidelityField[]
+}
+
+const FIDELITY_LABELS: Record<AceRunFidelityField, string> = {
+  prompt: 'Assistant prompt',
+  model: 'Assistant model',
+  userModel: 'User-simulator model',
+  transport: 'Transport',
+  temperature: 'Assistant temperature',
+  userTemperature: 'User temperature',
+  reasoningEffort: 'Reasoning effort',
+  bot: 'Bot harness',
+  botOpens: 'Conversation opener',
+  maxMessages: 'Max messages',
+  concurrency: 'Concurrency',
+  stateScope: 'State scope',
+  latentRefundBlockRate: 'Latent refund block rate',
+  toolFailBeforeRate: 'Write fail-before rate',
+  toolResponseLostRate: 'Response-lost rate',
+  judge: 'Judge mode',
+  judgeSample: 'Judge sample count',
+  semanticVerify: 'Semantic verify mode',
+  semanticVerifySample: 'Semantic sample count',
+  checkpoints: 'Checkpoints',
+}
+
 export const DEFAULT_ACE_RUN_FORM: AceRunFormValues = {
   scenarioFile: 'atomic.json',
   scenarioIds: '',
@@ -81,6 +142,10 @@ export type AceRunFormResult = { ok: true; request: AceRunRequest } | { ok: fals
 export interface AceRunBuildContext {
   /** Canonical parent trace for a fresh same-task rerun, never a checkpoint restore. */
   sourceTraceUid?: string
+}
+
+export function isSyntheticRegressionScenario(scenarioFile: string): boolean {
+  return scenarioFile.startsWith('regression:')
 }
 
 function tokensOf(text: string): string[] {
@@ -136,6 +201,98 @@ function parseScenarioIds(text: string): string[] | undefined | string {
     if (!scenarioIds.includes(token)) scenarioIds.push(token)
   }
   return scenarioIds
+}
+
+function effectiveNumber(text: string, fallback: number): number | string {
+  const normalized = text.trim()
+  if (normalized === '') return fallback
+  const value = Number(normalized)
+  return Number.isFinite(value) ? value : normalized
+}
+
+function effectiveFidelitySetting(
+  field: AceRunFidelityField,
+  values: AceRunFormValues,
+): AceRunRecordedSetting {
+  const inlinePrompt = values.promptText.trim()
+  switch (field) {
+    case 'prompt':
+      return inlinePrompt
+        ? {
+            value: `inline:${inlinePrompt}`,
+            display: `custom prompt (${inlinePrompt.length} chars)`,
+          }
+        : { value: `preset:${values.prompt}`, display: `preset ${values.prompt}` }
+    case 'model': {
+      const value = values.model.trim() || 'gpt-5-mini'
+      return { value, display: value }
+    }
+    case 'userModel': {
+      const value = values.userModel.trim() || values.model.trim() || 'gpt-5-mini'
+      return { value, display: value }
+    }
+    case 'transport':
+      return { value: values.transport, display: values.transport }
+    case 'temperature': {
+      const value = effectiveNumber(values.temperature, 0.3)
+      return { value, display: String(value) }
+    }
+    case 'userTemperature': {
+      const value = effectiveNumber(values.userTemperature, 0.9)
+      return { value, display: String(value) }
+    }
+    case 'reasoningEffort': {
+      const value = values.reasoningEffort || 'low'
+      return { value, display: value }
+    }
+    case 'bot': {
+      const value = values.bot || 'baseline'
+      return { value, display: value }
+    }
+    case 'botOpens': {
+      const value = values.botOpens === '' ? true : values.botOpens === 'true'
+      return { value, display: value ? 'bot opens' : 'user opens' }
+    }
+    case 'maxMessages': {
+      const value = effectiveNumber(values.maxMessages, 40)
+      return { value, display: String(value) }
+    }
+    case 'concurrency': {
+      const value = effectiveNumber(values.concurrency, 2)
+      return { value, display: String(value) }
+    }
+    case 'stateScope':
+      return { value: values.stateScope, display: values.stateScope }
+    case 'latentRefundBlockRate': {
+      const value = effectiveNumber(values.latentRefundBlockRate, 0)
+      return { value, display: String(value) }
+    }
+    case 'toolFailBeforeRate': {
+      const value = effectiveNumber(values.failBefore, 0)
+      return { value, display: String(value) }
+    }
+    case 'toolResponseLostRate': {
+      const value = effectiveNumber(values.responseLost, 0)
+      return { value, display: String(value) }
+    }
+    case 'judge':
+      return { value: values.judge, display: values.judge }
+    case 'judgeSample': {
+      // The launcher only sends a sample count in sample mode; ACE otherwise defaults it to 1.
+      const value =
+        values.judge === 'sample' ? effectiveNumber(values.judgeSample, 1) : (1 as const)
+      return { value, display: String(value) }
+    }
+    case 'semanticVerify':
+      return { value: values.semantic, display: values.semantic }
+    case 'semanticVerifySample': {
+      const value =
+        values.semantic === 'sample' ? effectiveNumber(values.semanticSample, 1) : (1 as const)
+      return { value, display: String(value) }
+    }
+    case 'checkpoints':
+      return { value: true, display: 'enabled (Viewer invariant)' }
+  }
 }
 
 /** Builds the exact API payload without starting a run. Exported for contract tests. */
@@ -202,6 +359,13 @@ export function buildAceRunRequest(
     return {
       ok: false,
       error: 'Custom prompts require a Debug or Counterfactual run so scored metrics stay clean.',
+    }
+  }
+  if (isSyntheticRegressionScenario(values.scenarioFile) && values.runKind === 'scored') {
+    return {
+      ok: false,
+      error:
+        'Synthetic regression reruns must be Debug or Counterfactual; formal metrics are excluded.',
     }
   }
   if (context.sourceTraceUid) {
@@ -275,6 +439,8 @@ function FieldGroup({ title, children }: { title: string; children: React.ReactN
 }
 
 export function AceRunLauncher({
+  initialValues,
+  recordedConfig,
   initialScenarioFile,
   initialScenarioId,
   initialSeed,
@@ -283,6 +449,8 @@ export function AceRunLauncher({
   title,
   onStarted,
 }: {
+  initialValues?: Partial<AceRunFormValues>
+  recordedConfig?: AceRunRecordedConfig
   initialScenarioFile?: string
   initialScenarioId?: string
   initialSeed?: number
@@ -294,13 +462,20 @@ export function AceRunLauncher({
   const capabilities = useAceCapabilities()
   const scenarios = useAceScenarios()
   const start = useStartAceRun()
-  const [values, setValues] = useState<AceRunFormValues>(() => ({
-    ...DEFAULT_ACE_RUN_FORM,
-    ...(initialScenarioFile ? { scenarioFile: initialScenarioFile } : {}),
-    ...(initialScenarioId ? { scenarioIds: initialScenarioId } : {}),
-    ...(initialSeed !== undefined ? { seeds: String(initialSeed) } : {}),
-    ...(initialRunKind ? { runKind: initialRunKind } : {}),
-  }))
+  const [values, setValues] = useState<AceRunFormValues>(() => {
+    const initialized = {
+      ...DEFAULT_ACE_RUN_FORM,
+      ...initialValues,
+      ...(initialScenarioFile ? { scenarioFile: initialScenarioFile } : {}),
+      ...(initialScenarioId ? { scenarioIds: initialScenarioId } : {}),
+      ...(initialSeed !== undefined ? { seeds: String(initialSeed) } : {}),
+      ...(initialRunKind ? { runKind: initialRunKind } : {}),
+    }
+    return isSyntheticRegressionScenario(initialized.scenarioFile) &&
+      initialized.runKind === 'scored'
+      ? { ...initialized, runKind: 'counterfactual' }
+      : initialized
+  })
   const [validationError, setValidationError] = useState<string | null>(null)
   const seedCount = useMemo(() => new Set(tokensOf(values.seeds)).size, [values.seeds])
   const selectedScenarioCount = useMemo(() => {
@@ -310,6 +485,27 @@ export function AceRunLauncher({
   }, [scenarios.data?.items, values.scenarioFile, values.scenarioIds])
   const plannedEpisodeCount = Math.max(1, seedCount) * selectedScenarioCount
   const available = capabilities.data?.available === true
+  const fidelityRows = recordedConfig
+    ? ACE_RUN_FIDELITY_FIELDS.map((field) => {
+        const recorded = recordedConfig.fields[field]
+        const effective = effectiveFidelitySetting(field, values)
+        return {
+          field,
+          label: FIDELITY_LABELS[field],
+          recorded,
+          effective,
+          status: recorded
+            ? Object.is(recorded.value, effective.value)
+              ? ('recorded' as const)
+              : ('changed' as const)
+            : ('default' as const),
+        }
+      })
+    : []
+  const recordedCount = fidelityRows.filter((row) => row.status === 'recorded').length
+  const changedCount = fidelityRows.filter((row) => row.status === 'changed').length
+  const missingCount = fidelityRows.filter((row) => row.status === 'default').length
+  const syntheticRegression = isSyntheticRegressionScenario(values.scenarioFile)
 
   const setField = <Key extends keyof AceRunFormValues>(key: Key, value: AceRunFormValues[Key]) => {
     setValues((current) => ({ ...current, [key]: value }))
@@ -327,18 +523,36 @@ export function AceRunLauncher({
     setValidationError(null)
   }
 
+  const setScenarioFile = (value: string) => {
+    setValues((current) => ({
+      ...current,
+      scenarioFile: value,
+      ...(isSyntheticRegressionScenario(value) && current.runKind === 'scored'
+        ? { runKind: 'counterfactual' as const }
+        : {}),
+    }))
+    setValidationError(null)
+  }
+
+  // `disabled={start.isPending}` only takes effect after a re-render; a second
+  // click landing before that would launch a second full batch of real spend.
+  // The ref closes that window synchronously.
+  const submitInFlight = useRef(false)
   const submit = async () => {
-    if (!available) return
+    if (!available || submitInFlight.current) return
     const result = buildAceRunRequest(values, { sourceTraceUid })
     if (!result.ok) {
       setValidationError(result.error)
       return
     }
+    submitInFlight.current = true
     try {
       const response = await start.mutateAsync(result.request)
       onStarted?.(response.runId)
     } catch {
       // React Query exposes the server error below the controls.
+    } finally {
+      submitInFlight.current = false
     }
   }
 
@@ -374,6 +588,71 @@ export function AceRunLauncher({
         </div>
       )}
 
+      {syntheticRegression && (
+        <div
+          data-testid="synthetic-regression-notice"
+          className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+        >
+          <b>Synthetic rerun · formal metrics excluded</b>
+          <span className="mt-1 block text-amber-800">
+            This scenario was reconstructed from production evidence. ACE records its source
+            lineage, but DB state, user simulation, tools, and future model output are regenerated.
+          </span>
+        </div>
+      )}
+
+      {recordedConfig && (
+        <div
+          className={`mt-3 rounded-md border px-3 py-2 text-xs ${
+            changedCount === 0 && missingCount === 0
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}
+          data-testid="source-config-fidelity"
+        >
+          <b>
+            {changedCount === 0 && missingCount === 0
+              ? 'Recorded configuration applied'
+              : 'Best-effort source configuration'}
+          </b>
+          <span className="ml-2">
+            {recordedCount} recorded · {changedCount} changed · {missingCount} missing/defaulted
+          </span>
+          <p className="mt-1 text-[11px] opacity-80">
+            Missing values use the effective ACE defaults. Viewer-launched runs always enable
+            checkpoints, so an older checkpoint-disabled source is shown as a deliberate config
+            change.
+          </p>
+          <details className="mt-2">
+            <summary className="cursor-pointer font-medium">
+              Show recorded ↔ effective config
+            </summary>
+            <div className="mt-2 overflow-x-auto rounded border border-current/10 bg-white/70">
+              <table className="w-full text-left text-[11px]">
+                <thead>
+                  <tr className="border-b border-current/10">
+                    <th className="px-2 py-1">Setting</th>
+                    <th className="px-2 py-1">Recorded</th>
+                    <th className="px-2 py-1">Effective child</th>
+                    <th className="px-2 py-1">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fidelityRows.map((row) => (
+                    <tr key={row.field} className="border-b border-current/5 last:border-0">
+                      <td className="px-2 py-1 font-medium">{row.label}</td>
+                      <td className="px-2 py-1">{row.recorded?.display ?? 'missing'}</td>
+                      <td className="px-2 py-1">{row.effective.display}</td>
+                      <td className="px-2 py-1">{row.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      )}
+
       <div className="mt-2 grid gap-3 md:grid-cols-3 lg:grid-cols-4">
         <FieldGroup title="Tasks & schedule">
           <label className="text-xs text-slate-600">
@@ -381,7 +660,7 @@ export function AceRunLauncher({
             <select
               className={INPUT}
               value={values.scenarioFile}
-              onChange={(event) => setField('scenarioFile', event.target.value)}
+              onChange={(event) => setScenarioFile(event.target.value)}
             >
               {!(scenarios.data?.items ?? []).some((pack) => pack.file === values.scenarioFile) && (
                 <option value={values.scenarioFile}>
@@ -478,8 +757,13 @@ export function AceRunLauncher({
                 setField('runKind', event.target.value as AceRunRequest['runKind'])
               }
             >
-              <option value="scored" disabled={Boolean(sourceTraceUid)}>
-                Scored{sourceTraceUid ? ' (unavailable for trace branches)' : ''}
+              <option value="scored" disabled={Boolean(sourceTraceUid) || syntheticRegression}>
+                Scored
+                {sourceTraceUid
+                  ? ' (unavailable for trace branches)'
+                  : syntheticRegression
+                    ? ' (unavailable for synthetic reruns)'
+                    : ''}
               </option>
               <option value="debug">Debug</option>
               <option value="counterfactual">Counterfactual</option>

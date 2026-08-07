@@ -4,7 +4,7 @@ import path from 'node:path'
 import express, { type ErrorRequestHandler } from 'express'
 import request from 'supertest'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { ReviewPayload, ReviewSubject } from '../../shared/reviews/types'
+import type { ReviewGroundTruth, ReviewPayload, ReviewSubject } from '../../shared/reviews/types'
 import { emptyReviewPayload } from '../../shared/reviews/types'
 import { ReviewStore } from '../reviews/reviewStore'
 import { createStaticReviewTraceSource, type ReviewTraceCandidate } from '../reviews/traceSource'
@@ -12,6 +12,21 @@ import { reviewsRoutes } from './reviews'
 
 let temporaryDirectory = ''
 const REAL_RUN_ID = 'sealed-factorial-baseline-optimized-chat-responses'
+const BLIND_CANARIES = [
+  'GROUND_TRUTH_SECRET_MODEL',
+  'GROUND_TRUTH_SECRET_ARM',
+  'GROUND_TRUTH_SECRET_JUDGE',
+  'GROUND_TRUTH_SECRET_FLAG',
+  'GROUND_TRUTH_SECRET_GRADE',
+  'AUTOMATIC_SECRET_GRADE',
+  'AUTOMATIC_SECRET_JUDGE',
+  'AUTOMATIC_SECRET_FLAG',
+] as const
+
+function expectNoBlindCanaries(value: unknown): void {
+  const json = JSON.stringify(value)
+  for (const canary of BLIND_CANARIES) expect(json).not.toContain(canary)
+}
 
 beforeEach(async () => {
   temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'trace-review-routes-'))
@@ -87,13 +102,35 @@ function testApp(extraCandidates: ReviewTraceCandidate[] = []) {
             description: 'The final state matches the requested legal action.',
           },
         ],
-        groundTruth: { order: { id: '1', refunded: false } },
+        // Deliberately masquerades as a trusted envelope. Unknown fields at
+        // any allowlisted level must fail closed in the route boundary.
+        groundTruth: {
+          status: 'available',
+          authoritative: true,
+          source: 'trace_bound_episode_sidecar_scenario_snapshot',
+          traceBound: true,
+          scenarioId: 'scenario-1',
+          configDigest: 'config-1',
+          task: { issue: 'refund', model: 'GROUND_TRUTH_SECRET_MODEL' },
+          policy: { arm: 'GROUND_TRUTH_SECRET_ARM' },
+          database: { judge: 'GROUND_TRUTH_SECRET_JUDGE' },
+          rubric: { flag: 'GROUND_TRUTH_SECRET_FLAG' },
+          grade: 'GROUND_TRUTH_SECRET_GRADE',
+        } as unknown as ReviewGroundTruth,
       },
       automatic: {
         model: 'secret-model',
         arm: 'candidate-b',
         outcome: 'fail',
-        judgeVerdicts: { resolution: { verdict: 'fail', critique: 'No state change.' } },
+        gradeVerdicts: {
+          resolution: { verdict: 'fail', critique: 'AUTOMATIC_SECRET_GRADE' },
+        },
+        judgeVerdicts: {
+          resolution: { verdict: 'fail', critique: 'AUTOMATIC_SECRET_JUDGE' },
+        },
+        detectorVerdicts: {
+          resolution: { verdict: 'fail', critique: 'AUTOMATIC_SECRET_FLAG' },
+        },
         failures: [
           {
             id: 'failure-1',
@@ -168,6 +205,7 @@ describe('/api/reviews', () => {
     }
     expect(queueJson).not.toContain('trace-uid-1')
     expect(queueJson).not.toContain('trace-production')
+    expectNoBlindCanaries(queue.body)
     expect(queue.body.items[0].subject.traceUid).toMatch(/^blind_trace_[0-9a-f]{20}$/)
 
     const guessedRun = await request(app).get(
@@ -209,6 +247,13 @@ describe('/api/reviews', () => {
     ]) {
       expect(blindJson).not.toContain(forbidden)
     }
+    expectNoBlindCanaries(blind.body)
+    expect(blind.body.trace.groundTruth).toEqual({
+      status: 'unavailable',
+      authoritative: false,
+      reason: 'unsafe_ground_truth_shape',
+      scenarioId: 'scenario-1',
+    })
 
     const draftRequest = {
       subject: blind.body.subject as ReviewSubject,
@@ -226,6 +271,7 @@ describe('/api/reviews', () => {
     expect(draft.body.key).toMatch(/^blind_record_[0-9a-f]{20}$/)
     expect(JSON.stringify(draft.body)).not.toContain(REAL_RUN_ID)
     expect(JSON.stringify(draft.body)).not.toContain('trace-uid-1')
+    expectNoBlindCanaries(draft.body)
     expect((await reviewStore.getDraft(subject('calibration')))?.runId).toBe(REAL_RUN_ID)
 
     const submitted = await request(app)
@@ -251,6 +297,55 @@ describe('/api/reviews', () => {
       latestFinal: { locked: true, runId: REAL_RUN_ID },
       automatic: { model: 'secret-model' },
     })
+  })
+
+  it('keeps only the typed authoritative task, policy, database, and rubric allowlist', async () => {
+    const safeGroundTruth: ReviewGroundTruth = {
+      status: 'available',
+      authoritative: true,
+      source: 'trace_bound_episode_sidecar_scenario_snapshot',
+      traceBound: true,
+      scenarioId: 'scenario-safe',
+      configDigest: 'config-safe',
+      task: {
+        issue: 'refund',
+        language: 'en',
+        personaGoal: 'Refund the eligible order.',
+        expectedOutcome: 'refund',
+      },
+      policy: {
+        expectedActions: [
+          { name: 'issue_refund', argsSubset: { order_id: 'order_1', amount: 500 } },
+        ],
+        forbiddenActions: ['cancel_order'],
+        consentRequired: true,
+      },
+      database: {
+        requiredInfo: [{ kind: 'money', value: 500 }],
+        expectedStateDelta: [{ orderId: 'order_1', field: 'refunded', to: 500 }],
+      },
+      rubric: { rewardBasis: ['ACTIONS', 'OUTCOME'], promiseCheck: true },
+    }
+    const { app } = testApp([
+      {
+        trace: {
+          corpusId: 'simulation',
+          runId: 'safe-run',
+          traceUid: 'safe-trace',
+          sourceTraceId: 'safe-source',
+          instanceId: 'scenario-safe',
+          transcript: [{ id: 'safe-m1', role: 'user', content: 'Please refund my order.' }],
+          groundTruth: safeGroundTruth,
+        },
+      },
+    ])
+
+    const workspace = await request(app).get(
+      '/api/reviews/safe-trace/draft?mode=calibration&annotator=local&rubricVersion=judge_v2',
+    )
+
+    expect(workspace.status).toBe(200)
+    expect(workspace.body.trace.groundTruth).toEqual(safeGroundTruth)
   })
 
   it('shows assisted suggestions and accepts explicit per-failure decisions', async () => {

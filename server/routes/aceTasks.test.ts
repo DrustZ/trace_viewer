@@ -132,6 +132,7 @@ def grade_atomic():
           taskBrief: 'Cancel the order before it ships.',
           traceCoverage: {
             traceCount: 2,
+            exploratoryTraceCount: 0,
             runCount: 2,
             matchedPairCount: 1,
             compareRunIds: ['baseline-chat', 'optimized-chat'],

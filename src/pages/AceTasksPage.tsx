@@ -367,13 +367,13 @@ function ObservedContracts({ contracts }: { contracts: AceTaskObservedScoringCon
                 <span className="font-mono font-medium">{contract.fingerprint}</span>
                 <span className="ml-2">{contract.traceCount} traces</span>
                 <span
-                  className={`ml-2 rounded px-1 py-0.5 text-[9px] ${contract.matchesCurrentCheckSemantics === true ? 'bg-emerald-50 text-emerald-700' : contract.matchesCurrentCheckSemantics === false ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'}`}
+                  className={`ml-2 rounded px-1 py-0.5 text-[9px] ${contract.matchesCurrentCheckShape === true ? 'bg-emerald-50 text-emerald-700' : contract.matchesCurrentCheckShape === false ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'}`}
                 >
-                  {contract.matchesCurrentCheckSemantics === true
-                    ? 'matches current checks'
-                    : contract.matchesCurrentCheckSemantics === false
-                      ? 'differs from current checks'
-                      : 'current semantics unavailable'}
+                  {contract.matchesCurrentCheckShape === true
+                    ? 'matches current check shape'
+                    : contract.matchesCurrentCheckShape === false
+                      ? 'differs from current check shape'
+                      : 'current check shape unavailable'}
                 </span>
               </summary>
               <div className="mt-2 flex flex-wrap gap-1">
@@ -769,6 +769,11 @@ export default function AceTasksPage() {
                       <span>{item.language ?? 'language unset'}</span>
                       <span>·</span>
                       <span>{item.traceCoverage.traceCount} traces</span>
+                      {item.traceCoverage.exploratoryTraceCount > 0 && (
+                        <span>
+                          · {item.traceCoverage.exploratoryTraceCount} exploratory excluded
+                        </span>
+                      )}
                       {item.traceCoverage.matchedPairCount > 0 && (
                         <span className="text-blue-600">
                           · {item.traceCoverage.matchedPairCount} matched seeds
@@ -803,7 +808,10 @@ export default function AceTasksPage() {
                       </h2>
                       <p className="mt-1 text-[11px] text-slate-500">
                         {task.data.sourcePacks.join(', ')} · {task.data.traceCoverage.traceCount}{' '}
-                        matching traces across {task.data.traceCoverage.runCount} runs
+                        formal matching traces across {task.data.traceCoverage.runCount} runs
+                        {task.data.traceCoverage.exploratoryTraceCount > 0
+                          ? ` · ${task.data.traceCoverage.exploratoryTraceCount} exploratory excluded`
+                          : ''}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <StatusBadge status={taskStatus(task.data.traceCoverage.status).status} />

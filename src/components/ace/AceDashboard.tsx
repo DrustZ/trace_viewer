@@ -1,6 +1,11 @@
 import { encodeFilterSet } from '@shared/filter/parse'
 import type { FilterCondition } from '@shared/filter/types'
-import type { AceBatchSummary, AceBreakdownItem, AceDashboardScope } from '@shared/schema/ace'
+import type {
+  AceBatchSummary,
+  AceBreakdownItem,
+  AceDashboardScope,
+  AceReliabilitySummary,
+} from '@shared/schema/ace'
 import { Link } from 'react-router-dom'
 import { useAceAnalysis, useAceDashboard, useAceRuns } from '../../api/ace'
 import { formatNumber, formatPercent } from '../common/format'
@@ -30,6 +35,76 @@ function Metric({
       <div className="text-[10px] font-medium uppercase tracking-wide">{label}</div>
       <div className="mt-0.5 text-lg font-semibold tabular-nums">{value}</div>
       {detail ? <div className="mt-0.5 text-[10px] opacity-65">{detail}</div> : null}
+    </div>
+  )
+}
+
+export function ReliabilityCurves({ reliability }: { reliability: AceReliabilitySummary }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+          Formal reliability curves
+        </div>
+        <div className="text-[10px] text-slate-400">
+          per-scenario C(successes,k) / C(trials,k), then macro-averaged
+        </div>
+      </div>
+      {reliability.cells.length === 0 ? (
+        <p className="mt-2 text-xs text-slate-400">No pair-keyed formal simulation cells.</p>
+      ) : (
+        <div className="mt-2 grid gap-2 lg:grid-cols-2">
+          {reliability.cells.map((cell) => {
+            const excluded = Object.values(cell.exclusions).reduce((sum, count) => sum + count, 0)
+            return (
+              <div
+                key={`${cell.runId}:${cell.configDigest ?? 'unknown'}`}
+                className="rounded border border-slate-100 bg-slate-50 p-2"
+              >
+                <div className="flex flex-wrap items-center gap-x-2 text-[11px]">
+                  <span className="font-mono font-semibold text-slate-700">{cell.runId}</span>
+                  <span className="font-mono text-[9px] text-slate-400">
+                    config {cell.configDigest?.slice(0, 12) ?? 'unrecorded'}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {cell.curve.length > 0 ? (
+                    cell.curve.map((point) => (
+                      <span
+                        key={point.k}
+                        className="rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-800"
+                        title={`Macro-average denominator: ${point.scenarioDenominator} scenarios`}
+                      >
+                        Pass^{point.k} {formatPercent(point.value)}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[10px] text-slate-400">No valid graded trials</span>
+                  )}
+                </div>
+                <div className="mt-1 text-[9px] text-slate-500">
+                  {cell.coverage.validTrialCount} unique trials ·{' '}
+                  {cell.coverage.scenarioDenominator} scenario denominator ·{' '}
+                  {cell.coverage.minTrialsPerScenario}–{cell.coverage.maxTrialsPerScenario} trials
+                  /scenario · {excluded} excluded
+                </div>
+                <div className="mt-0.5 text-[9px] text-slate-400">
+                  exclusions: invalid {cell.exclusions.invalid} · runtime{' '}
+                  {cell.exclusions.runtimeError} · ungraded {cell.exclusions.ungraded} · missing
+                  pair {cell.exclusions.missingPairKey} · duplicate-key rows{' '}
+                  {cell.exclusions.duplicatePair}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {reliability.excludedNonFormalTraceCount > 0 ? (
+        <p className="mt-2 text-[9px] text-slate-400">
+          {reliability.excludedNonFormalTraceCount} production/exploratory trace(s) excluded from
+          formal reliability.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -79,6 +154,7 @@ function RunCard({ run }: { run: AceBatchSummary }) {
             .slice(0, 3)
             .map((item) => `${item.code} ${item.count}`)
             .join(' · ')}
+          {run.failureChecks.length > 3 ? ` · +${run.failureChecks.length - 3} more` : ''}
         </div>
       )}
     </Link>
@@ -114,13 +190,22 @@ function Breakdown({
   operation?: 'eq' | 'contains'
 }) {
   if (items.length === 0) return null
+  const visibleItems = items.slice(0, 8)
   return (
     <div>
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-        {title}
+      <div className="mb-1 flex flex-wrap items-center gap-x-2 text-[10px] uppercase tracking-wide text-slate-400">
+        <span className="font-medium">{title}</span>
+        <span className="normal-case tabular-nums">
+          showing {visibleItems.length} of {items.length}
+        </span>
+        {visibleItems.length < items.length ? (
+          <Link to="/ace/analysis" className="normal-case text-blue-600 hover:underline">
+            view all
+          </Link>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-1">
-        {items.slice(0, 8).map((item) => (
+        {visibleItems.map((item) => (
           <Link
             key={item.code}
             to={filterUrl(scope, filterKey, item.code, operation)}
@@ -144,8 +229,11 @@ export function AceDashboard() {
   const runs = query.data?.items ?? []
   const aggregate = dashboard.data
   if (runs.length === 0 && (!aggregate || aggregate.total === 0)) return null
-  const episodes =
-    aggregate?.scheduledEpisodes ?? runs.reduce((sum, run) => sum + run.totals.episodes, 0)
+  const formalEpisodes =
+    aggregate?.formalScheduledEpisodes ??
+    runs
+      .filter((run) => run.runKind === 'scored')
+      .reduce((sum, run) => sum + run.totals.episodes, 0)
   const passed = aggregate?.pass ?? runs.reduce((sum, run) => sum + run.totals.passed, 0)
   const failed = aggregate?.fail ?? runs.reduce((sum, run) => sum + run.totals.failedGrade, 0)
   const invalid =
@@ -164,7 +252,15 @@ export function AceDashboard() {
     <CollapsibleSection id="ace-cockpit" title="ACE evaluation cockpit" defaultOpen>
       <div className="space-y-3 p-3">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
-          <Metric label="Scheduled (formal)" value={formatNumber(episodes)} />
+          <Metric
+            label="Scheduled (formal)"
+            value={formatNumber(formalEpisodes)}
+            detail={
+              aggregate
+                ? `${aggregate.scheduledEpisodes} scheduled episode(s) in selected scope`
+                : 'Scored simulation runs only'
+            }
+          />
           <Metric
             label="Pass rate"
             value={formatPercent(graded ? passed / graded : null)}
@@ -179,7 +275,7 @@ export function AceDashboard() {
           />
         </div>
         {aggregate && (
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             <Metric
               label="Episode validity"
               value={formatPercent(aggregate.userSimEpisodeValidityRate)}
@@ -194,27 +290,20 @@ export function AceDashboard() {
                   : 'No batch attempt counters'
               }
             />
-            <Metric label="Pass@1" value={formatPercent(aggregate.passAt1)} />
-            <Metric label="Pass^k" value={formatPercent(aggregate.passToK)} />
             <Metric
-              label="Required escalation"
-              value={
-                aggregate.requiredEscalations === null
-                  ? '—'
-                  : formatNumber(aggregate.requiredEscalations)
-              }
+              label="Required escalation hit"
+              value={formatPercent(aggregate.escalation.requiredHitRate)}
+              detail={`${aggregate.escalation.requiredObserved} / ${aggregate.escalation.requiredDenominator} required opportunities`}
             />
             <Metric
-              label="Unnecessary escalation"
-              value={
-                aggregate.unnecessaryEscalations === null
-                  ? '—'
-                  : formatNumber(aggregate.unnecessaryEscalations)
-              }
+              label="Unnecessary escalation rate"
+              value={formatPercent(aggregate.escalation.unnecessaryEscalationRate)}
+              detail={`${aggregate.escalation.notRequiredObserved} / ${aggregate.escalation.notRequiredDenominator} not-required opportunities`}
               tone="amber"
             />
           </div>
         )}
+        {aggregate ? <ReliabilityCurves reliability={aggregate.reliability} /> : null}
         {aggregate && (
           <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 md:grid-cols-2 lg:grid-cols-3">
             <Breakdown
@@ -258,7 +347,6 @@ export function AceDashboard() {
               items={aggregate.issues}
               filterKey="issue"
               scope={aggregate.scope}
-              operation="eq"
             />
             <Breakdown
               title="Languages"
@@ -283,6 +371,15 @@ export function AceDashboard() {
             />
           </div>
         )}
+        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wide text-slate-400">
+          <span className="font-medium">Runs</span>
+          <span className="normal-case tabular-nums">
+            showing {Math.min(4, runs.length)} of {runs.length}
+          </span>
+          <Link to="/ace" className="normal-case text-blue-600 hover:underline">
+            view all
+          </Link>
+        </div>
         <div className="grid gap-2 lg:grid-cols-2">
           {runs.slice(0, 4).map((run) => (
             <RunCard key={run.runId} run={run} />
@@ -290,10 +387,16 @@ export function AceDashboard() {
         </div>
         {aggregate && aggregate.triage.length > 0 && (
           <div className="rounded-lg border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
               Major failures & judge disagreements · showing {Math.min(20, aggregate.triage.length)}
               {' of '}
               {aggregate.triageTotal}
+              <Link
+                to="/ace/analysis"
+                className="ml-auto whitespace-nowrap text-blue-600 hover:underline"
+              >
+                view all
+              </Link>
             </div>
             <div className="max-h-44 divide-y divide-slate-100 overflow-auto">
               {aggregate.triage.slice(0, 20).map((item) => (

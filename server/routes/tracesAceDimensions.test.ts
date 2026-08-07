@@ -113,4 +113,39 @@ describe('ACE task-dimension trace drilldowns', () => {
     expect(response.status).toBe(200)
     expect(response.body.total).toBe(0)
   })
+
+  it('counts production-style multi-issue labels atomically and drills down with contains', async () => {
+    const store = new TraceStore()
+    const multi = store.upsert(
+      trace('multi-issue', {
+        issue: 'refund_payment, cancel_order',
+        issues: ['refund_payment', 'cancel_order'],
+        language: 'en',
+      }),
+    )
+    const ctx: RouteCtx = {
+      store,
+      searchIndex: new SearchIndex(store),
+      dataRoots: [],
+      importDir: '/tmp/not-used',
+    }
+    const app = express()
+    app.use(tracesRoutes(ctx, { loadTaskDefinitions: async () => [task] }))
+
+    expect(buildAceDashboard(store, ['run-a'], [task]).issues).toEqual([
+      { code: 'cancel_order', count: 1 },
+      { code: 'refund_payment', count: 1 },
+    ])
+    const response = await request(app)
+      .get('/api/traces')
+      .query({
+        filters: encodeFilterSet({
+          conditions: [{ key: 'issue', op: 'contains', value: 'refund_payment' }],
+        }),
+      })
+    expect(response.status).toBe(200)
+    expect(
+      response.body.items.map((item: { meta: { traceUid: string } }) => item.meta.traceUid),
+    ).toEqual([multi.meta.traceUid])
+  })
 })

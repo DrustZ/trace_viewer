@@ -75,8 +75,16 @@ export function StateToolsTab({ trace }: { trace: Trace }) {
                 className="group"
               >
                 <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs hover:bg-slate-50">
-                  <span className={entry.ok === false ? 'text-red-600' : 'text-emerald-600'}>
-                    {entry.ok === false ? '✕' : '✓'}
+                  <span
+                    className={
+                      entry.outcomeKnown === false
+                        ? 'text-amber-600'
+                        : entry.ok === false
+                          ? 'text-red-600'
+                          : 'text-emerald-600'
+                    }
+                  >
+                    {entry.outcomeKnown === false ? '?' : entry.ok === false ? '✕' : '✓'}
                   </span>
                   <b className="font-mono">{entry.name}</b>
                   {entry.tier && (
@@ -89,7 +97,13 @@ export function StateToolsTab({ trace }: { trace: Trace }) {
                     {String(entry.outcomeKnown ?? '—')}
                   </span>
                 </summary>
-                <div className="grid gap-3 bg-slate-50 px-4 py-3 lg:grid-cols-2">
+                {entry.outcomeKnown === false && (
+                  <p className="bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
+                    Unknown tool outcome: the model-visible response may differ from the actual side
+                    effect. Inspect both values before retrying a write.
+                  </p>
+                )}
+                <div className="grid gap-3 bg-slate-50 px-4 py-3 lg:grid-cols-3">
                   <div>
                     <p className="text-[10px] font-medium uppercase text-slate-400">Arguments</p>
                     <pre className="mt-1 overflow-auto whitespace-pre-wrap break-words rounded bg-white p-2 text-xs">
@@ -97,12 +111,30 @@ export function StateToolsTab({ trace }: { trace: Trace }) {
                     </pre>
                   </div>
                   <div>
-                    <p className="text-[10px] font-medium uppercase text-slate-400">Result</p>
+                    <p className="text-[10px] font-medium uppercase text-slate-400">
+                      Model-visible result
+                    </p>
                     <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-white p-2 text-xs">
                       {typeof entry.result === 'string'
                         ? entry.result
                         : JSON.stringify(entry.result, null, 2)}
                     </pre>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-medium uppercase text-slate-400">
+                      Actual tool outcome
+                    </p>
+                    {'actualResult' in entry ? (
+                      <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-white p-2 text-xs">
+                        {typeof entry.actualResult === 'string'
+                          ? entry.actualResult
+                          : JSON.stringify(entry.actualResult, null, 2)}
+                      </pre>
+                    ) : (
+                      <p className="mt-1 rounded bg-white p-2 text-xs text-slate-400">
+                        Not recorded{entry.actualResultHead ? ` · ${entry.actualResultHead}` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
               </details>

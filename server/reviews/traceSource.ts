@@ -2,6 +2,8 @@ import type {
   AutomaticFailureSummary,
   AutomaticReviewContext,
   AutomaticRubricVerdict,
+  ReviewGroundTruth,
+  ReviewGroundTruthUnavailableReason,
   ReviewTraceContext,
   RubricDefinition,
 } from '../../shared/reviews/types'
@@ -9,6 +11,7 @@ import type { AceTaskDetail } from '../../shared/schema/aceTasks'
 import type { Trace, TraceSummary } from '../../shared/schema/types'
 import type { AceTaskCatalog } from '../ace/taskCatalog'
 import type { TraceStore } from '../store/traceStore'
+import { sanitizeReviewGroundTruth, unavailableGroundTruth } from './groundTruth'
 
 export interface ReviewTraceCandidate {
   trace: ReviewTraceContext
@@ -125,39 +128,175 @@ function rubricDefinitions(...nameLists: readonly string[][]): RubricDefinition[
     : undefined
 }
 
-function currentCatalogReference(task: AceTaskDetail | undefined): unknown {
-  if (!task) return undefined
-  const uniqueVariant = !task.conflict && task.variants.length === 1 ? task.variants[0] : undefined
-  return {
-    source: 'current_catalog_unverified',
-    authoritative: false,
-    scenarioId: task.scenarioId,
-    conflict: task.conflict || task.variants.length !== 1,
-    ...(task.issue ? { issue: task.issue } : {}),
-    ...(task.language ? { language: task.language } : {}),
-    ...(uniqueVariant?.persona.goal ? { personaGoal: uniqueVariant.persona.goal } : {}),
-  }
-}
-
-function definitionValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(definitionValue)
-  const object = record(value)
-  if (!object) return value
-  return Object.fromEntries(
-    Object.entries(object)
-      .filter(([key]) => !/canary/i.test(key))
-      .map(([key, child]) => [key, definitionValue(child)]),
-  )
-}
-
 function snapshotField(snapshot: Record<string, unknown>, snake: string, camel: string): unknown {
   return snapshot[snake] ?? snapshot[camel]
 }
 
 interface GroundTruthResolution {
-  groundTruth: unknown
+  groundTruth: ReviewGroundTruth
   issue?: string
   language?: string
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  const allowedKeys = new Set(allowed)
+  return Object.keys(value).every((key) => allowedKeys.has(key))
+}
+
+function canonicalActions(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  return value.map((candidate) => {
+    const action = record(candidate)
+    if (!action || !hasOnlyKeys(action, ['name', 'args_subset', 'argsSubset'])) return candidate
+    const argsSubset = action.args_subset ?? action.argsSubset
+    return {
+      name: action.name,
+      ...(argsSubset !== undefined ? { argsSubset } : {}),
+    }
+  })
+}
+
+function canonicalAuthorizedEffects(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  return value.map((candidate) => {
+    const effect = record(candidate)
+    if (
+      !effect ||
+      !hasOnlyKeys(effect, ['order_id', 'orderId', 'effects', 'refund_cap', 'refundCap'])
+    ) {
+      return candidate
+    }
+    return {
+      orderId: effect.order_id ?? effect.orderId,
+      effects: effect.effects,
+      ...(effect.refund_cap !== undefined
+        ? { refundCap: effect.refund_cap }
+        : effect.refundCap !== undefined
+          ? { refundCap: effect.refundCap }
+          : {}),
+    }
+  })
+}
+
+function canonicalRequiredInfo(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  return value.map((candidate) => {
+    const requirement = record(candidate)
+    if (!requirement || !hasOnlyKeys(requirement, ['kind', 'value'])) return candidate
+    return { kind: requirement.kind, value: requirement.value }
+  })
+}
+
+function canonicalStateDelta(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  return value.map((candidate) => {
+    const delta = record(candidate)
+    if (!delta || !hasOnlyKeys(delta, ['order_id', 'orderId', 'field', 'to'])) return candidate
+    return {
+      orderId: delta.order_id ?? delta.orderId,
+      field: delta.field,
+      to: delta.to,
+    }
+  })
+}
+
+function canonicalPrecedence(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  return value.map((candidate) => (Array.isArray(candidate) ? [...candidate] : candidate))
+}
+
+function groundTruthSections(source: Record<string, unknown>, card: Record<string, unknown>) {
+  const issue = stringAt(card.issue, source.issue)
+  const language = stringAt(card.language, source.language)
+  const personaGoal = stringAt(card.goal, source.goal)
+  const expectedOutcome = stringAt(snapshotField(source, 'expected_outcome', 'expectedOutcome'))
+  return {
+    issue,
+    language,
+    task: {
+      ...(issue ? { issue } : {}),
+      ...(language ? { language } : {}),
+      ...(personaGoal ? { personaGoal } : {}),
+      ...(expectedOutcome ? { expectedOutcome } : {}),
+    },
+    policy: {
+      expectedActions: canonicalActions(
+        snapshotField(source, 'expected_actions', 'expectedActions'),
+      ),
+      forbiddenActions: snapshotField(source, 'forbidden_actions', 'forbiddenActions'),
+      authorizedEffects: canonicalAuthorizedEffects(
+        snapshotField(source, 'authorized_effects', 'authorizedEffects'),
+      ),
+      mustPrecede: canonicalPrecedence(snapshotField(source, 'must_precede', 'mustPrecede')),
+      consentRequired: snapshotField(source, 'consent_required', 'consentRequired'),
+    },
+    database: {
+      requiredInfo: canonicalRequiredInfo(snapshotField(source, 'required_info', 'requiredInfo')),
+      expectedStateDelta: canonicalStateDelta(
+        snapshotField(source, 'expected_state_delta', 'expectedStateDelta'),
+      ),
+    },
+    rubric: {
+      rewardBasis: snapshotField(source, 'reward_basis', 'rewardBasis'),
+      promiseCheck: snapshotField(source, 'promise_check', 'promiseCheck'),
+    },
+  }
+}
+
+function catalogGroundTruth(task: AceTaskDetail | undefined): GroundTruthResolution | undefined {
+  if (!task) return undefined
+  if (task.conflict || task.variants.length !== 1) {
+    return {
+      groundTruth: unavailableGroundTruth('task_catalog_definition_conflict', task.scenarioId),
+    }
+  }
+  const variant = task.variants[0]
+  if (!variant) {
+    return {
+      groundTruth: unavailableGroundTruth('task_catalog_definition_invalid', task.scenarioId),
+    }
+  }
+  const source: Record<string, unknown> = {
+    expected_actions: variant.expectedActions,
+    forbidden_actions: variant.forbiddenActions,
+    authorized_effects: variant.authorizedEffects,
+    required_info: variant.requiredInfo,
+    expected_state_delta: variant.expectedStateDelta,
+    must_precede: variant.mustPrecede,
+    consent_required: variant.consentRequired,
+    expected_outcome: variant.expectedOutcome,
+    reward_basis: variant.rewardBasis,
+    promise_check: variant.promiseCheck,
+  }
+  const card: Record<string, unknown> = {
+    issue: variant.persona.issue,
+    language: variant.persona.language,
+    goal: variant.persona.goal,
+  }
+  const sections = groundTruthSections(source, card)
+  const sanitized = sanitizeReviewGroundTruth(
+    {
+      status: 'available',
+      authoritative: true,
+      source: 'current_task_catalog',
+      traceBound: false,
+      scenarioId: task.scenarioId,
+      definitionDigest: variant.definitionDigest,
+      task: sections.task,
+      policy: sections.policy,
+      database: sections.database,
+      rubric: sections.rubric,
+    },
+    task.scenarioId,
+  )
+  return {
+    groundTruth:
+      sanitized?.status === 'available'
+        ? sanitized
+        : unavailableGroundTruth('task_catalog_definition_invalid', task.scenarioId),
+    ...(sections.issue ? { issue: sections.issue } : {}),
+    ...(sections.language ? { language: sections.language } : {}),
+  }
 }
 
 function resolveGroundTruth(
@@ -167,18 +306,12 @@ function resolveGroundTruth(
 ): GroundTruthResolution {
   const scenarioId = summary.meta.instanceId
   const snapshot = record(extra.scenario_snapshot) ?? record(extra.scenarioSnapshot)
-  const reference = currentCatalogReference(task)
-  const unavailable = (reason: string): GroundTruthResolution => ({
-    groundTruth: {
-      status: 'unavailable',
-      authoritative: false,
-      reason,
-      ...(scenarioId ? { scenarioId } : {}),
-      ...(reference ? { currentDefinitionReference: reference } : {}),
-    },
+  const unavailable = (reason: ReviewGroundTruthUnavailableReason): GroundTruthResolution => ({
+    groundTruth: unavailableGroundTruth(reason, scenarioId),
   })
 
-  if (!snapshot) return unavailable('trace_bound_scenario_snapshot_missing')
+  if (!snapshot)
+    return catalogGroundTruth(task) ?? unavailable('trace_bound_scenario_snapshot_missing')
   const snapshotProvenance = stringAt(
     extra.scenario_snapshot_provenance,
     extra.scenarioSnapshotProvenance,
@@ -197,39 +330,26 @@ function resolveGroundTruth(
     return unavailable('config_digest_mismatch')
   }
 
-  const card = record(snapshot.card) ?? {}
-  const issue = stringAt(card.issue, snapshot.issue)
-  const language = stringAt(card.language, snapshot.language)
-  const goal = stringAt(card.goal, snapshot.goal)
-  const definition = {
-    ...(issue ? { issue } : {}),
-    ...(language ? { language } : {}),
-    ...(goal ? { persona: { goal } } : {}),
-    expectedActions: definitionValue(
-      snapshotField(snapshot, 'expected_actions', 'expectedActions'),
-    ),
-    forbiddenActions: definitionValue(
-      snapshotField(snapshot, 'forbidden_actions', 'forbiddenActions'),
-    ),
-    requiredInfo: definitionValue(snapshotField(snapshot, 'required_info', 'requiredInfo')),
-    expectedStateDelta: definitionValue(
-      snapshotField(snapshot, 'expected_state_delta', 'expectedStateDelta'),
-    ),
-    mustPrecede: definitionValue(snapshotField(snapshot, 'must_precede', 'mustPrecede')),
-    consentRequired: snapshotField(snapshot, 'consent_required', 'consentRequired'),
-    expectedOutcome: snapshotField(snapshot, 'expected_outcome', 'expectedOutcome'),
-  }
-  return {
-    groundTruth: {
+  const sections = groundTruthSections(snapshot, record(snapshot.card) ?? {})
+  const groundTruth = sanitizeReviewGroundTruth(
+    {
       status: 'available',
       authoritative: true,
       source: `trace_bound_${snapshotProvenance}_scenario_snapshot`,
+      traceBound: true,
       scenarioId,
       configDigest: traceConfigDigest,
-      definition,
+      task: sections.task,
+      policy: sections.policy,
+      database: sections.database,
+      rubric: sections.rubric,
     },
-    ...(issue ? { issue } : {}),
-    ...(language ? { language } : {}),
+    scenarioId,
+  )
+  return {
+    groundTruth: groundTruth ?? unavailableGroundTruth('unsafe_ground_truth_shape', scenarioId),
+    ...(sections.issue ? { issue: sections.issue } : {}),
+    ...(sections.language ? { language: sections.language } : {}),
   }
 }
 
@@ -347,7 +467,11 @@ function projectTrace(
   // provenance is authoritative.
   const groundTruthResolution =
     corpusId === 'simulation' ? resolveGroundTruth(summary, extra ?? {}, task) : undefined
-  const fallbackGroundTruth = groundTruthResolution?.groundTruth ?? extra?.groundTruth
+  const safeGroundTruth =
+    groundTruthResolution?.groundTruth ??
+    (extra?.groundTruth !== undefined
+      ? unavailableGroundTruth('unsafe_ground_truth_shape', summary.meta.instanceId)
+      : undefined)
   const automatic: AutomaticReviewContext = {
     ...(model ? { model } : {}),
     ...(arm ? { arm } : {}),
@@ -384,7 +508,7 @@ function projectTrace(
         ...(message.timestamp ? { timestamp: message.timestamp } : {}),
       })),
       ...(rubric ? { rubric } : {}),
-      ...(fallbackGroundTruth !== undefined ? { groundTruth: fallbackGroundTruth } : {}),
+      ...(safeGroundTruth !== undefined ? { groundTruth: safeGroundTruth } : {}),
     },
     ...(automaticPresent ? { automatic } : {}),
   }

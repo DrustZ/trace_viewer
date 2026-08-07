@@ -175,8 +175,16 @@ export async function readAceBatch(manifestPath: string): Promise<AceBatchSummar
     .map((row) => episodeOf(row, scheduleDigest))
     .filter((row): row is AceBatchEpisode => row !== null)
   const totals = record(raw.totals)
-  const expected =
-    stateRows.length > 0 ? stateRows.length : number(totals.episodes, episodes.length)
+  // A producer may atomically publish a syntactically valid but semantically
+  // partial state array while retaining the intended total. Never let that
+  // shrink the scheduled denominator or make an incomplete run look done.
+  const expected = Math.max(
+    0,
+    number(totals.episodes),
+    stateRows.length,
+    completedRows.length,
+    episodes.length,
+  )
   const terminalEpisodes = episodes.filter((row) =>
     ['completed', 'cancelled', 'failed', 'error'].includes(row.status),
   )
@@ -187,20 +195,17 @@ export async function readAceBatch(manifestPath: string): Promise<AceBatchSummar
   const failedGrade = episodes.filter((row) => row.outcome === 'fail').length
   const runtimeErrors = episodes.filter((row) => row.outcome === 'runtime_error').length
   const invalidUserSim = episodes.filter((row) => row.outcome === 'invalid').length
-  const userSimAttemptValues = episodes.flatMap((row) =>
-    row.userSimAttempts === undefined ? [] : [row.userSimAttempts],
-  )
-  const invalidAttemptValues = episodes.flatMap((row) =>
-    row.userSimInvalidAttempts === undefined ? [] : [row.userSimInvalidAttempts],
-  )
-  const userSimAttempts =
-    userSimAttemptValues.length > 0
-      ? userSimAttemptValues.reduce((sum, value) => sum + value, 0)
-      : null
-  const invalidUserSimAttempts =
-    invalidAttemptValues.length > 0
-      ? invalidAttemptValues.reduce((sum, value) => sum + value, 0)
-      : null
+  const completeAttemptCounters =
+    episodes.length > 0 &&
+    episodes.every(
+      (row) => row.userSimAttempts !== undefined && row.userSimInvalidAttempts !== undefined,
+    )
+  const userSimAttempts = completeAttemptCounters
+    ? episodes.reduce((sum, row) => sum + (row.userSimAttempts ?? 0), 0)
+    : null
+  const invalidUserSimAttempts = completeAttemptCounters
+    ? episodes.reduce((sum, row) => sum + (row.userSimInvalidAttempts ?? 0), 0)
+    : null
   const executed = passed + failedGrade
   const usage = record(raw.usage)
 
@@ -208,6 +213,8 @@ export async function readAceBatch(manifestPath: string): Promise<AceBatchSummar
     runId,
     runKind: runKind(raw.run_kind ?? record(raw.spec).run_kind, schemaVersion),
     schemaVersion,
+    manifestAvailable: true,
+    controlsAvailable: true,
     lifecycle: lifecycle(rawLifecycle, finished),
     updatedAt:
       string(rawLifecycleRecord.heartbeat_at) ??
@@ -241,11 +248,11 @@ export async function readAceBatch(manifestPath: string): Promise<AceBatchSummar
       userSimValidityRate:
         userSimAttempts !== null && userSimAttempts > 0 && invalidUserSimAttempts !== null
           ? (userSimAttempts - invalidUserSimAttempts) / userSimAttempts
-          : nullableNumber(totals.user_sim_validity_rate),
+          : null,
       userSimAttemptValidityRate:
         userSimAttempts !== null && userSimAttempts > 0 && invalidUserSimAttempts !== null
           ? (userSimAttempts - invalidUserSimAttempts) / userSimAttempts
-          : nullableNumber(totals.user_sim_validity_rate),
+          : null,
       avgUserTurns: nullableNumber(totals.avg_user_turns),
       avgToolCalls: nullableNumber(totals.avg_tool_calls),
       flagsMajor: number(totals.flags_major),

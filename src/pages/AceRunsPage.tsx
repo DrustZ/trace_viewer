@@ -1,4 +1,9 @@
-import type { AceBatchEpisode, AceRunLifecycle, AceRunTraceSummary } from '@shared/schema/ace'
+import type {
+  AceBatchEpisode,
+  AceBatchSummary,
+  AceRunLifecycle,
+  AceRunTraceSummary,
+} from '@shared/schema/ace'
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAceRun, useAceRuns, useControlAceRun } from '../api/ace'
@@ -26,6 +31,34 @@ function Outcome({ value }: { value: string }) {
 
 const TERMINAL_EPISODE_STATUSES = new Set(['completed', 'cancelled', 'failed', 'error'])
 const EPISODE_PAGE_SIZE = 100
+type AceControlAction = 'pause' | 'resume' | 'cancel'
+
+export function aceRunControlDisabled(
+  run: Pick<AceBatchSummary, 'controlsAvailable' | 'lifecycle'>,
+  action: AceControlAction,
+  pending = false,
+): boolean {
+  if (run.controlsAvailable === false || pending) return true
+  if (action === 'pause') return run.lifecycle !== 'running'
+  if (action === 'resume') return run.lifecycle !== 'paused'
+  return !['queued', 'running', 'paused', 'cancelling'].includes(run.lifecycle)
+}
+
+export function AceRunAccessStatus({
+  manifestAvailable,
+  controlsAvailable,
+}: Pick<AceBatchSummary, 'manifestAvailable' | 'controlsAvailable'>) {
+  if (manifestAvailable !== false && controlsAvailable !== false) return null
+  return (
+    <span className="rounded bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+      {manifestAvailable === false && controlsAvailable === false
+        ? 'trace-only · read-only'
+        : manifestAvailable === false
+          ? 'manifest pending'
+          : 'controls unavailable'}
+    </span>
+  )
+}
 
 export function aceRunHeartbeat(
   updatedAt: string,
@@ -232,6 +265,10 @@ export default function AceRunsPage() {
                 <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase text-slate-600">
                   {run.data.runKind}
                 </span>
+                <AceRunAccessStatus
+                  manifestAvailable={run.data.manifestAvailable}
+                  controlsAvailable={run.data.controlsAvailable}
+                />
                 {heartbeat.stale ? (
                   <span className="rounded bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                     heartbeat stale
@@ -243,15 +280,7 @@ export default function AceRunsPage() {
                       key={action}
                       type="button"
                       onClick={() => control.mutate(action)}
-                      disabled={
-                        control.isPending ||
-                        (action === 'pause' && run.data.lifecycle !== 'running') ||
-                        (action === 'resume' && run.data.lifecycle !== 'paused') ||
-                        (action === 'cancel' &&
-                          !['queued', 'running', 'paused', 'cancelling'].includes(
-                            run.data.lifecycle,
-                          ))
-                      }
+                      disabled={aceRunControlDisabled(run.data, action, control.isPending)}
                       className="rounded border border-slate-200 px-2 py-1 text-xs capitalize hover:bg-slate-50 disabled:opacity-40"
                     >
                       {action}
@@ -260,9 +289,9 @@ export default function AceRunsPage() {
                 </div>
               </div>
               <p className="mt-1 text-[10px] text-slate-400">
-                Last durable manifest heartbeat {new Date(run.data.updatedAt).toLocaleString()} ·
-                {formatHeartbeatAge(heartbeat.ageMs)} · controls take effect at a safe turn
-                boundary.
+                {run.data.manifestAvailable === false
+                  ? `Latest loaded trace ${new Date(run.data.updatedAt).toLocaleString()} · no batch manifest is available.`
+                  : `Last durable manifest heartbeat ${new Date(run.data.updatedAt).toLocaleString()} · ${formatHeartbeatAge(heartbeat.ageMs)} · controls take effect at a safe turn boundary.`}
               </p>
               <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-5 xl:grid-cols-10">
                 <div>
@@ -492,7 +521,9 @@ export default function AceRunsPage() {
               </div>
               {episodes.length === 0 ? (
                 <p className="px-4 py-6 text-center text-xs text-slate-500">
-                  Waiting for the first scheduled episode state…
+                  {run.data.manifestAvailable === false
+                    ? 'No manifest schedule is available; use the durable trace list below.'
+                    : 'Waiting for the first scheduled episode state…'}
                 </p>
               ) : filteredEpisodes.length === 0 ? (
                 <p className="px-4 py-6 text-center text-xs text-slate-500">

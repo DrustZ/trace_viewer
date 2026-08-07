@@ -33,19 +33,31 @@ export function useAceRuns() {
   })
 }
 
-export function aceDashboardPath(runIds?: readonly string[]): string {
-  const normalized = [...new Set(runIds ?? [])].sort()
-  if (normalized.length === 0) return '/api/ace/dashboard'
-  const search = new URLSearchParams()
-  for (const runId of normalized) search.append('runId', runId)
-  return `/api/ace/dashboard?${search.toString()}`
+export interface AceDashboardPage {
+  triageOffset?: number
+  triageLimit?: number
 }
 
-export function useAceDashboard(runIds?: readonly string[]) {
+export function aceDashboardPath(runIds?: readonly string[], page: AceDashboardPage = {}): string {
   const normalized = [...new Set(runIds ?? [])].sort()
+  const search = new URLSearchParams()
+  for (const runId of normalized) search.append('runId', runId)
+  const triageOffset = Math.max(0, Math.trunc(page.triageOffset ?? 0))
+  const triageLimit = Math.max(1, Math.min(250, Math.trunc(page.triageLimit ?? 250)))
+  if (triageOffset > 0) search.set('triageOffset', String(triageOffset))
+  if (triageLimit !== 250) search.set('triageLimit', String(triageLimit))
+  const query = search.toString()
+  return query ? `/api/ace/dashboard?${query}` : '/api/ace/dashboard'
+}
+
+export function useAceDashboard(runIds?: readonly string[], page: AceDashboardPage = {}) {
+  const normalized = [...new Set(runIds ?? [])].sort()
+  const triageOffset = Math.max(0, Math.trunc(page.triageOffset ?? 0))
+  const triageLimit = Math.max(1, Math.min(250, Math.trunc(page.triageLimit ?? 250)))
   return useQuery({
-    queryKey: ['ace-dashboard', normalized],
-    queryFn: () => apiGet<AceDashboardSummary>(aceDashboardPath(normalized)),
+    queryKey: ['ace-dashboard', normalized, triageOffset, triageLimit],
+    queryFn: () =>
+      apiGet<AceDashboardSummary>(aceDashboardPath(normalized, { triageOffset, triageLimit })),
   })
 }
 
@@ -126,7 +138,7 @@ export function useAceCheckpoints(traceUid: string | undefined) {
 export function useAceReplay() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (request: AceReplayRequest & { forkMessageId?: string }) =>
+    mutationFn: (request: AceReplayRequest) =>
       apiPost<Record<string, unknown>>('/api/ace/replays', request),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['ace-runs'] })
