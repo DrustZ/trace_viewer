@@ -32,6 +32,7 @@ import {
   type PlaygroundRunConfig,
   quickRunSelection,
   resolveScenarioPack,
+  runtimeErrorSummary,
   shouldAutorun,
 } from '../components/ace/playgroundRun'
 import { ErrorState, LoadingState } from '../components/common/EmptyState'
@@ -335,6 +336,9 @@ function EpisodeSession({
   const stopDecision = run.data
     ? aceRunControlDecision(run.data, 'cancel', control.isPending)
     : { allowed: false, reason: 'Waiting for the run manifest before Stop is possible.' }
+  // The actual runner/provider message for a runtime error — nobody should
+  // have to open batch.json to learn why an episode died.
+  const runtimeError = runtimeErrorSummary(run.data?.lifecycleError, episode.data)
 
   return (
     <div className="space-y-3" data-testid="playground-session">
@@ -364,6 +368,14 @@ function EpisodeSession({
           </button>
         )}
       </div>
+      {runtimeError && (
+        <p
+          className="whitespace-pre-wrap break-words rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+          data-testid="playground-runtime-error"
+        >
+          {runtimeError}
+        </p>
+      )}
       {episode.data ? (
         <>
           <EpisodeConversation trace={episode.data} />
@@ -727,6 +739,24 @@ function PlaygroundWorkbench({
                 <option value="high">High</option>
                 <option value="xhigh">XHigh</option>
               </select>
+            </label>
+            <label className="block text-xs text-slate-600">
+              Transport
+              <select
+                className={INPUT}
+                data-testid="playground-transport"
+                value={config.transport}
+                onChange={(event) =>
+                  setField('transport', event.target.value as PlaygroundRunConfig['transport'])
+                }
+              >
+                <option value="responses">Responses (canonical)</option>
+                <option value="chat">Chat completions</option>
+              </select>
+              <span className="mt-0.5 block text-[10px] text-slate-400">
+                All formal batches run Responses. Chat supports function tools only with reasoning
+                effort none.
+              </span>
             </label>
 
             <label className="block text-xs text-slate-600">

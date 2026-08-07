@@ -11,6 +11,7 @@ import {
   type PlaygroundRunConfig,
   quickRunSelection,
   resolveScenarioPack,
+  runtimeErrorSummary,
   shouldAutorun,
 } from './playgroundRun'
 
@@ -31,6 +32,9 @@ describe('buildPlaygroundRunRequest', () => {
         seeds: [1],
         runKind: 'debug',
         prompt: 'optimized',
+        // Canonical batches all run responses; the chat endpoint rejects
+        // function tools whenever reasoning is not 'none'.
+        transport: 'responses',
         bot: 'playbook',
         model: 'gpt-5-mini',
         temperature: 0.4,
@@ -38,6 +42,25 @@ describe('buildPlaygroundRunRequest', () => {
         costCapUsd: 2,
         checkpoints: true,
       },
+    })
+  })
+
+  it("rejects chat transport with any reasoning effort other than 'none' before submit", () => {
+    // Explicit non-none reasoning and the runner default ('' → low) both fail.
+    for (const reasoningEffort of ['low', 'minimal', ''] as const) {
+      expect(buildPlaygroundRunRequest(config({ transport: 'chat', reasoningEffort }))).toMatchObject({
+        ok: false,
+        error: expect.stringContaining("reasoning effort 'none'"),
+      })
+    }
+  })
+
+  it("allows the recorded chat + reasoning 'none' combination through unchanged", () => {
+    expect(
+      buildPlaygroundRunRequest(config({ transport: 'chat', reasoningEffort: 'none' })),
+    ).toMatchObject({
+      ok: true,
+      request: { transport: 'chat', reasoningEffort: 'none' },
     })
   })
 
@@ -244,6 +267,57 @@ describe('episodePollInterval (SSE fallback)', () => {
   })
 })
 
+describe('runtimeErrorSummary', () => {
+  const providerError =
+    "BadRequestError: Error code: 400 - {'error': {'message': \"Function tools with reasoning_effort are not supported…\"}}" +
+    '\nTraceback (most recent call last):\n  …'
+
+  it('surfaces the first line of the run manifest lifecycle error', () => {
+    expect(runtimeErrorSummary(providerError, undefined)).toBe(providerError.split('\n')[0])
+  })
+
+  it('falls back to the runtime failure evidence of a runtime_error episode', () => {
+    const trace = sourceTrace()
+    trace.evaluation = {
+      lifecycle: { state: 'failed' },
+      outcome: 'runtime_error',
+      checks: [],
+      metrics: {},
+      failures: [
+        {
+          origin: 'runtime',
+          code: 'runtime.failed',
+          severity: 'critical',
+          gating: false,
+          evidence: 'Episode runtime failed.',
+          source: 'ace.batch',
+        },
+      ],
+      flags: [],
+      worldDiff: [],
+      ledger: [],
+    }
+    expect(runtimeErrorSummary(undefined, trace)).toBe('Episode runtime failed.')
+  })
+
+  it('stays silent for healthy sessions', () => {
+    expect(runtimeErrorSummary(undefined, undefined)).toBeUndefined()
+    const passed = sourceTrace()
+    passed.evaluation = {
+      lifecycle: { state: 'completed' },
+      outcome: 'pass',
+      checks: [],
+      metrics: {},
+      failures: [],
+      flags: [],
+      worldDiff: [],
+      ledger: [],
+    }
+    expect(runtimeErrorSummary(undefined, passed)).toBeUndefined()
+    expect(runtimeErrorSummary('', passed)).toBeUndefined()
+  })
+})
+
 describe('isExistingRunConflict (idempotent retry attach)', () => {
   it('recognizes the runner duplicate-batch rejection and the bridge active-run conflict', () => {
     expect(
@@ -306,6 +380,21 @@ describe('initialPlaygroundConfig', () => {
       temperature: '0.3',
       reasoningEffort: 'low',
     })
+  })
+
+  it('replays a recorded chat_completions + none transport and defaults responses otherwise', () => {
+    const recorded = sourceTrace()
+    const spec = (recorded.meta.extra?.config_snapshot as { spec: Record<string, unknown> }).spec
+    spec.agent_transport = 'chat_completions'
+    spec.reasoning_effort = 'none'
+    expect(initialPlaygroundConfig({}, recorded)).toMatchObject({
+      transport: 'chat',
+      reasoningEffort: 'none',
+    })
+
+    // A trace without a recorded transport gets the canonical default.
+    expect(initialPlaygroundConfig({}, sourceTrace()).transport).toBe('responses')
+    expect(initialPlaygroundConfig({}).transport).toBe('responses')
   })
 
   it('never guesses a missing environment seed', () => {

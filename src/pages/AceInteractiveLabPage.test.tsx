@@ -282,6 +282,41 @@ describe('Playground page', () => {
     expect(html).not.toContain('>Quick run<')
   })
 
+  it('defaults transport to responses and keeps it editable in the config panel', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+    const select = html.match(/<select[^>]*data-testid="playground-transport"[\s\S]*?<\/select>/)
+    expect(select).not.toBeNull()
+    expect(select?.[0]).toMatch(/<option value="responses" selected/)
+    expect(html).toContain('Chat supports function tools only with reasoning')
+  })
+
+  it('surfaces the run lifecycle error headline in the session area', () => {
+    mocks.run.mockReturnValue({
+      data: {
+        ...childRun,
+        lifecycle: 'failed',
+        controlsAvailable: false,
+        lifecycleError:
+          'BadRequestError: Error code: 400 - Function tools with reasoning_effort are not supported…\nTraceback…',
+      },
+      isLoading: false,
+      isError: false,
+    })
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab?run=child-run&scenarioId=scenario-01']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+    expect(html).toContain('data-testid="playground-runtime-error"')
+    expect(html).toContain('Function tools with reasoning_effort are not supported…')
+    expect(html).not.toContain('Traceback…')
+  })
+
   it('disables and explains every control for a completed run', () => {
     mocks.run.mockReturnValue({
       data: { ...childRun, lifecycle: 'completed', controlsAvailable: false },

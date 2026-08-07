@@ -22,6 +22,13 @@ export interface PlaygroundRunConfig {
   promptPreset: string
   /** Non-empty custom prompt downgrades the run to counterfactual. */
   promptText: string
+  /**
+   * Agent transport. Every canonical batch runs `responses`; the chat
+   * completions endpoint rejects function tools whenever reasoning effort is
+   * anything but `none` (the runner default is `low`), so `chat` is only
+   * valid together with an explicit reasoning `none`.
+   */
+  transport: AceRunFormValues['transport']
   bot: AceRunFormValues['bot']
   model: string
   temperature: string
@@ -37,6 +44,7 @@ export const DEFAULT_PLAYGROUND_CONFIG: PlaygroundRunConfig = {
   seed: '1',
   promptPreset: 'optimized',
   promptText: '',
+  transport: 'responses',
   bot: '',
   model: '',
   temperature: '0',
@@ -68,6 +76,9 @@ export function initialPlaygroundConfig(
     ...(recordedSeed !== undefined ? { seed: String(recordedSeed) } : {}),
     ...(overrides.prompt ? { promptPreset: overrides.prompt } : {}),
     ...(overrides.promptText ? { promptText: overrides.promptText } : {}),
+    // A recorded transport is replayed as recorded (e.g. chat + reasoning
+    // none); a trace without one keeps the canonical responses default.
+    ...(overrides.transport ? { transport: overrides.transport } : {}),
     ...(overrides.bot ? { bot: overrides.bot } : {}),
     ...(overrides.model ? { model: overrides.model } : {}),
     ...(overrides.temperature ? { temperature: overrides.temperature } : {}),
@@ -192,6 +203,26 @@ export function isExistingRunConflict(error: unknown): boolean {
   return /already exists|already active/i.test(error.message)
 }
 
+/**
+ * The one line a user needs when an episode dies as `runtime error`: the run
+ * manifest's `lifecycle.error` head line (the actual provider/runner message —
+ * episode-level failures only carry a generic "Episode runtime failed.").
+ * Returns undefined for healthy sessions so the strip renders nothing.
+ */
+export function runtimeErrorSummary(
+  lifecycleError: string | undefined,
+  trace: Trace | undefined,
+): string | undefined {
+  const headline = lifecycleError?.split('\n')[0]?.trim()
+  if (headline) return headline
+  const evaluation = trace?.evaluation
+  if (evaluation?.outcome !== 'runtime_error') return undefined
+  const failure =
+    evaluation.failures.find((entry) => entry.origin === 'runtime') ?? evaluation.failures[0]
+  const evidence = typeof failure?.evidence === 'string' ? failure.evidence : undefined
+  return evidence ?? failure?.code ?? 'Episode runtime failed.'
+}
+
 /** True once an episode trace needs no further polling: terminal status, no pending grade. */
 export function episodeSettled(trace: Trace | undefined): boolean {
   if (!trace) return false
@@ -204,6 +235,19 @@ export function buildPlaygroundRunRequest(config: PlaygroundRunConfig): AceRunFo
   if (config.scenarioId.trim() === '') {
     return { ok: false, error: 'Pick a scenario before running an episode.' }
   }
+  // Provider contract, checked here so it fails at the button instead of as a
+  // runtime error 15 seconds into the episode: the chat completions endpoint
+  // rejects function tools with any reasoning effort other than 'none', and
+  // leaving reasoning on "runner default" means 'low'.
+  if (config.transport === 'chat' && config.reasoningEffort !== 'none') {
+    return {
+      ok: false,
+      error:
+        "Chat transport supports function tools only with reasoning effort 'none' " +
+        "(the runner default is 'low'). Switch transport to Responses, or set reasoning " +
+        "effort to 'none'.",
+    }
+  }
   const values: AceRunFormValues = {
     ...DEFAULT_ACE_RUN_FORM,
     scenarioFile: config.scenarioFile,
@@ -215,6 +259,7 @@ export function buildPlaygroundRunRequest(config: PlaygroundRunConfig): AceRunFo
     runKind: config.promptText.trim() ? 'counterfactual' : 'debug',
     prompt: config.promptPreset,
     promptText: config.promptText,
+    transport: config.transport,
     bot: config.bot,
     model: config.model,
     temperature: config.temperature,
