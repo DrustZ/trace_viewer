@@ -252,35 +252,125 @@ export function RunStatTiles({
   )
 }
 
-export function filterAceRunEpisodes(
+/**
+ * One row of the single episodes table: a scheduled episode joined with its
+ * durable trace, or a durable trace the manifest does not know about (orphan
+ * or manifest-less run).
+ */
+export interface AceRunRow {
+  episode?: AceBatchEpisode
+  trace?: AceRunTraceSummary
+}
+
+export type AceRunChipId = 'all' | 'in_progress' | 'failures' | 'invalid'
+
+export const RUN_CHIPS: Array<{ id: AceRunChipId; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'in_progress', label: 'In progress' },
+  { id: 'failures', label: 'Failures only' },
+  { id: 'invalid', label: 'Invalid' },
+]
+
+const ACTIVE_EPISODE_STATUSES = new Set(['queued', 'pending', 'running', 'paused', 'cancelling'])
+const PROBLEM_STATUSES = new Set(['failed', 'error', 'cancelled'])
+const PROBLEM_OUTCOMES = new Set(['fail', 'invalid', 'runtime_error'])
+
+/** Join the schedule with durable traces; append traces the schedule misses. */
+export function buildAceRunRows(
   episodes: readonly AceBatchEpisode[],
-  tracesByUid: ReadonlyMap<string, AceRunTraceSummary>,
-  options: { query: string; status: string; failuresOnly: boolean },
-): AceBatchEpisode[] {
+  traces: readonly AceRunTraceSummary[],
+): AceRunRow[] {
+  const byUid = new Map(traces.map((trace) => [trace.traceUid, trace]))
+  const joined = new Set<string>()
+  const rows: AceRunRow[] = episodes.map((episode) => {
+    const trace = episode.traceUid ? byUid.get(episode.traceUid) : undefined
+    if (trace) joined.add(trace.traceUid)
+    return { episode, trace }
+  })
+  for (const trace of traces) {
+    if (!joined.has(trace.traceUid)) rows.push({ trace })
+  }
+  return rows
+}
+
+export function aceRunRowStatus(row: AceRunRow): string {
+  return row.episode?.status ?? row.trace?.status ?? ''
+}
+
+export function aceRunRowOutcome(row: AceRunRow): string {
+  return row.trace?.outcome ?? row.episode?.outcome ?? 'ungraded'
+}
+
+/** The former "Problems only" predicate, now also covering trace-only rows. */
+export function aceRunRowHasProblem(row: AceRunRow): boolean {
+  const { episode, trace } = row
+  return (
+    (episode !== undefined &&
+      (PROBLEM_OUTCOMES.has(episode.outcome) || episode.failedChecks.length > 0)) ||
+    (trace !== undefined &&
+      (PROBLEM_OUTCOMES.has(trace.outcome) ||
+        trace.failureCount > 0 ||
+        trace.judgeDisagreement === true)) ||
+    PROBLEM_STATUSES.has(aceRunRowStatus(row))
+  )
+}
+
+export function aceRunRowMatchesChip(row: AceRunRow, chip: AceRunChipId): boolean {
+  switch (chip) {
+    case 'all':
+      return true
+    case 'in_progress':
+      return ACTIVE_EPISODE_STATUSES.has(aceRunRowStatus(row))
+    case 'failures':
+      return aceRunRowHasProblem(row)
+    case 'invalid':
+      return (
+        row.episode?.outcome === 'invalid' ||
+        row.episode?.invalidUserSim === true ||
+        row.trace?.outcome === 'invalid'
+      )
+  }
+}
+
+/**
+ * The merged diagnosis cell: root-cause signals (failed checks + trace failure
+ * codes + judge disagreement) plus the secondary details the removed
+ * durable-trace/failure-triage tables carried (flags, termination, turns/tools).
+ */
+export function aceRunRowDiagnosis(row: AceRunRow): { signals: string[]; details: string[] } {
+  const { episode, trace } = row
+  const signals = [
+    ...(episode?.failedChecks ?? []),
+    ...(trace?.failureCodes ?? []),
+    ...(trace?.judgeDisagreement ? ['judge disagreement'] : []),
+  ].filter((value, index, all) => all.indexOf(value) === index)
+  const details: string[] = []
+  if (episode && (episode.flagsMajor > 0 || episode.flagsMinor > 0)) {
+    details.push(`flags ${episode.flagsMajor}M/${episode.flagsMinor}m`)
+  }
+  if (episode?.termination) details.push(`termination ${episode.termination}`)
+  if (trace) details.push(`turns ${trace.turns} · tools ${trace.toolUses}`)
+  return { signals, details }
+}
+
+export function filterAceRunRows(
+  rows: readonly AceRunRow[],
+  options: { chip: AceRunChipId; query: string; status: string },
+): AceRunRow[] {
   const query = options.query.trim().toLowerCase()
-  return episodes.filter((episode) => {
-    const trace = episode.traceUid ? tracesByUid.get(episode.traceUid) : undefined
-    if (options.status && episode.status !== options.status) return false
-    if (
-      options.failuresOnly &&
-      episode.outcome !== 'fail' &&
-      episode.outcome !== 'invalid' &&
-      episode.outcome !== 'runtime_error' &&
-      episode.failedChecks.length === 0 &&
-      !['failed', 'error', 'cancelled'].includes(episode.status) &&
-      (trace?.failureCount ?? 0) === 0 &&
-      trace?.judgeDisagreement !== true
-    ) {
-      return false
-    }
+  return rows.filter((row) => {
+    if (!aceRunRowMatchesChip(row, options.chip)) return false
+    if (options.status && aceRunRowStatus(row) !== options.status) return false
     if (!query) return true
+    const { episode, trace } = row
     return [
-      episode.scenarioId,
-      episode.sourceTraceId,
-      String(episode.seed),
-      episode.status,
-      episode.outcome,
-      ...episode.failedChecks,
+      episode?.scenarioId ?? trace?.scenarioId ?? '',
+      episode?.sourceTraceId ?? trace?.sourceTraceId ?? '',
+      episode ? String(episode.seed) : '',
+      aceRunRowStatus(row),
+      aceRunRowOutcome(row),
+      episode?.termination ?? '',
+      ...(episode?.failedChecks ?? []),
       ...(trace?.failureCodes ?? []),
       ...(trace?.failureOrigins ?? []),
     ].some((value) => value.toLowerCase().includes(query))
@@ -297,65 +387,43 @@ export default function AceRunsPage() {
   const control = useControlAceRun(selected ?? '')
   const episodes = run.data?.episodes ?? []
   const runTraces = run.data?.traces ?? []
-  const tracesByUid = useMemo(
-    () => new Map(runTraces.map((trace) => [trace.traceUid, trace])),
-    [runTraces],
-  )
   const [episodeQuery, setEpisodeQuery] = useState('')
   const [episodeStatus, setEpisodeStatus] = useState('')
-  const [failuresOnly, setFailuresOnly] = useState(false)
+  const [chip, setChip] = useState<AceRunChipId>('all')
   const [episodePage, setEpisodePage] = useState(0)
   // Deep links from the task explorer carry scenario params: open the launcher
   // pre-filled instead of burying the intent behind the New run button.
   const [launcherOpen, setLauncherOpen] = useState(
     () => Boolean(initialScenarioFile) || Boolean(initialScenarioId),
   )
+  const rows = useMemo(() => buildAceRunRows(episodes, runTraces), [episodes, runTraces])
   const episodeStatuses = useMemo(
-    () => [...new Set(episodes.map((episode) => episode.status))].sort(),
-    [episodes],
+    () => [...new Set(rows.map(aceRunRowStatus))].filter(Boolean).sort(),
+    [rows],
   )
-  const filteredEpisodes = useMemo(
+  const chipCounts = useMemo(
     () =>
-      filterAceRunEpisodes(episodes, tracesByUid, {
-        query: episodeQuery,
-        status: episodeStatus,
-        failuresOnly,
-      }),
-    [episodes, tracesByUid, episodeQuery, episodeStatus, failuresOnly],
+      Object.fromEntries(
+        RUN_CHIPS.map((entry) => [
+          entry.id,
+          rows.filter((row) => aceRunRowMatchesChip(row, entry.id)).length,
+        ]),
+      ) as Record<AceRunChipId, number>,
+    [rows],
   )
-  const pageCount = Math.max(1, Math.ceil(filteredEpisodes.length / EPISODE_PAGE_SIZE))
+  const filteredRows = useMemo(
+    () => filterAceRunRows(rows, { chip, query: episodeQuery, status: episodeStatus }),
+    [rows, chip, episodeQuery, episodeStatus],
+  )
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / EPISODE_PAGE_SIZE))
   const currentEpisodePage = Math.min(episodePage, pageCount - 1)
-  const visibleEpisodes = filteredEpisodes.slice(
+  const visibleRows = filteredRows.slice(
     currentEpisodePage * EPISODE_PAGE_SIZE,
     (currentEpisodePage + 1) * EPISODE_PAGE_SIZE,
   )
-  const activeEpisodes = useMemo(
-    () =>
-      episodes.filter(
-        (row) =>
-          !TERMINAL_EPISODE_STATUSES.has(row.status) &&
-          ['queued', 'pending', 'running', 'paused', 'cancelling'].includes(row.status),
-      ),
-    [episodes],
-  )
   const terminalEpisodeCount = useMemo(
-    () => episodes.filter((row) => TERMINAL_EPISODE_STATUSES.has(row.status)).length,
-    [episodes],
-  )
-  const failures = useMemo(
-    () =>
-      episodes.filter((row) => {
-        const trace = row.traceUid ? tracesByUid.get(row.traceUid) : undefined
-        return (
-          row.outcome === 'fail' ||
-          row.outcome === 'invalid' ||
-          row.outcome === 'runtime_error' ||
-          ['failed', 'error', 'cancelled'].includes(row.status) ||
-          (trace?.failureCount ?? 0) > 0 ||
-          trace?.judgeDisagreement === true
-        )
-      }),
-    [episodes, tracesByUid],
+    () => rows.filter((row) => TERMINAL_EPISODE_STATUSES.has(aceRunRowStatus(row))).length,
+    [rows],
   )
   const heartbeat = run.data
     ? aceRunHeartbeat(run.data.updatedAt, run.data.lifecycle)
@@ -534,77 +602,38 @@ export default function AceRunsPage() {
                 </div>
               )}
             </section>
-            {activeEpisodes.length > 0 && (
-              <section className="overflow-hidden rounded-lg border border-blue-200 bg-white">
-                <div className="flex items-center border-b border-blue-100 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-900">
-                  Current activity · {activeEpisodes.length}
-                  <span className="ml-auto text-[11px] font-normal text-blue-600">
-                    Message-level durable progress
-                  </span>
-                </div>
-                <div className="max-h-52 overflow-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-slate-50 text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2">Scenario</th>
-                        <th>Seed</th>
-                        <th>Status</th>
-                        <th>Pending phase</th>
-                        <th>Messages</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeEpisodes.map((row) => (
-                        <tr
-                          key={row.pairKey ?? row.sourceTraceId}
-                          className="border-t border-slate-100"
-                        >
-                          <td className="px-3 py-2 font-mono">
-                            {row.traceUid ? (
-                              <Link
-                                className="text-blue-600 hover:underline"
-                                to={`/trace/${encodeURIComponent(row.traceUid)}`}
-                              >
-                                {row.scenarioId}
-                              </Link>
-                            ) : (
-                              row.scenarioId
-                            )}
-                          </td>
-                          <td>{row.seed}</td>
-                          <td>{row.status}</td>
-                          <td>
-                            {row.phase ?? 'queued'}
-                            {row.toolName ? ` · ${row.toolName}` : ''}
-                          </td>
-                          <td>{row.messageCount ?? 0}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
             <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-sm font-medium">
-                    All scheduled episodes · {filteredEpisodes.length}/{episodes.length}
+                    Episodes · {filteredRows.length}/{rows.length}
                   </h2>
                   <span className="text-[11px] font-normal text-slate-400">
                     {terminalEpisodeCount} terminal · message-complete updates arrive over SSE
                   </span>
-                  <label className="ml-auto flex items-center gap-1 text-xs text-slate-600">
-                    <input
-                      type="checkbox"
-                      checked={failuresOnly}
-                      onChange={(event) => {
-                        setEpisodePage(0)
-                        setFailuresOnly(event.target.checked)
-                      }}
-                    />
-                    Problems only
-                  </label>
+                  <fieldset
+                    className="ml-auto flex flex-wrap gap-1"
+                    aria-label="Episode filters"
+                  >
+                    {RUN_CHIPS.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        aria-pressed={chip === entry.id}
+                        onClick={() => {
+                          setEpisodePage(0)
+                          setChip(entry.id)
+                        }}
+                        className={`rounded-full border px-2.5 py-1 text-xs ${
+                          chip === entry.id
+                            ? 'border-blue-600 bg-blue-600 text-white'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {entry.label} · {chipCounts[entry.id]}
+                      </button>
+                    ))}
+                  </fieldset>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <input
@@ -632,15 +661,15 @@ export default function AceRunsPage() {
                   </select>
                 </div>
               </div>
-              {episodes.length === 0 ? (
+              {rows.length === 0 ? (
                 <p className="px-4 py-6 text-center text-xs text-slate-500">
                   {run.data.manifestAvailable === false
-                    ? 'No manifest schedule is available; use the durable trace list below.'
+                    ? 'Waiting for the first durable trace message…'
                     : 'Waiting for the first scheduled episode state…'}
                 </p>
-              ) : filteredEpisodes.length === 0 ? (
+              ) : filteredRows.length === 0 ? (
                 <p className="px-4 py-6 text-center text-xs text-slate-500">
-                  No scheduled episodes match these local filters.
+                  No episodes match these local filters.
                 </p>
               ) : (
                 <div className="max-h-[36rem] overflow-auto">
@@ -657,53 +686,63 @@ export default function AceRunsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleEpisodes.map((episode) => {
-                        const trace = episode.traceUid
-                          ? tracesByUid.get(episode.traceUid)
-                          : undefined
+                      {visibleRows.map((row) => {
+                        const { episode, trace } = row
+                        const traceUid = episode?.traceUid ?? trace?.traceUid
+                        const sourceTraceId = episode?.sourceTraceId ?? trace?.sourceTraceId
+                        const status = aceRunRowStatus(row)
+                        const { signals, details } = aceRunRowDiagnosis(row)
                         return (
                           <tr
                             key={
-                              episode.pairKey ??
-                              `${episode.scenarioId}:${episode.environmentSeed}:${episode.sourceTraceId}`
+                              episode
+                                ? (episode.pairKey ??
+                                  `${episode.scenarioId}:${episode.environmentSeed}:${episode.sourceTraceId}`)
+                                : `trace:${trace?.traceUid}`
                             }
                             className="border-t border-slate-100 align-top"
                           >
                             <td className="px-3 py-2">
-                              <div className="font-mono text-slate-700">{episode.scenarioId}</div>
-                              {episode.traceUid ? (
+                              <div className="font-mono text-slate-700">
+                                {episode?.scenarioId ?? trace?.scenarioId ?? '—'}
+                                {episode ? null : (
+                                  <span className="ml-1 rounded bg-amber-50 px-1 py-0.5 text-[9px] font-medium uppercase text-amber-700">
+                                    not in schedule
+                                  </span>
+                                )}
+                              </div>
+                              {traceUid ? (
                                 <Link
                                   className="font-mono text-[10px] text-blue-600 hover:underline"
-                                  to={`/trace/${encodeURIComponent(episode.traceUid)}`}
+                                  to={`/trace/${encodeURIComponent(traceUid)}?tab=evaluation`}
                                 >
-                                  {episode.sourceTraceId}
+                                  {sourceTraceId}
                                 </Link>
                               ) : (
                                 <span className="font-mono text-[10px] text-slate-400">
-                                  {TERMINAL_EPISODE_STATUSES.has(episode.status)
-                                    ? `${episode.sourceTraceId} · trace missing`
+                                  {TERMINAL_EPISODE_STATUSES.has(status)
+                                    ? `${sourceTraceId} · trace missing`
                                     : 'trace not emitted yet'}
                                 </span>
                               )}
                             </td>
-                            <td>{episode.seed}</td>
-                            <td>{episode.status}</td>
+                            <td>{episode ? episode.seed : '—'}</td>
+                            <td>{status}</td>
                             <td>
-                              {episode.phase ?? trace?.phase ?? '—'}
-                              {episode.toolName ? ` · ${episode.toolName}` : ''}
+                              {episode?.phase ?? trace?.phase ?? '—'}
+                              {episode?.toolName ? ` · ${episode.toolName}` : ''}
                             </td>
                             <td>
-                              <Outcome value={trace?.outcome ?? episode.outcome} />
+                              <Outcome value={aceRunRowOutcome(row)} />
                             </td>
-                            <td>{trace?.messageCount ?? episode.messageCount ?? 0}</td>
-                            <td className="max-w-sm text-red-700">
-                              {[
-                                ...episode.failedChecks,
-                                ...(trace?.failureCodes ?? []),
-                                ...(trace?.judgeDisagreement ? ['judge disagreement'] : []),
-                              ]
-                                .filter((value, index, all) => all.indexOf(value) === index)
-                                .join(', ') || '—'}
+                            <td>{trace?.messageCount ?? episode?.messageCount ?? 0}</td>
+                            <td className="max-w-sm">
+                              <span className="text-red-700">{signals.join(', ') || '—'}</span>
+                              {details.length > 0 ? (
+                                <div className="text-[10px] text-slate-400">
+                                  {details.join(' · ')}
+                                </div>
+                              ) : null}
                             </td>
                           </tr>
                         )
@@ -712,7 +751,7 @@ export default function AceRunsPage() {
                   </table>
                 </div>
               )}
-              {filteredEpisodes.length > EPISODE_PAGE_SIZE && (
+              {filteredRows.length > EPISODE_PAGE_SIZE && (
                 <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-3 py-2 text-xs">
                   <button
                     type="button"
@@ -735,116 +774,6 @@ export default function AceRunsPage() {
                   </button>
                 </div>
               )}
-            </section>
-            <details open className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-              <summary className="cursor-pointer border-b border-slate-200 px-4 py-2 text-sm font-medium">
-                Every durable trace · {runTraces.length} (uncapped exact-run API)
-              </summary>
-              {runTraces.length === 0 ? (
-                <p className="px-4 py-6 text-center text-xs text-slate-500">
-                  Waiting for the first durable trace message…
-                </p>
-              ) : (
-                <div className="max-h-80 overflow-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-slate-50 text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2">Trace</th>
-                        <th>Task</th>
-                        <th>Status / outcome</th>
-                        <th>Messages</th>
-                        <th>Turns / tools</th>
-                        <th>Root-cause signals</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {runTraces.map((trace) => (
-                        <tr key={trace.traceUid} className="border-t border-slate-100 align-top">
-                          <td className="px-3 py-2 font-mono">
-                            <Link
-                              className="text-blue-600 hover:underline"
-                              to={`/trace/${encodeURIComponent(trace.traceUid)}?tab=evaluation`}
-                            >
-                              {trace.sourceTraceId}
-                            </Link>
-                          </td>
-                          <td className="font-mono">{trace.scenarioId}</td>
-                          <td>
-                            {trace.status} · <Outcome value={trace.outcome} />
-                          </td>
-                          <td>{trace.messageCount}</td>
-                          <td>
-                            {trace.turns} / {trace.toolUses}
-                          </td>
-                          <td className="max-w-sm text-red-700">
-                            {trace.failureCodes.join(', ') ||
-                              (trace.judgeDisagreement ? 'judge disagreement' : '—')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </details>
-            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-              <div className="border-b border-slate-200 px-4 py-2 text-sm font-medium">
-                Failure triage · {failures.length}
-              </div>
-              <div className="max-h-[65vh] overflow-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-slate-50 text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2">Scenario</th>
-                      <th>Seed</th>
-                      <th>Outcome</th>
-                      <th>Diagnosis</th>
-                      <th>Flags</th>
-                      <th>Termination</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {failures.map((row) => {
-                      const trace = row.traceUid ? tracesByUid.get(row.traceUid) : undefined
-                      const diagnosis = [
-                        ...row.failedChecks,
-                        ...(trace?.failureCodes ?? []),
-                        ...(trace?.judgeDisagreement ? ['judge disagreement'] : []),
-                      ].filter((value, index, all) => all.indexOf(value) === index)
-                      return (
-                        <tr
-                          key={row.pairKey ?? row.sourceTraceId}
-                          className="border-t border-slate-100"
-                        >
-                          <td className="px-3 py-2 font-mono">
-                            {row.traceUid ? (
-                              <Link
-                                className="text-blue-600 hover:underline"
-                                to={`/trace/${encodeURIComponent(row.traceUid)}?tab=evaluation`}
-                              >
-                                {row.scenarioId}
-                              </Link>
-                            ) : (
-                              row.scenarioId
-                            )}
-                          </td>
-                          <td>{row.seed}</td>
-                          <td>
-                            <Outcome value={trace?.outcome ?? row.outcome} />
-                          </td>
-                          <td className="max-w-sm text-red-700">
-                            {diagnosis.join(', ') || row.status}
-                          </td>
-                          <td>
-                            {row.flagsMajor}M/{row.flagsMinor}m
-                          </td>
-                          <td>{row.termination ?? '—'}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
             </section>
           </>
         )}

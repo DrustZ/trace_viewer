@@ -6,8 +6,11 @@ import {
   aceRunControlDisabled,
   aceRunHeartbeat,
   aceRunProgress,
+  aceRunRowDiagnosis,
+  aceRunRowMatchesChip,
+  buildAceRunRows,
   collectRunIssues,
-  filterAceRunEpisodes,
+  filterAceRunRows,
   RunStatTiles,
 } from './AceRunsPage'
 
@@ -191,56 +194,106 @@ describe('ACE run diagnostics helpers', () => {
       ]),
     ).toEqual({ terminal: 8, inProgress: 37, stateNotRepresented: 35 })
   })
+})
 
-  it('filters the complete schedule by status and trace-level root-cause signals', () => {
-    const rows = [
-      episode(),
-      episode({
-        scenarioId: 'scenario-b',
-        sourceTraceId: 'scenario-b-s2',
-        traceUid: 'trace-b',
-        seed: 2,
-        status: 'failed',
-        outcome: 'runtime_error',
-        pairKey: 'schedule:scenario-b:2',
-      }),
-    ]
-    const traces = new Map([
-      ['trace-a', trace()],
-      [
-        'trace-b',
-        trace({
-          traceUid: 'trace-b',
-          sourceTraceId: 'scenario-b-s2',
-          scenarioId: 'scenario-b',
-          status: 'failed',
-          outcome: 'runtime_error',
-          majorFailureCount: 1,
-          failureCodes: ['runtime.provider_timeout'],
-          failureOrigins: ['runtime'],
-        }),
-      ],
+describe('unified episodes table', () => {
+  const scheduled = [
+    episode(),
+    episode({
+      scenarioId: 'scenario-b',
+      sourceTraceId: 'scenario-b-s2',
+      traceUid: 'trace-b',
+      seed: 2,
+      status: 'failed',
+      outcome: 'runtime_error',
+      pairKey: 'schedule:scenario-b:2',
+    }),
+    episode({
+      scenarioId: 'scenario-c',
+      sourceTraceId: 'scenario-c-s3',
+      traceUid: undefined,
+      seed: 3,
+      status: 'running',
+      outcome: 'ungraded',
+      pairKey: 'schedule:scenario-c:3',
+    }),
+    episode({
+      scenarioId: 'scenario-d',
+      sourceTraceId: 'scenario-d-s4',
+      traceUid: undefined,
+      seed: 4,
+      status: 'completed',
+      outcome: 'invalid',
+      invalidUserSim: true,
+      pairKey: 'schedule:scenario-d:4',
+    }),
+  ]
+  const durable = [
+    trace(),
+    trace({
+      traceUid: 'trace-b',
+      sourceTraceId: 'scenario-b-s2',
+      scenarioId: 'scenario-b',
+      status: 'failed',
+      outcome: 'runtime_error',
+      majorFailureCount: 1,
+      failureCodes: ['runtime.provider_timeout'],
+      failureOrigins: ['runtime'],
+    }),
+    trace({
+      traceUid: 'trace-orphan',
+      sourceTraceId: 'scenario-x-s9',
+      scenarioId: 'scenario-x',
+      outcome: 'fail',
+      failureCount: 2,
+      failureCodes: ['agent.wrong_tool'],
+    }),
+  ]
+  const rows = buildAceRunRows(scheduled, durable)
+
+  it('joins the schedule with durable traces and appends orphan traces', () => {
+    expect(rows).toHaveLength(5)
+    expect(rows[0]).toEqual({ episode: scheduled[0], trace: durable[0] })
+    expect(rows[1]).toEqual({ episode: scheduled[1], trace: durable[1] })
+    expect(rows[2]).toEqual({ episode: scheduled[2], trace: undefined })
+    expect(rows[4]).toEqual({ trace: durable[2] })
+  })
+
+  it('implements the four chips: All | In progress | Failures only | Invalid', () => {
+    const names = (chip: 'all' | 'in_progress' | 'failures' | 'invalid') =>
+      filterAceRunRows(rows, { chip, query: '', status: '' }).map(
+        (row) => row.episode?.scenarioId ?? row.trace?.scenarioId,
+      )
+    expect(names('all')).toEqual([
+      'scenario-a',
+      'scenario-b',
+      'scenario-c',
+      'scenario-d',
+      'scenario-x',
     ])
+    expect(names('in_progress')).toEqual(['scenario-c'])
+    expect(names('failures')).toEqual(['scenario-b', 'scenario-d', 'scenario-x'])
+    expect(names('invalid')).toEqual(['scenario-d'])
+  })
 
+  it('keeps the search + status pipeline on top of the chips', () => {
     expect(
-      filterAceRunEpisodes(rows, traces, { query: '', status: '', failuresOnly: true }).map(
-        (row) => row.scenarioId,
+      filterAceRunRows(rows, { chip: 'all', query: 'provider_timeout', status: 'failed' }).map(
+        (row) => row.episode?.scenarioId,
       ),
     ).toEqual(['scenario-b'])
     expect(
-      filterAceRunEpisodes(rows, traces, {
-        query: 'provider_timeout',
-        status: 'failed',
-        failuresOnly: false,
-      }).map((row) => row.scenarioId),
-    ).toEqual(['scenario-b'])
+      filterAceRunRows(rows, { chip: 'failures', query: 'wrong_tool', status: '' }).map(
+        (row) => row.trace?.scenarioId,
+      ),
+    ).toEqual(['scenario-x'])
+    expect(filterAceRunRows(rows, { chip: 'failures', query: 'nope', status: '' })).toEqual([])
   })
 
-  it('keeps an otherwise passing episode in problems-only triage when diagnostics disagree', () => {
-    const row = episode()
-    const traces = new Map([
+  it('keeps an otherwise passing episode in Failures only when diagnostics disagree', () => {
+    const disagreeing = buildAceRunRows(
+      [episode()],
       [
-        'trace-a',
         trace({
           failureCount: 1,
           failureCodes: ['agent.cot_leak'],
@@ -248,17 +301,35 @@ describe('ACE run diagnostics helpers', () => {
           judgeDisagreement: true,
         }),
       ],
-    ])
+    )
+    expect(aceRunRowMatchesChip(disagreeing[0], 'failures')).toBe(true)
+    expect(filterAceRunRows(disagreeing, { chip: 'all', query: 'detector', status: '' })).toEqual(
+      disagreeing,
+    )
+  })
 
-    expect(
-      filterAceRunEpisodes([row], traces, { query: '', status: '', failuresOnly: true }),
-    ).toEqual([row])
-    expect(
-      filterAceRunEpisodes([row], traces, {
-        query: 'detector',
-        status: '',
-        failuresOnly: false,
-      }),
-    ).toEqual([row])
+  it('merges triage-only details (flags, termination, turns/tools) into the diagnosis', () => {
+    const row = buildAceRunRows(
+      [
+        episode({
+          failedChecks: ['refund_contract'],
+          flagsMajor: 1,
+          flagsMinor: 2,
+          termination: 'user_stop',
+        }),
+      ],
+      [
+        trace({
+          failureCodes: ['refund_contract', 'agent.cot_leak'],
+          judgeDisagreement: true,
+          turns: 4,
+          toolUses: 7,
+        }),
+      ],
+    )[0]
+    expect(aceRunRowDiagnosis(row)).toEqual({
+      signals: ['refund_contract', 'agent.cot_leak', 'judge disagreement'],
+      details: ['flags 1M/2m', 'termination user_stop', 'turns 4 · tools 7'],
+    })
   })
 })
