@@ -4,6 +4,25 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 17 — 2026-08-07 13:05 — Playground 三提交审查（b5c84de..07b2ae5）
+
+### 审查结论：三个提交质量都很高，无需修改
+
+- **b5c84de SSE 假死修复** ✅ 根因定位准确（僵尸 EventSource / 同源连接占满，而非
+  scanner 或 watcher），1.5s 轮询兜底有界（仅 run 活跃期，durable trace 到手/终态即停，
+  SSE 仍是快路径），Playwright 阻断 /api/events 实测验证。
+- **0763194 Quick run** ✅ 单一主 CTA 设计合理，`quickRunSelection` 纯函数带测试。
+- **07b2ae5 autorun=1 深链** ✅ 花钱路径审查通过：`shouldAutorun` 纯函数（配置不全不跑、
+  已有 run 不跑、桥不可用不跑）+ 三层防重复（StrictMode-safe guard ref、消费即清 URL 参数、
+  onRunSelected 兜底）+ runEpisode 原有 in-flight/batchId 幂等仍在 + Playwright 实测单次
+  POST。这是本仓库花钱路径防护的最佳实践样例。
+
+### 小提醒
+
+- 仓库根的 `.autorun_repro.mjs` / `.quickrun_repro.mjs` / `.sse_repro.mjs` 草稿脚本
+  记得删除或加 .gitignore，避免被下次快照提交扫入。
+- 925 tests + tsc 全绿（Round 16 时 900 → +25）。
+
 ## Round 16 — 2026-08-07 12:15 — 遗留 minor 清扫 + 第二个 flaky 定位
 
 - 核验早期 minor：app.ts 错误中间件 4xx-5xx 透传 ✅ 已修；`publicBridgeResult` 递归
