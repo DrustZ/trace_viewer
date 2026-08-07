@@ -1,24 +1,33 @@
 import {
   emptyReviewPayload,
-  FAILURE_DECISIONS,
   type FailureDecision,
-  REVIEW_PRIORITIES,
-  REVIEW_VERDICTS,
-  type ReviewGroundTruth,
   type ReviewPayload,
   type ReviewRecord,
   type ReviewSubject,
   type ReviewWorkspaceResponse,
-  RUBRIC_VERDICTS,
   reviewSubjectKey,
+  type TurnAnnotation,
 } from '@shared/reviews/types'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReviewWorkspace, useSaveReviewDraft, useSubmitReview } from '../../api/reviews'
+import { ReviewAutomaticSection } from './ReviewAutomaticSection'
+import { ReviewFailureSection } from './ReviewFailureSection'
+import { ReviewFastPath } from './ReviewFastPath'
+import { groundTruthPresentation, ReviewGroundTruthSection } from './ReviewGroundTruthSection'
+import { ReviewRubricSection } from './ReviewRubricSection'
+import { ReviewShortcutsHelp } from './ReviewShortcutsHelp'
+import { ReviewStatusSection } from './ReviewStatusSection'
+import { ReviewTranscriptSection } from './ReviewTranscriptSection'
+import { ReviewTurnAnnotationsSection } from './ReviewTurnAnnotationsSection'
 import {
-  applyReviewClassificationShortcut,
-  reviewShortcutFor,
-  visibleReviewShortcutLabels,
-} from './shortcuts'
+  evidenceDimensionsByMessage,
+  finalizeReviewPayload,
+  toggleEvidenceMessageId,
+} from './reviewPayloadOps'
+import { applyReviewClassificationShortcut, reviewShortcutFor } from './shortcuts'
+
+// Re-exported so existing imports/tests keep working after the panel split.
+export { type GroundTruthPresentation, groundTruthPresentation } from './ReviewGroundTruthSection'
 
 export interface ReviewPanelProps {
   subject: ReviewSubject
@@ -26,9 +35,12 @@ export interface ReviewPanelProps {
   autosaveDelayMs?: number
   onSubmitted?: (record: ReviewRecord) => void
   onNext?: (persistCurrent: ReviewNavigationGuard) => void | Promise<void>
+  onPrev?: (persistCurrent: ReviewNavigationGuard) => void | Promise<void>
   onNavigationGuardChange?: (guard: ReviewNavigationGuard | null) => void
   /** Keep hook/form state alive while hiding all review evidence during a pending URL transition. */
   suspended?: boolean
+  /** Historical root-cause tags (e.g. aggregated from the loaded queue) for completion. */
+  rootCauseTagSuggestions?: readonly string[]
 }
 
 export type ReviewNavigationGuard = () => Promise<boolean>
@@ -64,66 +76,34 @@ function payloadOf(workspace: ReviewWorkspaceResponse): ReviewPayload {
   return payload
 }
 
-function csv(value: string): string[] {
-  return [
-    ...new Set(
-      value
-        .split(',')
-        .map((part) => part.trim())
-        .filter(Boolean),
-    ),
-  ]
-}
-
 function errorMessage(value: unknown): string | null {
   return value instanceof Error ? value.message : value ? String(value) : null
 }
 
-export interface GroundTruthPresentation {
-  kind: 'trace_bound' | 'reference' | 'unavailable' | 'legacy'
+function DetailsSection({
+  title,
+  count,
+  children,
+  tone = 'default',
+}: {
   title: string
-  warning?: string
-}
-
-export function groundTruthPresentation(
-  value: ReviewGroundTruth | unknown,
-): GroundTruthPresentation {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return { kind: 'legacy', title: 'DB / policy ground truth' }
-  }
-  const candidate = value as Record<string, unknown>
-  if (
-    candidate.status === 'available' &&
-    candidate.authoritative === true &&
-    candidate.traceBound === true
-  ) {
-    return { kind: 'trace_bound', title: 'Trace-bound task ground truth' }
-  }
-  if (
-    candidate.status === 'reference' &&
-    candidate.authoritative === false &&
-    candidate.source === 'current_task_catalog'
-  ) {
-    return {
-      kind: 'reference',
-      title: 'Current task catalog reference (not trace-bound)',
-      warning:
-        'Informational only: the current checkout may differ from the task definition used for this historical trace.',
-    }
-  }
-  if (candidate.status === 'unavailable' && candidate.authoritative === false) {
-    return {
-      kind: 'unavailable',
-      title: 'Task ground truth unavailable',
-      warning:
-        'No matching trace-bound scenario snapshot exists. The current checkout is not substituted in Calibration mode.',
-    }
-  }
-  return { kind: 'legacy', title: 'DB / policy ground truth' }
-}
-
-function inputClass(): string {
-  return 'w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-60'
+  count?: number
+  children: ReactNode
+  tone?: 'default' | 'warning'
+}) {
+  return (
+    <details
+      className={`rounded-lg border p-3 ${
+        tone === 'warning' ? 'border-amber-300 bg-amber-50' : 'border-slate-200'
+      }`}
+    >
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+        {title}
+        {count !== undefined ? <span className="ml-1.5 text-xs text-slate-500">({count})</span> : null}
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  )
 }
 
 export function ReviewPanel({
@@ -132,22 +112,25 @@ export function ReviewPanel({
   autosaveDelayMs = 800,
   onSubmitted,
   onNext,
+  onPrev,
   onNavigationGuardChange,
   suspended = false,
+  rootCauseTagSuggestions = [],
 }: ReviewPanelProps) {
   const workspaceQuery = useReviewWorkspace(subject)
   const saveDraft = useSaveReviewDraft()
   const submitReview = useSubmitReview()
   const [payload, setPayload] = useState<ReviewPayload | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [customDimension, setCustomDimension] = useState('')
   const [submitted, setSubmitted] = useState<ReviewRecord | null>(null)
   const [editingRevision, setEditingRevision] = useState(false)
   const [revealedAutomatic, setRevealedAutomatic] = useState<ReviewWorkspaceResponse['automatic']>()
   const [focusedFailureId, setFocusedFailureId] = useState<string | null>(null)
+  const [focusedDimensionId, setFocusedDimensionId] = useState<string | null>(null)
+  const [evidenceHint, setEvidenceHint] = useState<string | null>(null)
   const loadedSubject = useRef<string | null>(null)
   const editVersion = useRef(0)
-  const nextInFlight = useRef(false)
+  const navInFlight = useRef(false)
   const submitInFlight = useRef(false)
   const subjectKey = reviewSubjectKey(subject)
 
@@ -163,6 +146,8 @@ export function ReviewPanel({
     )
     setRevealedAutomatic(workspaceQuery.data.automatic)
     setDirty(false)
+    setFocusedDimensionId(null)
+    setEvidenceHint(null)
     editVersion.current = 0
   }, [subject.mode, subjectKey, workspaceQuery.data])
 
@@ -210,6 +195,12 @@ export function ReviewPanel({
     )
   }, [visibleFailureIds])
 
+  useEffect(() => {
+    if (!evidenceHint) return
+    const timer = window.setTimeout(() => setEvidenceHint(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [evidenceHint])
+
   const saveCurrent = useCallback(async (): Promise<boolean> => {
     if (!payload || locked) return false
     const version = editVersion.current
@@ -244,10 +235,7 @@ export function ReviewPanel({
   const submitCurrent = useCallback(async (): Promise<void> => {
     if (!payload || locked || submitInFlight.current) return
     submitInFlight.current = true
-    const finalPayload: ReviewPayload = {
-      ...payload,
-      reviewStatus: payload.reviewStatus === 'in_review' ? 'reviewed' : payload.reviewStatus,
-    }
+    const finalPayload = finalizeReviewPayload(payload)
     try {
       const response = await submitReview.mutateAsync({
         subject,
@@ -270,18 +258,20 @@ export function ReviewPanel({
     }
   }, [locked, nextRevision, onSubmitted, payload, saveDraft.reset, subject, submitReview])
 
-  const goNext = useCallback(async (): Promise<void> => {
-    if (!onNext || nextInFlight.current) return
-    nextInFlight.current = true
-    try {
-      // ReviewPage captures a stable queue successor before invoking this
-      // guard, because persisting a draft can remove the current row from the
-      // active filter.
-      await onNext(persistCurrent)
-    } finally {
-      nextInFlight.current = false
-    }
-  }, [onNext, persistCurrent])
+  const navigate = useCallback(
+    async (handler?: (persistCurrent: ReviewNavigationGuard) => void | Promise<void>) => {
+      if (!handler || navInFlight.current) return
+      navInFlight.current = true
+      try {
+        await handler(persistCurrent)
+      } finally {
+        navInFlight.current = false
+      }
+    },
+    [persistCurrent],
+  )
+  const goNext = useCallback(() => navigate(onNext), [navigate, onNext])
+  const goPrev = useCallback(() => navigate(onPrev), [navigate, onPrev])
 
   useEffect(() => {
     if (!dirty || !payload || locked || suspended) return
@@ -315,6 +305,11 @@ export function ReviewPanel({
         void goNext()
         return
       }
+      if (shortcut === 'prev' && onPrev) {
+        event.preventDefault()
+        void goPrev()
+        return
+      }
       if (!payload || locked) return
       if (shortcut === 'save') {
         event.preventDefault()
@@ -326,7 +321,11 @@ export function ReviewPanel({
         void submitCurrent()
         return
       }
-      if (shortcut === 'overall-pass' || shortcut === 'overall-fail') {
+      if (
+        shortcut === 'overall-pass' ||
+        shortcut === 'overall-fail' ||
+        shortcut === 'overall-unsure'
+      ) {
         event.preventDefault()
         update((previous) =>
           applyReviewClassificationShortcut(
@@ -359,8 +358,10 @@ export function ReviewPanel({
   }, [
     focusedFailureId,
     goNext,
+    goPrev,
     locked,
     onNext,
+    onPrev,
     payload,
     saveCurrent,
     submitCurrent,
@@ -391,6 +392,59 @@ export function ReviewPanel({
   const groundTruth = workspaceQuery.data?.trace.groundTruth
   const groundTruthView =
     groundTruth === undefined ? undefined : groundTruthPresentation(groundTruth)
+
+  const focusedDimension = focusedDimensionId
+    ? (rubricDefinitions.find((definition) => definition.dimensionId === focusedDimensionId) ??
+      null)
+    : null
+  const focusedEvidenceIds = useMemo(() => {
+    const review = payload?.rubricReviews.find(
+      (item) => item.dimensionId === focusedDimensionId,
+    )
+    return new Set(review?.evidenceMessageIds ?? [])
+  }, [focusedDimensionId, payload?.rubricReviews])
+  const evidenceBadges = useMemo(() => {
+    if (!payload) return new Map<string, string[]>()
+    const labelOf = new Map(
+      rubricDefinitions.map((definition) => [definition.dimensionId, definition.label]),
+    )
+    const byMessage = evidenceDimensionsByMessage(payload)
+    return new Map(
+      [...byMessage.entries()].map(([messageId, dimensionIds]) => [
+        messageId,
+        dimensionIds.map((dimensionId) => labelOf.get(dimensionId) ?? dimensionId),
+      ]),
+    )
+  }, [payload, rubricDefinitions])
+
+  const toggleEvidence = useCallback(
+    (messageId: string) => {
+      if (locked || !payload) return
+      if (
+        !focusedDimensionId ||
+        !payload.rubricReviews.some((item) => item.dimensionId === focusedDimensionId)
+      ) {
+        setEvidenceHint(
+          'Pick a rubric dimension first (Details → Rubric dimensions), then click messages to attach evidence.',
+        )
+        return
+      }
+      update((previous) => toggleEvidenceMessageId(previous, focusedDimensionId, messageId))
+    },
+    [focusedDimensionId, locked, payload, update],
+  )
+
+  const patchAnnotation = useCallback(
+    (annotationId: string, patch: Partial<Omit<TurnAnnotation, 'annotationId'>>) => {
+      update((previous) => ({
+        ...previous,
+        turnAnnotations: previous.turnAnnotations.map((item) =>
+          item.annotationId === annotationId ? { ...item, ...patch } : item,
+        ),
+      }))
+    },
+    [update],
+  )
 
   if (suspended) {
     return (
@@ -431,6 +485,7 @@ export function ReviewPanel({
   }
 
   const mutationError = errorMessage(saveDraft.error ?? submitReview.error)
+  const transcript = workspaceQuery.data?.trace.transcript ?? []
 
   return (
     <aside className={`space-y-5 rounded-xl border border-slate-200 bg-white p-4 ${className}`}>
@@ -442,15 +497,18 @@ export function ReviewPanel({
             {editingRevision ? nextRevision : (latestFinal?.revision ?? nextRevision)}
           </p>
         </div>
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-            subject.mode === 'calibration'
-              ? 'bg-violet-100 text-violet-700'
-              : 'bg-blue-100 text-blue-700'
-          }`}
-        >
-          {subject.mode === 'calibration' ? 'Calibration' : 'Assisted'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              subject.mode === 'calibration'
+                ? 'bg-violet-100 text-violet-700'
+                : 'bg-blue-100 text-blue-700'
+            }`}
+          >
+            {subject.mode === 'calibration' ? 'Calibration' : 'Assisted'}
+          </span>
+          <ReviewShortcutsHelp hasAutomaticFailures={Boolean(automatic?.failures?.length)} />
+        </div>
       </header>
 
       {subject.mode === 'calibration' && !locked ? (
@@ -465,579 +523,150 @@ export function ReviewPanel({
         </div>
       ) : null}
 
-      {workspaceQuery.data?.trace.transcript?.length ? (
-        <details open className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-            Transcript · {workspaceQuery.data.trace.transcript.length} messages
-          </summary>
-          <ol className="mt-3 max-h-[32rem] space-y-2 overflow-auto">
-            {workspaceQuery.data.trace.transcript.map((message) => (
-              <li key={message.id} className="rounded-md border border-slate-200 bg-white p-2.5">
-                <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                  <span className="font-mono font-medium text-slate-700">{message.id}</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 uppercase">
-                    {message.role}
-                  </span>
-                  {message.timestamp ? <span className="ml-auto">{message.timestamp}</span> : null}
-                </div>
-                <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-xs leading-5 text-slate-800">
-                  {message.content}
-                </pre>
-              </li>
-            ))}
-          </ol>
-        </details>
-      ) : null}
-
-      {automatic ? (
-        <section className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <h3 className="text-sm font-semibold text-slate-800">Automatic evaluation</h3>
-          {automatic.detectorAnalysis?.status === 'unavailable' ? (
-            <div
-              role="alert"
-              className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900"
-            >
-              Canonical production detector analysis is unavailable (
-              {automatic.detectorAnalysis.reason}). Assisted draft decisions and submission are
-              blocked until the local analysis succeeds.
-            </div>
-          ) : null}
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-            {automatic.model ? (
-              <>
-                <dt className="text-slate-500">Model</dt>
-                <dd className="text-right text-slate-800">{automatic.model}</dd>
-              </>
-            ) : null}
-            {automatic.arm ? (
-              <>
-                <dt className="text-slate-500">A/B arm</dt>
-                <dd className="text-right text-slate-800">{automatic.arm}</dd>
-              </>
-            ) : null}
-            {automatic.outcome ? (
-              <>
-                <dt className="text-slate-500">Outcome</dt>
-                <dd className="text-right text-slate-800">{automatic.outcome}</dd>
-              </>
-            ) : null}
-          </dl>
-          {automatic.judgeVerdicts ? (
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(automatic.judgeVerdicts).map(([dimension, verdict]) => (
-                <span
-                  key={dimension}
-                  className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
-                >
-                  {dimension}: {verdict.verdict}
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <label className="text-xs font-medium text-slate-600">
-          Overall verdict
-          <select
-            className={`${inputClass()} mt-1`}
-            aria-keyshortcuts="P F"
-            value={payload.overallVerdict}
-            disabled={locked}
-            onChange={(event) =>
-              update((previous) => ({
-                ...previous,
-                overallVerdict: event.target.value as ReviewPayload['overallVerdict'],
-              }))
-            }
-          >
-            {REVIEW_VERDICTS.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-xs font-medium text-slate-600">
-          Review status
-          <select
-            className={`${inputClass()} mt-1`}
-            value={payload.reviewStatus}
-            disabled={locked}
-            onChange={(event) =>
-              update((previous) => ({
-                ...previous,
-                reviewStatus: event.target.value as ReviewPayload['reviewStatus'],
-              }))
-            }
-          >
-            <option value="in_review">in review</option>
-            <option value="reviewed">reviewed</option>
-            <option value="skipped">skipped</option>
-          </select>
-        </label>
-        <label className="text-xs font-medium text-slate-600">
-          Priority
-          <select
-            className={`${inputClass()} mt-1`}
-            value={payload.priority}
-            disabled={locked}
-            onChange={(event) =>
-              update((previous) => ({
-                ...previous,
-                priority: event.target.value as ReviewPayload['priority'],
-              }))
-            }
-          >
-            {REVIEW_PRIORITIES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
-
-      <label className="block text-xs font-medium text-slate-600">
-        Root-cause tags (comma separated)
-        <input
-          className={`${inputClass()} mt-1`}
-          value={payload.rootCauseTags.join(', ')}
-          disabled={locked}
-          onChange={(event) =>
-            update((previous) => ({ ...previous, rootCauseTags: csv(event.target.value) }))
-          }
-        />
-      </label>
-      <label className="block text-xs font-medium text-slate-600">
-        Overall note
-        <textarea
-          className={`${inputClass()} mt-1 min-h-24 resize-y`}
-          value={payload.note}
-          disabled={locked}
-          onChange={(event) => update((previous) => ({ ...previous, note: event.target.value }))}
-        />
-      </label>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Rubric verdicts</h3>
-          <span className="text-xs text-slate-500">pass / fail / skip + critique + evidence</span>
-        </div>
-        {rubricDefinitions.map((definition) => {
-          const review = payload.rubricReviews.find(
-            (candidate) => candidate.dimensionId === definition.dimensionId,
+      <ReviewFastPath
+        verdict={payload.overallVerdict}
+        note={payload.note}
+        locked={locked}
+        dirty={dirty}
+        saving={saveDraft.isPending}
+        submitting={submitReview.isPending}
+        errorText={mutationError}
+        canStartRevision={locked && subject.mode === 'assisted'}
+        nextRevision={nextRevision}
+        onVerdict={(verdict) => update((previous) => ({ ...previous, overallVerdict: verdict }))}
+        onNote={(note) => update((previous) => ({ ...previous, note }))}
+        onSave={() => void saveCurrent()}
+        onSubmit={() => void submitCurrent()}
+        onStartRevision={() => {
+          setEditingRevision(true)
+          setPayload((previous) =>
+            previous ? { ...previous, reviewStatus: 'in_review' } : previous,
           )
-          if (!review) return null
-          return (
-            <article
-              key={definition.dimensionId}
-              className="rounded-lg border border-slate-200 p-3"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h4 className="text-sm font-medium text-slate-800">{definition.label}</h4>
-                  {definition.description ? (
-                    <p className="mt-1 text-xs text-slate-500">{definition.description}</p>
-                  ) : null}
-                </div>
-                <fieldset className="flex gap-1">
-                  <legend className="sr-only">{definition.label} verdict</legend>
-                  {RUBRIC_VERDICTS.map((verdict) => (
-                    <button
-                      key={verdict}
-                      type="button"
-                      disabled={locked}
-                      onClick={() =>
-                        mutateRubric(definition.dimensionId, (item) => ({ ...item, verdict }))
-                      }
-                      className={`rounded px-2 py-1 text-xs font-medium ${
-                        review.verdict === verdict
-                          ? verdict === 'pass'
-                            ? 'bg-emerald-600 text-white'
-                            : verdict === 'fail'
-                              ? 'bg-red-600 text-white'
-                              : 'bg-slate-600 text-white'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {verdict}
-                    </button>
-                  ))}
-                </fieldset>
-              </div>
-              <textarea
-                aria-label={`${definition.label} critique`}
-                className={`${inputClass()} mt-3 min-h-20 resize-y`}
-                placeholder="Critique"
-                value={review.critique}
-                disabled={locked}
-                onChange={(event) =>
-                  mutateRubric(definition.dimensionId, (item) => ({
-                    ...item,
-                    critique: event.target.value,
-                  }))
-                }
-              />
-              <input
-                aria-label={`${definition.label} evidence message ids`}
-                className={`${inputClass()} mt-2`}
-                placeholder="Evidence message IDs, comma separated"
-                value={review.evidenceMessageIds.join(', ')}
-                disabled={locked}
-                onChange={(event) =>
-                  mutateRubric(definition.dimensionId, (item) => ({
-                    ...item,
-                    evidenceMessageIds: csv(event.target.value),
-                  }))
-                }
-              />
-            </article>
-          )
-        })}
-        {!locked && !hasDefinedRubric ? (
-          <div className="flex gap-2">
-            <input
-              className={inputClass()}
-              placeholder="Custom rubric dimension ID"
-              value={customDimension}
-              onChange={(event) => setCustomDimension(event.target.value)}
-            />
-            <button
-              type="button"
-              className="shrink-0 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
-              onClick={() => {
-                const dimensionId = customDimension.trim()
-                if (
-                  !dimensionId ||
-                  payload.rubricReviews.some((item) => item.dimensionId === dimensionId)
-                )
-                  return
+        }}
+        onPrev={onPrev ? () => void goPrev() : undefined}
+        onNext={onNext ? () => void goNext() : undefined}
+      />
+
+      <ReviewTranscriptSection
+        messages={transcript}
+        locked={locked}
+        focusedDimensionLabel={focusedDimension?.label ?? null}
+        selectedIds={focusedEvidenceIds}
+        evidenceBadges={evidenceBadges}
+        hint={evidenceHint}
+        onToggle={toggleEvidence}
+      />
+
+      <section aria-label="Review details" className="space-y-2">
+        <h3 className="text-sm font-semibold text-slate-800">Details</h3>
+        <DetailsSection title="Status & tags">
+          <ReviewStatusSection
+            reviewStatus={payload.reviewStatus}
+            priority={payload.priority}
+            rootCauseTags={payload.rootCauseTags}
+            tagSuggestions={rootCauseTagSuggestions}
+            locked={locked}
+            onStatus={(reviewStatus) => update((previous) => ({ ...previous, reviewStatus }))}
+            onPriority={(priority) => update((previous) => ({ ...previous, priority }))}
+            onTags={(rootCauseTags) => update((previous) => ({ ...previous, rootCauseTags }))}
+          />
+        </DetailsSection>
+
+        <DetailsSection title="Rubric dimensions" count={rubricDefinitions.length}>
+          <ReviewRubricSection
+            definitions={rubricDefinitions}
+            reviews={payload.rubricReviews}
+            locked={locked}
+            hasDefinedRubric={hasDefinedRubric}
+            focusedDimensionId={focusedDimensionId}
+            onFocusDimension={setFocusedDimensionId}
+            onMutate={mutateRubric}
+            onAddDimension={(dimensionId) =>
+              update((previous) => ({
+                ...previous,
+                rubricReviews: [
+                  ...previous.rubricReviews,
+                  { dimensionId, verdict: 'skip', critique: '', evidenceMessageIds: [] },
+                ],
+              }))
+            }
+          />
+        </DetailsSection>
+
+        {automatic?.failures?.length ? (
+          <DetailsSection title="Automatic failures" count={automatic.failures.length}>
+            <ReviewFailureSection
+              failures={automatic.failures}
+              reviews={payload.failureReviews}
+              locked={locked}
+              focusedFailureId={focusedFailureId}
+              onFocusFailure={setFocusedFailureId}
+              onDecide={decideFailure}
+              onNote={(failureId, note) =>
                 update((previous) => ({
                   ...previous,
-                  rubricReviews: [
-                    ...previous.rubricReviews,
-                    { dimensionId, verdict: 'skip', critique: '', evidenceMessageIds: [] },
-                  ],
+                  failureReviews: previous.failureReviews.map((item) =>
+                    item.failureId === failureId ? { ...item, note } : item,
+                  ),
                 }))
-                setCustomDimension('')
-              }}
-            >
-              Add
-            </button>
-          </div>
+              }
+            />
+          </DetailsSection>
         ) : null}
-        {!locked && hasDefinedRubric ? (
-          <p className="text-xs text-slate-500">
-            This trace has a fixed rubric. Custom dimensions are disabled so saved reviews match the
-            scoring contract.
-          </p>
+
+        <DetailsSection title="Turn annotations" count={payload.turnAnnotations.length}>
+          <ReviewTurnAnnotationsSection
+            annotations={payload.turnAnnotations}
+            transcript={transcript}
+            locked={locked}
+            onAdd={() => {
+              const firstMessage = transcript[0]
+              if (!firstMessage) return
+              update((previous) => ({
+                ...previous,
+                turnAnnotations: [
+                  ...previous.turnAnnotations,
+                  {
+                    annotationId: globalThis.crypto?.randomUUID?.() ?? `annotation-${Date.now()}`,
+                    messageId: firstMessage.id,
+                    label: '',
+                    tags: [],
+                    note: '',
+                  },
+                ],
+              }))
+            }}
+            onChange={patchAnnotation}
+            onRemove={(annotationId) =>
+              update((previous) => ({
+                ...previous,
+                turnAnnotations: previous.turnAnnotations.filter(
+                  (item) => item.annotationId !== annotationId,
+                ),
+              }))
+            }
+          />
+        </DetailsSection>
+
+        {groundTruth !== undefined && groundTruthView !== undefined ? (
+          <DetailsSection
+            title="Ground truth"
+            tone={
+              groundTruthView.kind === 'unavailable' || groundTruthView.kind === 'reference'
+                ? 'warning'
+                : 'default'
+            }
+          >
+            <ReviewGroundTruthSection groundTruth={groundTruth} presentation={groundTruthView} />
+          </DetailsSection>
+        ) : null}
+
+        {automatic ? (
+          <DetailsSection title="Automatic evaluation">
+            <ReviewAutomaticSection automatic={automatic} />
+          </DetailsSection>
         ) : null}
       </section>
-
-      {automatic?.failures?.length ? (
-        <section className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-800">Automatic failure decisions</h3>
-            <span className="text-xs text-slate-500">
-              Focus a finding, then C confirm · X reject
-            </span>
-          </div>
-          {automatic.failures.map((failure) => {
-            const review = payload.failureReviews.find((item) => item.failureId === failure.id)
-            const focused = focusedFailureId === failure.id
-            return (
-              <article
-                key={failure.id}
-                className={`rounded-lg border p-3 ${
-                  focused
-                    ? 'border-blue-400 bg-blue-50/40 ring-1 ring-blue-200'
-                    : 'border-slate-200'
-                }`}
-                onFocus={() => setFocusedFailureId(failure.id)}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <p className="text-sm font-medium text-slate-800">
-                    {failure.code}{' '}
-                    <span className="text-xs text-slate-500">· {failure.origin}</span>
-                  </p>
-                  <button
-                    type="button"
-                    aria-pressed={focused}
-                    aria-keyshortcuts="C X"
-                    className={`rounded px-2 py-1 text-[11px] font-medium ${
-                      focused ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
-                    }`}
-                    onClick={() => setFocusedFailureId(failure.id)}
-                  >
-                    {focused ? 'Focused · C / X' : 'Focus for shortcuts'}
-                  </button>
-                </div>
-                <p className="mt-1 text-xs text-slate-600">{failure.message}</p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {FAILURE_DECISIONS.map((decision) => (
-                    <button
-                      key={decision}
-                      type="button"
-                      disabled={locked}
-                      className={`rounded px-2 py-1 text-xs ${
-                        review?.decision === decision
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                      onClick={() => decideFailure(failure.id, decision)}
-                    >
-                      {decision.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
-                {review ? (
-                  <input
-                    className={`${inputClass()} mt-2`}
-                    placeholder="Decision note"
-                    value={review.note}
-                    disabled={locked}
-                    onChange={(event) =>
-                      update((previous) => ({
-                        ...previous,
-                        failureReviews: previous.failureReviews.map((item) =>
-                          item.failureId === failure.id
-                            ? { ...item, note: event.target.value }
-                            : item,
-                        ),
-                      }))
-                    }
-                  />
-                ) : null}
-              </article>
-            )
-          })}
-        </section>
-      ) : null}
-
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Turn annotations</h3>
-          {!locked ? (
-            <button
-              type="button"
-              className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700"
-              onClick={() => {
-                const firstMessage = workspaceQuery.data?.trace.transcript?.[0]
-                if (!firstMessage) return
-                update((previous) => ({
-                  ...previous,
-                  turnAnnotations: [
-                    ...previous.turnAnnotations,
-                    {
-                      annotationId: globalThis.crypto?.randomUUID?.() ?? `annotation-${Date.now()}`,
-                      messageId: firstMessage.id,
-                      label: '',
-                      tags: [],
-                      note: '',
-                    },
-                  ],
-                }))
-              }}
-            >
-              Add annotation
-            </button>
-          ) : null}
-        </div>
-        {payload.turnAnnotations.map((annotation) => (
-          <article
-            key={annotation.annotationId}
-            className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-2"
-          >
-            <select
-              className={inputClass()}
-              aria-label="Annotated message"
-              value={annotation.messageId}
-              disabled={locked}
-              onChange={(event) =>
-                update((previous) => ({
-                  ...previous,
-                  turnAnnotations: previous.turnAnnotations.map((item) =>
-                    item.annotationId === annotation.annotationId
-                      ? { ...item, messageId: event.target.value }
-                      : item,
-                  ),
-                }))
-              }
-            >
-              {workspaceQuery.data?.trace.transcript?.map((message) => (
-                <option key={message.id} value={message.id}>
-                  {message.id} · {message.role}
-                </option>
-              ))}
-            </select>
-            <input
-              className={inputClass()}
-              placeholder="Label"
-              value={annotation.label}
-              disabled={locked}
-              onChange={(event) =>
-                update((previous) => ({
-                  ...previous,
-                  turnAnnotations: previous.turnAnnotations.map((item) =>
-                    item.annotationId === annotation.annotationId
-                      ? { ...item, label: event.target.value }
-                      : item,
-                  ),
-                }))
-              }
-            />
-            <input
-              className={inputClass()}
-              placeholder="Tags, comma separated"
-              value={annotation.tags.join(', ')}
-              disabled={locked}
-              onChange={(event) =>
-                update((previous) => ({
-                  ...previous,
-                  turnAnnotations: previous.turnAnnotations.map((item) =>
-                    item.annotationId === annotation.annotationId
-                      ? { ...item, tags: csv(event.target.value) }
-                      : item,
-                  ),
-                }))
-              }
-            />
-            <div className="flex gap-2">
-              <input
-                className={inputClass()}
-                placeholder="Annotation note"
-                value={annotation.note}
-                disabled={locked}
-                onChange={(event) =>
-                  update((previous) => ({
-                    ...previous,
-                    turnAnnotations: previous.turnAnnotations.map((item) =>
-                      item.annotationId === annotation.annotationId
-                        ? { ...item, note: event.target.value }
-                        : item,
-                    ),
-                  }))
-                }
-              />
-              {!locked ? (
-                <button
-                  type="button"
-                  className="rounded-md px-2 text-xs text-red-600"
-                  onClick={() =>
-                    update((previous) => ({
-                      ...previous,
-                      turnAnnotations: previous.turnAnnotations.filter(
-                        (item) => item.annotationId !== annotation.annotationId,
-                      ),
-                    }))
-                  }
-                >
-                  Remove
-                </button>
-              ) : null}
-            </div>
-          </article>
-        ))}
-      </section>
-
-      {groundTruth !== undefined && groundTruthView !== undefined ? (
-        <details
-          className={`rounded-lg border p-3 ${
-            groundTruthView.kind === 'unavailable' || groundTruthView.kind === 'reference'
-              ? 'border-amber-300 bg-amber-50'
-              : 'border-slate-200 bg-slate-50'
-          }`}
-        >
-          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-            {groundTruthView.title}
-          </summary>
-          {groundTruthView.warning ? (
-            <p className="mt-2 text-xs font-medium text-amber-800">{groundTruthView.warning}</p>
-          ) : null}
-          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
-            {JSON.stringify(groundTruth, null, 2)}
-          </pre>
-        </details>
-      ) : null}
-
-      <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-        <summary className="cursor-pointer text-xs font-medium text-slate-700">
-          Keyboard shortcuts
-        </summary>
-        <dl className="mt-2 grid gap-1.5 text-xs sm:grid-cols-3">
-          {visibleReviewShortcutLabels(Boolean(automatic?.failures?.length)).map((shortcut) => (
-            <div key={shortcut.action} className="flex items-center gap-2">
-              <kbd className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-700">
-                {shortcut.keys}
-              </kbd>
-              <span className="text-slate-500">{shortcut.description}</span>
-            </div>
-          ))}
-        </dl>
-      </details>
-
-      {mutationError ? <p className="text-sm text-red-600">{mutationError}</p> : null}
-      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4">
-        <span className="text-xs text-slate-500">
-          {locked
-            ? 'Locked'
-            : saveDraft.isPending
-              ? 'Saving…'
-              : dirty
-                ? 'Unsaved changes'
-                : 'Draft saved'}
-        </span>
-        <div className="flex gap-2">
-          {onNext ? (
-            <button
-              type="button"
-              aria-keyshortcuts="Alt+ArrowDown"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
-              onClick={() => void goNext()}
-            >
-              Next · Alt/Option ↓
-            </button>
-          ) : null}
-          {locked && subject.mode === 'assisted' ? (
-            <button
-              type="button"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
-              onClick={() => {
-                setEditingRevision(true)
-                setPayload((previous) =>
-                  previous ? { ...previous, reviewStatus: 'in_review' } : previous,
-                )
-              }}
-            >
-              Start revision {nextRevision}
-            </button>
-          ) : null}
-          {!locked ? (
-            <>
-              <button
-                type="button"
-                aria-keyshortcuts="Control+S Meta+S"
-                disabled={saveDraft.isPending}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
-                onClick={() => void saveCurrent()}
-              >
-                Save draft
-              </button>
-              <button
-                type="button"
-                aria-keyshortcuts="Control+Enter Meta+Enter"
-                disabled={submitReview.isPending}
-                className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                onClick={() => void submitCurrent()}
-              >
-                {submitReview.isPending ? 'Submitting…' : 'Submit & lock'}
-              </button>
-            </>
-          ) : null}
-        </div>
-      </footer>
     </aside>
   )
 }

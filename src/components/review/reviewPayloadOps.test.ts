@@ -5,7 +5,7 @@ import {
   finalizeReviewPayload,
   rootCauseTagSuggestions,
   toggleEvidenceMessageId,
-} from './reviewFastPath'
+} from './reviewPayloadOps'
 
 describe('fast-path submit payload', () => {
   it('produces a contract-valid payload from verdict + note only', () => {
