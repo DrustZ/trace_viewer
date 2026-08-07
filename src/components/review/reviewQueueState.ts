@@ -189,6 +189,34 @@ export function calibrationFiltersForQueue(filters: ReviewQueueFilters): Calibra
   }
 }
 
+export interface ReviewQueueCursorMove {
+  subject: ReviewSubject | null
+  reason: 'moved' | 'reset' | 'empty' | 'at-start' | 'at-end'
+}
+
+/**
+ * Simple queue cursor over the loaded page. When the current item has left
+ * the filtered list (e.g. it was submitted under state=unreviewed), the first
+ * item is the correct continuation ('reset'). 'at-start'/'at-end' tell the
+ * caller to hop a page or refetch-and-clamp.
+ */
+export function reviewQueueCursorTarget(
+  items: readonly ReviewQueueItem[],
+  currentTraceUid: string | undefined,
+  delta: 1 | -1,
+): ReviewQueueCursorMove {
+  if (items.length === 0) return { subject: null, reason: 'empty' }
+  const currentIndex = currentTraceUid
+    ? items.findIndex((item) => item.subject.traceUid === currentTraceUid)
+    : -1
+  if (currentIndex < 0) return { subject: items[0]?.subject ?? null, reason: 'reset' }
+  const targetIndex = currentIndex + delta
+  if (targetIndex < 0) return { subject: null, reason: 'at-start' }
+  const target = items[targetIndex]
+  if (!target) return { subject: null, reason: 'at-end' }
+  return { subject: target.subject, reason: 'moved' }
+}
+
 /**
  * Find the next item in the currently visible queue. When the just-submitted
  * item has disappeared because state=unreviewed, the first refreshed item is

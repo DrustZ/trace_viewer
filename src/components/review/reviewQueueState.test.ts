@@ -5,6 +5,7 @@ import {
   DEFAULT_REVIEW_QUEUE_FILTERS,
   nextReviewSubject,
   normalizedReviewQueueOffset,
+  reviewQueueCursorTarget,
   reviewQueueFiltersFromSearchParams,
   reviewQueueFiltersToSearchParams,
   reviewQueuePageWindow,
@@ -179,5 +180,43 @@ describe('nextReviewSubject', () => {
   it('can wrap a work queue so submit-at-end still advances without waiting for refetch', () => {
     expect(nextReviewSubject(items, 'trace-c', true)?.traceUid).toBe('trace-a')
     expect(nextReviewSubject([item('trace-c')], 'trace-c', true)).toBeNull()
+  })
+})
+
+describe('reviewQueueCursorTarget', () => {
+  const items = [item('trace-a'), item('trace-b'), item('trace-c')]
+
+  it('moves both directions inside the loaded page', () => {
+    expect(reviewQueueCursorTarget(items, 'trace-a', 1)).toMatchObject({
+      reason: 'moved',
+      subject: { traceUid: 'trace-b' },
+    })
+    expect(reviewQueueCursorTarget(items, 'trace-b', -1)).toMatchObject({
+      reason: 'moved',
+      subject: { traceUid: 'trace-a' },
+    })
+  })
+
+  it('resets to the first item when the current one left the filtered queue', () => {
+    expect(reviewQueueCursorTarget(items.slice(1), 'trace-a', 1)).toMatchObject({
+      reason: 'reset',
+      subject: { traceUid: 'trace-b' },
+    })
+    expect(reviewQueueCursorTarget(items, undefined, 1)).toMatchObject({
+      reason: 'reset',
+      subject: { traceUid: 'trace-a' },
+    })
+  })
+
+  it('clamps at both page boundaries and reports an empty queue', () => {
+    expect(reviewQueueCursorTarget(items, 'trace-c', 1)).toEqual({
+      subject: null,
+      reason: 'at-end',
+    })
+    expect(reviewQueueCursorTarget(items, 'trace-a', -1)).toEqual({
+      subject: null,
+      reason: 'at-start',
+    })
+    expect(reviewQueueCursorTarget([], 'trace-a', 1)).toEqual({ subject: null, reason: 'empty' })
   })
 })
