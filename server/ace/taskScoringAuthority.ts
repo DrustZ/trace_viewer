@@ -224,5 +224,8 @@ export const runAceTaskScoringExport: AceTaskScoringExporter = (projectRoot, sce
         }
       })
     })
+    // Prevent an EPIPE from a probe that exits before reading stdin from
+    // surfacing as an uncaught 'error' event; error/close above already report.
+    child.stdin.on('error', () => {})
     child.stdin.end(JSON.stringify({ schemaVersion: 1, scenarios }))
   })

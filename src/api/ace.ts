@@ -77,10 +77,14 @@ export function useAceRun(runId: string | undefined) {
     queryKey: ['ace-run', runId],
     queryFn: () => apiGet<AceBatchSummary>(`/api/ace/runs/${encodeURIComponent(runId ?? '')}`),
     enabled: Boolean(runId),
-    refetchInterval: (query) =>
-      query.state.data && ['completed', 'cancelled', 'failed'].includes(query.state.data.lifecycle)
-        ? false
-        : 1_000,
+    refetchInterval: (query) => {
+      // Stop polling on error (e.g. a stale shared URL naming a deleted run)
+      // and on terminal lifecycles; otherwise a missing run is hit at 1 Hz forever.
+      if (query.state.status === 'error') return false
+      const lifecycle = query.state.data?.lifecycle
+      if (!lifecycle) return 1_000
+      return ['completed', 'cancelled', 'failed'].includes(lifecycle) ? false : 1_000
+    },
   })
 }
 

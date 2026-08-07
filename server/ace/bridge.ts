@@ -144,6 +144,11 @@ export class AceBridgeClient {
         }
       })
     })
+    // A bridge that exits before reading stdin (missing venv, import error)
+    // makes this write EPIPE; without a handler that is an uncaught 'error'
+    // event that crashes the whole server. The failure itself is already
+    // reported through the child's error/close path above.
+    child.stdin.on('error', () => {})
     child.stdin.end(JSON.stringify(params))
     return { child, completion }
   }

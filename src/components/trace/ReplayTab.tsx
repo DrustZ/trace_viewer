@@ -81,20 +81,34 @@ export function ReplayTab({ trace }: { trace: Trace }) {
 
   const historical = () => replay.mutate(historicalReplayRequest(trace))
   const restore = () => replay.mutate({ sourceTraceUid: traceUid, mode: 'restore', checkpointId })
+  // Forks spend real money: hold this path to the same 0.01–100000 cost-cap
+  // bounds every other launch path validates (an empty box is Number('') === 0,
+  // and NaN would serialize to null).
+  const costCapValue = Number(costCap)
+  const costCapInvalid =
+    costCap.trim() === '' ||
+    !Number.isFinite(costCapValue) ||
+    costCapValue < 0.01 ||
+    costCapValue > 100_000
+  const temperatureValue = Number(temperature)
+  const temperatureInvalid =
+    temperature.trim() !== '' &&
+    (!Number.isFinite(temperatureValue) || temperatureValue < 0 || temperatureValue > 2)
   const fork = (mode: 'exact' | 'counterfactual') => {
+    if (costCapInvalid || (mode === 'counterfactual' && temperatureInvalid)) return
     replay.mutate({
       sourceTraceUid: traceUid,
       mode,
       checkpointId,
-      costCapUsd: Number(costCap),
+      costCapUsd: costCapValue,
       ...(requestedChildRunId.trim() ? { childRunId: requestedChildRunId.trim() } : {}),
       ...(mode === 'counterfactual' && nextUserMessage.trim()
         ? { nextUserMessage: nextUserMessage.trim() }
         : {}),
       ...(mode === 'counterfactual' && prompt.trim() ? { prompt: prompt.trim() } : {}),
       ...(mode === 'counterfactual' && model.trim() ? { model: model.trim() } : {}),
-      ...(mode === 'counterfactual' && temperature !== ''
-        ? { temperature: Number(temperature) }
+      ...(mode === 'counterfactual' && temperature.trim() !== ''
+        ? { temperature: temperatureValue }
         : {}),
     })
   }
@@ -230,12 +244,17 @@ export function ReplayTab({ trace }: { trace: Trace }) {
               value={costCap}
               onChange={(event) => setCostCap(event.target.value)}
             />
+            {costCapInvalid && (
+              <span className="mt-1 block text-[11px] text-rose-600">
+                Cost cap (USD) must be between 0.01 and 100000.
+              </span>
+            )}
           </label>
           <div className="flex items-end">
             <button
               type="button"
               onClick={() => fork('exact')}
-              disabled={!selected?.branchable || replay.isPending}
+              disabled={!selected?.branchable || replay.isPending || costCapInvalid}
               className="w-full rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
             >
               Fork exact config
@@ -279,6 +298,11 @@ export function ReplayTab({ trace }: { trace: Trace }) {
               onChange={(event) => setTemperature(event.target.value)}
               placeholder="unchanged"
             />
+            {temperatureInvalid && (
+              <span className="mt-1 block text-[11px] text-rose-600">
+                Temperature must be between 0 and 2.
+              </span>
+            )}
           </label>
         </div>
         <button
@@ -287,6 +311,8 @@ export function ReplayTab({ trace }: { trace: Trace }) {
           disabled={
             !selected?.counterfactual_branchable ||
             replay.isPending ||
+            costCapInvalid ||
+            temperatureInvalid ||
             ![nextUserMessage, prompt, model, temperature].some((value) => value.trim() !== '')
           }
           className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 disabled:opacity-40"

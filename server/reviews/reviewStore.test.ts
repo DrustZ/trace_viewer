@@ -106,6 +106,34 @@ describe('ReviewStore', () => {
     expect(await store.listFinals()).toHaveLength(3)
   })
 
+  it('repairs a torn final tail on the next submit instead of gluing records together', async () => {
+    const store = makeStore()
+    const first = await store.submit(subject(), payload({ reviewStatus: 'reviewed' }), undefined, 1)
+    // Simulate a crash mid-append: a partial record with no trailing newline.
+    await fs.appendFile(store.finalsPath, '{"torn', 'utf8')
+    expect(await store.listFinals()).toHaveLength(1)
+
+    const assisted = subject({ mode: 'assisted' })
+    const second = await store.submit(assisted, payload({ reviewStatus: 'reviewed' }), undefined, 1)
+    expect((await store.listFinals()).map((record) => record.key)).toEqual([first.key, second.key])
+
+    // The unparseable fragment is gone and every stored line parses again.
+    const lines = (await fs.readFile(store.finalsPath, 'utf8')).trim().split('\n')
+    expect(lines).toHaveLength(2)
+    for (const line of lines) JSON.parse(line)
+  })
+
+  it('keeps a parseable record that lost only its trailing newline', async () => {
+    const store = makeStore()
+    const first = await store.submit(subject(), payload({ reviewStatus: 'reviewed' }), undefined, 1)
+    const contents = await fs.readFile(store.finalsPath, 'utf8')
+    await fs.writeFile(store.finalsPath, contents.slice(0, -1), 'utf8')
+
+    const assisted = subject({ mode: 'assisted' })
+    const second = await store.submit(assisted, payload({ reviewStatus: 'reviewed' }), undefined, 1)
+    expect((await store.listFinals()).map((record) => record.key)).toEqual([first.key, second.key])
+  })
+
   it('keeps corpus, run, rubric, annotator, mode, and revision in collision-safe keys', async () => {
     const store = makeStore()
     const variants = [

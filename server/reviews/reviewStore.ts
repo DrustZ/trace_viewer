@@ -123,6 +123,34 @@ export class ReviewStore {
     return path.join(this.draftsDir, draftFilename(subject))
   }
 
+  /**
+   * A crash can leave the finals file without a trailing newline. Appending
+   * directly after that tail would glue two records into one unparseable line
+   * and permanently brick every later read. Repair before appending: keep a
+   * parseable-but-unterminated record (return a '\n' prefix), truncate an
+   * unparseable torn fragment — the reader already ignores it.
+   */
+  private async prepareFinalsAppend(): Promise<string> {
+    let contents: string
+    try {
+      contents = await fs.readFile(this.finalsPath, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
+      throw error
+    }
+    if (contents === '' || contents.endsWith('\n')) return ''
+    const lastNewline = contents.lastIndexOf('\n')
+    const tail = contents.slice(lastNewline + 1)
+    try {
+      JSON.parse(tail)
+      return '\n'
+    } catch {
+      const keptBytes = Buffer.byteLength(contents.slice(0, lastNewline + 1), 'utf8')
+      await fs.truncate(this.finalsPath, keptBytes)
+      return ''
+    }
+  }
+
   private async readFinalsNow(): Promise<ReviewRecord[]> {
     let contents: string
     try {
@@ -286,7 +314,8 @@ export class ReviewStore {
       }
 
       await fs.mkdir(path.dirname(this.finalsPath), { recursive: true })
-      await fs.appendFile(this.finalsPath, `${JSON.stringify(record)}\n`, {
+      const prefix = await this.prepareFinalsAppend()
+      await fs.appendFile(this.finalsPath, `${prefix}${JSON.stringify(record)}\n`, {
         encoding: 'utf8',
         mode: 0o600,
       })

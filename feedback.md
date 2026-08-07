@@ -1,0 +1,121 @@
+# Code Review Feedback — ACE Cockpit (branch `codex/ace-trace-cockpit`)
+
+> 审查方：Claude（受 Ray 委托做周期性审查）。本文件每轮审查更新，newest round 在最上面。
+> 行号基于 2026-08-06 22:05 左右的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
+> 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
+
+## Round 1 — 2026-08-06 22:40
+
+### 总体评价
+
+四个子系统（bridge 集成 / review-labeling / 网络暴露+SSE / ACE 前端）整体设计水准很高：
+进程契约两侧双重校验（allowlist、regression token、exact-fork 拒绝 override、路径包含检查）、
+HMAC 盲评 + append-only finals + 原子 draft 重命名、SSE replay journal + 心跳、
+launcher 请求构造函数直接 round-trip 真实 server parser 的契约测试——这些都是亮点。
+
+缺陷集中在三类：**(1) 花真钱的路径缺少幂等/确认/校验**；**(2) Tailscale 暴露让文档声明的
+"trusted local machine" 安全模型整体失效**；**(3) 崩溃恢复与异步失败路径不可见**。
+建议本轮优先处理下面的 Critical 与 Major。
+
+### Critical
+
+1. **Tailscale 模式把整个无鉴权 API 暴露给 tailnet** — `scripts/serveTailscale.mjs:32` + `vite.config.ts`
+   README 声称 "keeps the API private on 127.0.0.1"，但绑定到 Tailscale IP 的 Vite 会把所有
+   `/api/*` 代理回 localhost:8787，等于 API 对全 tailnet 开放且无任何 token/auth。
+   结合下面两条，任何 tailnet 设备可以：花钱启动 ACE run（costCapUsd 上限 $100,000、最多 1000 seeds）、
+   挂载任意目录并通过 `/api/traces/:id/raw` 读文件。
+   **最低要求**：API 前加 shared-secret token（或校验 Tailscale identity header），
+   并给远程客户端加 spend/mutation kill-switch。README 的 "private" 表述在修复前先改掉。
+
+2. **dataRoots 校验只挡了 `/` 和 `$HOME` 两个精确路径** — `server/store/dataRootManager.ts:50`
+   `POST /api/data-roots {"path":"/Users"}`、`/private/etc`、`~/.config` 全都能挂载；
+   连接器接受 .json/.jsonl/.txt，配合 raw 端点即可外泄 `~/.config` 下的凭据类 JSON。
+   另外 root 内部的 symlink 会被跟出边界（chokidar `followSymlinks:true`，只 realpath 了 root 本身，
+   `server/store/scan.ts:661` 附近），且远程添加的 root 持久化到 `.trace-viewer/data-roots.json`
+   重启后自动恢复（持久化立足点）。**建议**：前缀 allowlist（或至少黑名单目录树 + realpath 每个文件）、
+   symlink 不跟出 root、远程添加需要确认。
+
+3. **reviewStore 撕裂尾部"恢复"会在下次 submit 时真正写坏文件** — `server/reviews/reviewStore.ts:141` + `:288`
+   crash 留下无换行的半行 `{"torn`，读取时能容忍；但 `submit()` 直接 append，粘成
+   `{"torn{"new":...}\n` —— 此后该行以 `\n` 结尾，恢复分支不再适用，所有 `/api/reviews` 永久 500，
+   且新 label 丢失。**[已修复 by Claude]**：append 前检查文件尾字节，非 `\n` 则先补 `\n`。
+   （补充：mid-file 单行损坏或单个 corrupt draft 也会 fail-closed 整个队列 API——建议改成
+   skip + warning，`runs/labels/` 在 git repo 里，一个 merge conflict marker 就能打挂整个子系统。）
+
+4. **Run launcher 双击可双倍花钱** — `src/components/ace/AceRunLauncher.tsx:330,767`
+   只有 `disabled={start.isPending}`，React re-render 之前的第二次点击照样触发第二个
+   `start.mutateAsync`；launcher 不传 batchId，server 每次请求都 mint 新 runId
+   （`server/ace/requests.ts:161`），没有幂等兜底。**建议**：客户端 in-flight ref 守卫 +
+   花钱操作加确认步骤；server 端支持客户端提供的幂等 key。
+
+### Major
+
+5. **bridge stdin EPIPE 会 crash 整个 viewer server** — `server/ace/bridge.ts:147`、`server/ace/taskScoringAuthority.ts:227`
+   `child.stdin.end(JSON.stringify(params))` 无 error handler；venv 缺失时 python 在读 stdin 前退出，
+   payload 超过 pipe buffer（大 promptText / transcriptPrefix）就是 unhandled 'error' event。
+   **[已修复 by Claude]**：给 stdin 挂 `error` no-op handler（错误已由 exit/close 路径上报）。
+
+6. **`POST /api/ace/runs` 返回 202 后的 start 失败完全不可见** — `server/routes/ace.ts:665` + `bridge.ts:167`
+   失败只 `console.error`；client 看到 `queued`，之后合成行消失，无处可查。
+   **建议**：把 launch 失败写进 lineage/run 状态（如 `lifecycle:"launch_failed"` + error message），
+   让 `/api/ace/runs` 能返回它。
+
+7. **每个请求都 spawn 一个 Python scoring probe** — `server/ace/taskCatalog.ts:600` 被
+   dashboard/tasks/traces/reviews 多路由每请求调用，30s timeout + 16MiB buffer，无 memo 无并发上限；
+   dashboard 轮询会堆积 Python 进程。**建议**：按 pack 文件 mtime/hash memoize + 单飞（in-flight dedup）。
+
+8. **SSE：落后 client 的 `snapshot.required` 广播给所有 client 且进入 replay journal** —
+   `server/routes/events.ts:88`。一个 laggy client 反复引发全体 invalidate 风暴。
+   **建议**：`snapshot.required` 只发给触发的那个连接，不写 journal。
+
+9. **前端 SSE handler 每个事件 invalidate 几乎全部 query** — `src/api/live.tsx:31`
+   （只排除 `trace-raw`），`staleTime: Infinity` 的 `useAceAnalysis` 也被打穿；扫描/高并发 batch
+   期间就是 refetch 风暴。**建议**：按事件类型映射到具体 query key + debounce/coalesce。
+
+10. **`useAceRun` 对不存在的 run 以 1Hz 永久轮询** — `src/api/ace.ts:80`
+    `refetchInterval` 在 `data === undefined`（含永久 error）时返回 1000。
+    **[已修复 by Claude]**：error 状态停止轮询。`AcePairedComparison` 与 Lab 的 LiveRunMonitor
+    同样受益；Lab 那个"manifest 未出现"文案的无限等待建议再加 give-up/backoff。
+
+11. **ReplayTab fork 的 costCapUsd 无校验** — `src/components/trace/ReplayTab.tsx:89,224`
+    清空输入框 → `Number('') === 0`；非法输入 → `NaN` → JSON `null`。其它 launch 路径都有
+    0.01–100000 校验，唯独这条花钱路径没有。**[已修复 by Claude]**：复用与 launcher 一致的
+    校验逻辑（含 temperature 的 NaN 防护），非法值禁用提交并显示提示。
+
+12. **Experiments 页部分失败后自锁** — `src/pages/AceExperimentsPage.tsx:202,230`
+    `Promise.allSettled` 后只要提交过就 `alreadySubmitted=true`，变体 B 失败无法单独重试；
+    换 ID 重跑会把成功的 A 再花一遍钱。**建议**：按变体记录成功/失败，允许只重试失败的变体。
+
+13. **校准统计面板在盲评时查询盲名** — `src/pages/ReviewPage.tsx:94`
+    未解锁的 calibration item 的 `selected.runId` 是 `blind_run_…` HMAC 别名，存储记录是
+    canonical runId，于是主工作流下面板恒显示 0。**建议**：面板在盲评模式下改用全局（不带 runId）
+    统计，或等 reveal 后再按 runId 过滤。
+
+14. **URL import 的 SSRF 防护可被 redirect/DNS-rebinding 绕过** — `server/routes/importRoute.ts:37`
+    检查一次 DNS 后 `fetch()` 自行重解析并跟随重定向。localhost-only 时可接受（文档也写了 deferred），
+    但 Tailscale 暴露后需要 `redirect:'manual'` + 每跳校验。
+
+### Minor（择要）
+
+- `server/ace/launchLineageStore.ts:88` — 一次磁盘写失败让 `writeQueue` 永久 rejected，后续 append 全挂。链式 `.then` 前先 `.catch` 复位。
+- `server/app.ts:48` — error middleware 只透传 4xx，`AceBridgeError` 想要的 502 变成 500；且 500 会把内部错误消息（含绝对路径）回给客户端。
+- `server/ace/bridge.ts:78` — `envelope.error.code` 未检查 `error` 是对象，`{"ok":false}` 抛裸 TypeError，丢掉 stderr tail 诊断。
+- `server/ace/bridge.ts:114` — 超时 kill 只发 SIGTERM 无 SIGKILL 升级，卡死的 python 占着 runId 最长 24h（`run_already_active`）。
+- `server/routes/ace.ts:576` — `/api/ace/scenarios` 一个坏 pack 500 整个端点（对比 aceTasks 的优雅降级）。
+- `server/routes/ace.ts:41,869` — `publicBridgeResult` 只 basename `*path`/`parent_checkpoint` 键；regression 响应的 `artifact`/`scenarioPack`/`draft` 键漏网（今天恰好是相对路径才没事）。
+- `server/ace/analysisBundle.ts:119` — overlay 合并 `failures` 但整体替换 `flags`，同一证据两个投影不一致。
+- `server/reviews/calibration.ts:63` — 任一 marginal 为 0 就报 `undefined_single_class`，但 Cohen's kappa 仅在 pe=1 时才真正未定义（如 judge 全 pass、human 5/5 时 κ=0 是有定义的）；line 70 的 guard 是死代码。
+- `server/reviews/traceSource.ts:266` — 非 ACE trace 无 corpusId 时默认 `'production'`，普通 corpus 的 label 会写进 ACE 的 `runs/labels/`。
+- `src/components/review/ReviewPanel.tsx:224` — submit 时不取消 800ms autosave timer，autosave 后到会在成功提交后显示假的 423/409 红错。
+- `server/routes/events.ts:51` — `res.write` 返回值忽略，慢消费者无背压、无 per-client 上限；`eventsRoutes()` 的 store 订阅永不 dispose（多 app 共享 store 的测试会泄漏）。
+- `scripts/serveTailscale.mjs:11` — 硬编码 `/usr/local/bin/tailscale`，新 mac 常在别处，直接 throw。
+- `src/pages/AceRunsPage.tsx:186` — run 下拉 `setSearch({run})` 整体替换 query string，丢掉 scenarioFile/scenarioId，launcher 因 key 变化 remount，用户填的长 prompt 被清空。
+- URL-state 约定漂移：AceRunsPage 的 episode 过滤、AceAnalysisPage 的 runSearch、Experiments 表单都是 useState 不进 URL（本 codebase 的分享机制是 URL round-trip）。
+- 虚拟化约定漂移：AceRunsPage 三个表格（activity/durable/triage）与 ReplayTab 的 per-message `<option>` 列表未虚拟化，万级 episode/message 会卡。
+- lint：`server/ace/taskCatalog.ts`（unused imports）、`taskScoringAuthority.ts:96`（optional chain）、`server/routes/traces.ts`、`AceDashboard.tsx`、`AceRunsPage.tsx`（format）— `biome check` 未全绿。
+
+### 测试缺口（建议补）
+
+- 花钱路径零交互测试：double-submit、部分失败重试、轮询停止条件（页面测试全是 `renderToStaticMarkup` + `toContain`，点不了按钮）。
+- reviewStore 崩溃恢复：torn tail、corrupt mid-file 行、corrupt draft、HTTP 层 409/423。
+- `classifyAcePair`/`pairAceRuns`/`pairedPassInterval`（CI 统计核心）无测试；EvaluationTab/StateToolsTab 无测试。
