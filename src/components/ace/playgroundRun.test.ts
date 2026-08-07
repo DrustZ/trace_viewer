@@ -8,6 +8,7 @@ import {
   episodeSettled,
   initialPlaygroundConfig,
   type PlaygroundRunConfig,
+  quickRunSelection,
 } from './playgroundRun'
 
 function config(overrides: Partial<PlaygroundRunConfig> = {}): PlaygroundRunConfig {
@@ -118,6 +119,46 @@ function sourceTrace(): Trace {
     },
   }
 }
+
+describe('quickRunSelection', () => {
+  const packs = [{ file: 'atomic.json' }, { file: 'multi.json' }]
+  const tasks = [
+    { scenarioId: 'multi-1', sourceFiles: ['configs/scenarios/multi.json'] },
+    { scenarioId: 'atomic-1', sourceFiles: ['configs/scenarios/atomic.json'] },
+    { scenarioId: 'atomic-2', sourceFiles: ['configs/scenarios/atomic.json'] },
+  ]
+
+  it('picks the first scenario of the default (first) pack with seed 1', () => {
+    expect(quickRunSelection(packs, tasks)).toEqual({
+      scenarioFile: 'atomic.json',
+      scenarioId: 'atomic-1',
+      seed: '1',
+    })
+  })
+
+  it('honors the currently selected pack when it exists in the catalog', () => {
+    expect(quickRunSelection(packs, tasks, 'multi.json')).toEqual({
+      scenarioFile: 'multi.json',
+      scenarioId: 'multi-1',
+      seed: '1',
+    })
+  })
+
+  it('falls back to the first pack when the preferred file is unknown', () => {
+    expect(quickRunSelection(packs, tasks, 'missing.json')).toMatchObject({
+      scenarioFile: 'atomic.json',
+      scenarioId: 'atomic-1',
+    })
+  })
+
+  it('returns null until packs and matching scenarios have loaded', () => {
+    expect(quickRunSelection([], tasks)).toBeNull()
+    expect(quickRunSelection(packs, [])).toBeNull()
+    expect(
+      quickRunSelection([{ file: 'empty.json' }], tasks), // pack with no scenarios
+    ).toBeNull()
+  })
+})
 
 describe('episodePollInterval (SSE fallback)', () => {
   it('polls while the run is active in any pre-terminal lifecycle', () => {

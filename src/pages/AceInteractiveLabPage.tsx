@@ -27,6 +27,7 @@ import {
   episodeSettled,
   initialPlaygroundConfig,
   type PlaygroundRunConfig,
+  quickRunSelection,
 } from '../components/ace/playgroundRun'
 import { ErrorState, LoadingState } from '../components/common/EmptyState'
 import { formatNumber, formatPercent } from '../components/common/format'
@@ -398,10 +399,11 @@ function PlaygroundWorkbench({
       // Already cleared in memory.
     }
   }
-  const runEpisode = async () => {
+  const runEpisode = async (override?: PlaygroundRunConfig) => {
     if (!available || submitInFlight.current) return
+    const effective = override ?? config
     const result = buildPlaygroundRunRequest({
-      ...config,
+      ...effective,
       ...(sourceTraceUidForRun ? { sourceTraceUid: sourceTraceUidForRun } : {}),
     })
     if (!result.ok) {
@@ -419,6 +421,33 @@ function PlaygroundWorkbench({
     } finally {
       submitInFlight.current = false
     }
+  }
+
+  // One primary CTA whose semantics follow the config: with no scenario picked
+  // it is a zero-config Quick run (first scenario of the current/default pack,
+  // seed 1); with a scenario it is the plain Run episode.
+  const quick = quickRunSelection(
+    scenarios.data?.items ?? [],
+    tasks.data?.items ?? [],
+    config.scenarioFile,
+  )
+  const needsQuickPick = config.scenarioId.trim() === ''
+  const sessionRef = useRef<HTMLElement | null>(null)
+  const launchEpisode = () => {
+    if (needsQuickPick) {
+      if (!quick) return
+      const merged: PlaygroundRunConfig = {
+        ...config,
+        scenarioFile: quick.scenarioFile,
+        scenarioId: quick.scenarioId,
+        ...(config.seed.trim() === '' ? { seed: quick.seed } : {}),
+      }
+      setConfig(merged)
+      void runEpisode(merged)
+    } else {
+      void runEpisode()
+    }
+    sessionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (
@@ -604,7 +633,7 @@ function PlaygroundWorkbench({
                 value={config.scenarioId}
                 onChange={(event) => setField('scenarioId', event.target.value)}
               >
-                <option value="">Pick a scenario…</option>
+                <option value="">Auto — Quick run picks the first scenario</option>
                 {config.scenarioId !== '' &&
                   !packScenarios.some((task) => task.scenarioId === config.scenarioId) && (
                     <option value={config.scenarioId}>{config.scenarioId}</option>
@@ -648,21 +677,25 @@ function PlaygroundWorkbench({
           </section>
 
           {/* Right: session area */}
-          <section className="min-w-0 space-y-3">
+          <section ref={sessionRef} className="min-w-0 space-y-3">
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3">
               <button
                 type="button"
                 data-testid="playground-run-episode"
-                onClick={() => void runEpisode()}
-                disabled={!available || start.isPending}
+                onClick={launchEpisode}
+                disabled={!available || start.isPending || (needsQuickPick && !quick)}
                 className="rounded-md bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-40"
               >
-                {start.isPending ? 'Starting…' : 'Run episode'}
+                {start.isPending ? 'Starting…' : needsQuickPick ? 'Quick run' : 'Run episode'}
               </button>
               <span className="text-[11px] text-slate-500">
-                {config.promptText.trim()
-                  ? 'Counterfactual run (custom prompt) · excluded from formal metrics.'
-                  : 'Debug run · excluded from formal metrics.'}
+                {needsQuickPick
+                  ? quick
+                    ? `Auto-picks ${quick.scenarioId} from ${quick.scenarioFile} · seed ${quick.seed} — everything stays editable on the left.`
+                    : 'Loading the scenario catalog…'
+                  : config.promptText.trim()
+                    ? 'Counterfactual run (custom prompt) · excluded from formal metrics.'
+                    : 'Debug run · excluded from formal metrics.'}
               </span>
             </div>
             {validationError && (
@@ -680,8 +713,7 @@ function PlaygroundWorkbench({
               <EpisodeSession runId={selectedRunId} onChildRun={onRunSelected} />
             ) : (
               <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-xs text-slate-400">
-                Configure on the left, then run one episode to see the conversation, grade, and
-                fork/regression actions here.
+                Pick a scenario or just hit Quick run — messages stream in as the episode executes.
               </p>
             )}
 

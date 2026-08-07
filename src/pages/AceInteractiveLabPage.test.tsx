@@ -250,6 +250,34 @@ describe('Playground page', () => {
     expect(html).toContain('Available now: pause, cancel')
   })
 
+  it('offers a zero-config Quick run as the primary CTA when no scenario is picked', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+
+    expect(html).toMatch(/data-testid="playground-run-episode"[^>]*>Quick run</)
+    // The CTA explains its auto-pick: first scenario of the default pack, seed 1.
+    expect(html).toContain('Auto-picks scenario-01 from atomic.json · seed 1')
+    // One primary CTA only — no separate Run episode button while unpicked.
+    expect(html).not.toContain('>Run episode<')
+    // Empty state carries the one-line guidance.
+    expect(html).toContain(
+      'Pick a scenario or just hit Quick run — messages stream in as the episode executes.',
+    )
+  })
+
+  it('keeps Run episode as the CTA once a scenario is selected', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab?scenarioId=refund-02']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+    expect(html).toMatch(/data-testid="playground-run-episode"[^>]*>Run episode</)
+    expect(html).not.toContain('>Quick run<')
+  })
+
   it('disables and explains every control for a completed run', () => {
     mocks.run.mockReturnValue({
       data: { ...childRun, lifecycle: 'completed', controlsAvailable: false },

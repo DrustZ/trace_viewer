@@ -75,6 +75,35 @@ export function initialPlaygroundConfig(
   }
 }
 
+export interface QuickRunSelection {
+  scenarioFile: string
+  scenarioId: string
+  seed: string
+}
+
+/**
+ * Zero-config Quick run target: the current pack when it exists in the
+ * scenarios catalog (else the catalog's first pack), its first scenario, and
+ * seed 1. Returns null until both catalogs have loaded something usable.
+ */
+export function quickRunSelection(
+  packs: ReadonlyArray<{ file: string }>,
+  tasks: ReadonlyArray<{ scenarioId: string; sourceFiles: string[] }>,
+  preferredFile?: string,
+): QuickRunSelection | null {
+  const packFile =
+    preferredFile !== undefined && packs.some((pack) => pack.file === preferredFile)
+      ? preferredFile
+      : packs[0]?.file
+  if (packFile === undefined) return null
+  const base = packFile.split('/').at(-1)
+  const scenario = tasks.find((task) =>
+    task.sourceFiles.some((file) => file.split('/').at(-1) === base),
+  )
+  if (!scenario) return null
+  return { scenarioFile: packFile, scenarioId: scenario.scenarioId, seed: '1' }
+}
+
 /** Run lifecycles during which the episode is still being produced or graded. */
 export const ACTIVE_RUN_LIFECYCLES = ['queued', 'running', 'paused', 'cancelling'] as const
 
