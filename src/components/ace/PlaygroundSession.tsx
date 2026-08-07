@@ -155,16 +155,23 @@ export interface SessionPhaseInfo {
  * One status pill for the live session: starting → running · N messages →
  * grading → complete/failed. `lifecycle` is the batch manifest's word
  * (authoritative when terminal); `pendingPhase` is the episode's own current
- * phase and only promotes the label to grading-style states.
+ * phase and only promotes the label to grading-style states. When the
+ * manifest is unreachable (`lifecycle` undefined), a settled episode — final
+ * status and a landed grade — still resolves the pill to complete so the
+ * session never wedges on the run index alone.
  */
 export function sessionPhase(
   lifecycle: string | undefined,
   messageCount: number,
   pendingPhase?: string,
+  episodeSettled = false,
 ): SessionPhaseInfo {
   if (lifecycle === 'completed') return { kind: 'complete', label: 'complete', active: false }
   if (lifecycle === 'failed' || lifecycle === 'cancelled') {
     return { kind: 'failed', label: lifecycle, active: false }
+  }
+  if (lifecycle === undefined && episodeSettled && messageCount > 0) {
+    return { kind: 'complete', label: 'complete', active: false }
   }
   if (messageCount === 0) return { kind: 'starting', label: 'starting', active: true }
   if (pendingPhase !== undefined && /grad|judge|verif/i.test(pendingPhase)) {

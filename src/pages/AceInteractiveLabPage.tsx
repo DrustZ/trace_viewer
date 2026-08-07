@@ -28,8 +28,10 @@ import {
   episodePollInterval,
   episodeSettled,
   initialPlaygroundConfig,
+  isExistingRunConflict,
   type PlaygroundRunConfig,
   quickRunSelection,
+  resolveScenarioPack,
   shouldAutorun,
 } from '../components/ace/playgroundRun'
 import { ErrorState, LoadingState } from '../components/common/EmptyState'
@@ -51,7 +53,13 @@ function LiveRunMonitor({
   sourceTrace?: Trace
   instanceId: string
 }) {
-  const run = useAceRun(runId)
+  // Session semantics: this run was just started here, so a 404 means "the
+  // manifest is not durable yet" — poll through it instead of parking on the
+  // first error (the default useAceRun behavior for stale shared URLs).
+  const run = useAceRun(runId, {
+    refetchInterval: (query) =>
+      episodePollInterval({ lifecycle: query.state.data?.lifecycle }),
+  })
   const runs = useAceRuns()
   const control = useControlAceRun(runId)
   const filters = useMemo(
@@ -283,7 +291,13 @@ function EpisodeSession({
   runId: string
   onChildRun: (id: string) => void
 }) {
-  const run = useAceRun(runId)
+  // Poll the run summary through pre-manifest 404s (see LiveRunMonitor note);
+  // the episode trace queries below relay in parallel, so leaving "starting"
+  // never depends on the run index alone.
+  const run = useAceRun(runId, {
+    refetchInterval: (query) =>
+      episodePollInterval({ lifecycle: query.state.data?.lifecycle }),
+  })
   const control = useControlAceRun(runId)
   const lifecycle = run.data?.lifecycle
   const filters = useMemo(
@@ -316,6 +330,7 @@ function EpisodeSession({
     lifecycle,
     episode.data?.messages.length ?? 0,
     episode.data?.evaluation?.lifecycle.pendingPhase,
+    episodeSettled(episode.data),
   )
   const stopDecision = run.data
     ? aceRunControlDecision(run.data, 'cancel', control.isPending)
@@ -404,6 +419,20 @@ function PlaygroundWorkbench({
     )
   }, [tasks.data?.items, config.scenarioFile])
 
+  // A trace deep link prefills the scenario id without its pack file. Correct
+  // the pack from the task catalog once it loads, or a Replicate of any
+  // non-default-pack scenario would POST an unknown scenarioFile/Id pair.
+  const scenarioPackFix = resolveScenarioPack(
+    config.scenarioId,
+    config.scenarioFile,
+    tasks.data?.items ?? [],
+  )
+  useEffect(() => {
+    if (scenarioPackFix !== undefined) {
+      setConfig((current) => ({ ...current, scenarioFile: scenarioPackFix }))
+    }
+  }, [scenarioPackFix])
+
   // Matched fresh rerun lineage only when scenario+seed still equal the recorded ones.
   const sourceTraceUidForRun =
     requestedTraceUid &&
@@ -470,8 +499,17 @@ function PlaygroundWorkbench({
       const response = await start.mutateAsync({ ...result.request, batchId })
       clearPendingBatchId()
       onRunSelected(response.runId)
-    } catch {
-      // React Query exposes the server error below the button.
+    } catch (error) {
+      // The persisted batchId makes retries idempotent: if this rejection says
+      // the batch already exists, the earlier POST (whose response was lost —
+      // e.g. a wedged proxy socket) did start the run. Attach to it instead of
+      // leaving the tab permanently poisoned with an unusable pending id.
+      if (isExistingRunConflict(error)) {
+        clearPendingBatchId()
+        onRunSelected(batchId)
+        start.reset()
+      }
+      // Other errors stay visible below the button via React Query.
     } finally {
       submitInFlight.current = false
     }
@@ -483,8 +521,13 @@ function PlaygroundWorkbench({
   // in-flight + persisted-batchId idempotency backstops everything else.
   const autorunFired = useRef(false)
   const capabilitiesKnown = !capabilities.isLoading
+  // Hold autorun until the scenario's pack is authoritative: the task catalog
+  // has loaded (or failed — then the server rejection stays visible) and any
+  // pending pack correction from the effect above has been applied.
+  const scenarioPackSettled = tasks.isError || (!tasks.isLoading && scenarioPackFix === undefined)
   useEffect(() => {
     if (!autorunRequested || autorunFired.current || !capabilitiesKnown) return
+    if (!scenarioPackSettled) return
     autorunFired.current = true
     onAutorunConsumed?.()
     if (

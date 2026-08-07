@@ -7,8 +7,10 @@ import {
   episodePollInterval,
   episodeSettled,
   initialPlaygroundConfig,
+  isExistingRunConflict,
   type PlaygroundRunConfig,
   quickRunSelection,
+  resolveScenarioPack,
   shouldAutorun,
 } from './playgroundRun'
 
@@ -161,6 +163,30 @@ describe('quickRunSelection', () => {
   })
 })
 
+describe('resolveScenarioPack', () => {
+  const tasks = [
+    { scenarioId: 'ab-idbait-00-refund_payment', sourceFiles: ['configs/scenarios/ab.json'] },
+    { scenarioId: 'atomic-1', sourceFiles: ['configs/scenarios/atomic.json'] },
+  ]
+
+  it('corrects a trace-prefilled scenario to the pack that actually contains it', () => {
+    expect(resolveScenarioPack('ab-idbait-00-refund_payment', 'atomic.json', tasks)).toBe('ab.json')
+  })
+
+  it('leaves the pack alone when it already owns the scenario', () => {
+    expect(resolveScenarioPack('atomic-1', 'atomic.json', tasks)).toBeUndefined()
+    expect(
+      resolveScenarioPack('ab-idbait-00-refund_payment', 'configs/scenarios/ab.json', tasks),
+    ).toBeUndefined()
+  })
+
+  it('stays silent for an empty or unknown scenario and an unloaded catalog', () => {
+    expect(resolveScenarioPack('', 'atomic.json', tasks)).toBeUndefined()
+    expect(resolveScenarioPack('missing-99', 'atomic.json', tasks)).toBeUndefined()
+    expect(resolveScenarioPack('atomic-1', 'multi.json', [])).toBeUndefined()
+  })
+})
+
 describe('shouldAutorun', () => {
   const ready = {
     requested: true,
@@ -215,6 +241,26 @@ describe('episodePollInterval (SSE fallback)', () => {
 
   it('stops without a manifest once the episode itself has settled', () => {
     expect(episodePollInterval({ episodeSettled: true })).toBe(false)
+  })
+})
+
+describe('isExistingRunConflict (idempotent retry attach)', () => {
+  it('recognizes the runner duplicate-batch rejection and the bridge active-run conflict', () => {
+    expect(
+      isExistingRunConflict(
+        new Error(
+          '{"error":"ValueError: batch \'viewer-1\' already exists with a different configuration"}',
+        ),
+      ),
+    ).toBe(true)
+    expect(isExistingRunConflict(new Error('ACE run is already active: viewer-1'))).toBe(true)
+  })
+
+  it('leaves every other failure on the visible error path', () => {
+    expect(isExistingRunConflict(new Error('Cost cap must be between 0.01 and 100'))).toBe(false)
+    expect(isExistingRunConflict(new Error('The user aborted a request.'))).toBe(false)
+    expect(isExistingRunConflict('already exists')).toBe(false)
+    expect(isExistingRunConflict(undefined)).toBe(false)
   })
 })
 

@@ -11,7 +11,7 @@ import type {
   AceSaveRegressionRequest,
   AceScenarioPack,
 } from '@shared/schema/ace'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query'
 import { apiGet, apiPost } from './client'
 
 export interface AceRunsResponse {
@@ -84,7 +84,10 @@ export function useAceScenarios() {
   })
 }
 
-export function useAceRun(runId: string | undefined) {
+export function useAceRun(
+  runId: string | undefined,
+  options?: Pick<UseQueryOptions<AceBatchSummary>, 'refetchInterval'>,
+) {
   return useQuery({
     queryKey: ['ace-run', runId],
     queryFn: () => apiGet<AceBatchSummary>(`/api/ace/runs/${encodeURIComponent(runId ?? '')}`),
@@ -92,11 +95,14 @@ export function useAceRun(runId: string | undefined) {
     refetchInterval: (query) => {
       // Stop polling on error (e.g. a stale shared URL naming a deleted run)
       // and on terminal lifecycles; otherwise a missing run is hit at 1 Hz forever.
+      // A live Playground session overrides this: there a 404 usually means
+      // "manifest not durable yet", so it keeps polling through errors.
       if (query.state.status === 'error') return false
       const lifecycle = query.state.data?.lifecycle
       if (!lifecycle) return 1_000
       return ['completed', 'cancelled', 'failed'].includes(lifecycle) ? false : 1_000
     },
+    ...options,
   })
 }
 
@@ -104,7 +110,13 @@ export function useStartAceRun() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (request: AceRunRequest) =>
-      apiPost<{ runId: string; lifecycle: string }>('/api/ace/runs', request),
+      apiPost<{ runId: string; lifecycle: string }>('/api/ace/runs', request, {
+        // The server bounds launch at a 30s READY timeout, so a healthy request
+        // always settles well inside this. Without a client bound, a wedged
+        // dev-proxy socket can hold the promise — and the Starting… button —
+        // open forever with no error and no retry path.
+        signal: AbortSignal.timeout(45_000),
+      }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['ace-runs'] }),
   })
 }

@@ -171,6 +171,17 @@ describe('sessionPhase', () => {
     expect(sessionPhase('failed', 2)).toMatchObject({ kind: 'failed', label: 'failed' })
     expect(sessionPhase('cancelled', 2)).toMatchObject({ kind: 'failed', label: 'cancelled' })
   })
+
+  it('resolves complete from a settled episode when the run manifest is unreachable', () => {
+    expect(sessionPhase(undefined, 8, undefined, true)).toMatchObject({
+      kind: 'complete',
+      active: false,
+    })
+    // An unsettled episode without a manifest still reads as live progress.
+    expect(sessionPhase(undefined, 8, undefined, false).kind).toBe('running')
+    // An authoritative active lifecycle outranks the settled fallback.
+    expect(sessionPhase('running', 8, undefined, true).kind).toBe('running')
+  })
 })
 
 describe('EpisodeResultCard', () => {

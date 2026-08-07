@@ -126,6 +126,32 @@ export function shouldAutorun(state: {
   return state.scenarioId.trim() !== '' && state.seed.trim() !== ''
 }
 
+/**
+ * The pack file that actually contains `scenarioId`, when it is not the
+ * currently selected one. A trace deep link (`?trace=<uid>`) carries only the
+ * scenario id — the recorded config has no pack file — so a Replicate of any
+ * non-default-pack scenario would otherwise POST scenarioFile=atomic.json and
+ * be rejected with "unknown scenarioIds". Returns undefined when the current
+ * pack already owns the scenario, when the catalog has not loaded, or when
+ * the scenario is unknown (the server rejection stays visible then).
+ */
+export function resolveScenarioPack(
+  scenarioId: string,
+  currentFile: string,
+  tasks: ReadonlyArray<{ scenarioId: string; sourceFiles: string[] }>,
+): string | undefined {
+  if (scenarioId.trim() === '') return undefined
+  const owner = tasks.find((task) => task.scenarioId === scenarioId)
+  if (!owner) return undefined
+  const bases = owner.sourceFiles
+    .map((file) => file.split('/').at(-1))
+    .filter((base): base is string => base !== undefined && base !== '')
+  if (bases.length === 0) return undefined
+  const currentBase = currentFile.split('/').at(-1)
+  if (currentBase !== undefined && bases.includes(currentBase)) return undefined
+  return bases[0]
+}
+
 /** Run lifecycles during which the episode is still being produced or graded. */
 export const ACTIVE_RUN_LIFECYCLES = ['queued', 'running', 'paused', 'cancelling'] as const
 
@@ -151,6 +177,19 @@ export function episodePollInterval(state: {
       : false
   }
   return state.episodeSettled ? false : EPISODE_POLL_MS
+}
+
+/**
+ * True when a run-start rejection means "a batch with this id already exists".
+ * The Playground reuses one persisted batchId across retries so a lost 202 can
+ * never double-charge; when the retry hits this conflict, the earlier POST
+ * did start the run — the correct recovery is to attach to it, not to error.
+ * Covers the runner's ValueError ("batch '…' already exists …", HTTP 400) and
+ * the bridge's typed run_already_active ("ACE run is already active", 409).
+ */
+export function isExistingRunConflict(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  return /already exists|already active/i.test(error.message)
 }
 
 /** True once an episode trace needs no further polling: terminal status, no pending grade. */
