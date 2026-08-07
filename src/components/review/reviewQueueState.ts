@@ -25,6 +25,61 @@ function oneOf<T extends string>(value: string | null, values: readonly T[]): T 
   return values.includes(value as T) ? (value as T) : undefined
 }
 
+function positiveOffset(value: string | null): number | undefined {
+  if (!value || !/^\d+$/.test(value)) return undefined
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+export interface ReviewQueuePageWindow {
+  start: number
+  end: number
+  total: number
+  hasPrevious: boolean
+  hasNext: boolean
+  previousOffset: number
+  nextOffset: number
+}
+
+/** Move an obsolete offset to the last real page after a filtered total shrinks. */
+export function normalizedReviewQueueOffset(
+  totalValue: number,
+  limitValue: number,
+  offsetValue: number,
+): number {
+  const total = Math.max(0, Math.floor(totalValue))
+  const limit = Math.max(1, Math.floor(limitValue))
+  const offset = Math.max(0, Math.floor(offsetValue))
+  if (total === 0) return 0
+  if (offset < total) return offset
+  return Math.floor((total - 1) / limit) * limit
+}
+
+/** Truthful visible range and page targets for one server response. */
+export function reviewQueuePageWindow(
+  totalValue: number,
+  limitValue: number,
+  offsetValue: number,
+  itemCountValue: number,
+): ReviewQueuePageWindow {
+  const total = Math.max(0, Math.floor(totalValue))
+  const limit = Math.max(1, Math.floor(limitValue))
+  const offset = Math.max(0, Math.floor(offsetValue))
+  const available = Math.max(0, total - offset)
+  const itemCount = Math.min(Math.max(0, Math.floor(itemCountValue)), available)
+  const start = itemCount > 0 ? offset + 1 : 0
+  const end = itemCount > 0 ? offset + itemCount : 0
+  return {
+    start,
+    end,
+    total,
+    hasPrevious: offset > 0,
+    hasNext: itemCount > 0 && end < total,
+    previousOffset: Math.max(0, offset - limit),
+    nextOffset: offset + limit,
+  }
+}
+
 /**
  * Only explicit review-queue parameters are accepted. In particular, model,
  * arm, grade, detector, and judge query parameters can never enter the queue
@@ -40,6 +95,7 @@ export function reviewQueueFiltersFromSearchParams(search: URLSearchParams): Rev
     ),
   ]
   const disagreement = oneOf(search.get('disagreement'), ['true', 'false'] as const)
+  const offset = positiveOffset(search.get('offset'))
   const mode = oneOf(search.get('mode'), REVIEW_MODES) ?? DEFAULT_REVIEW_QUEUE_FILTERS.mode
   const stateParam = search.get('state')
   const corpusParam = search.get('corpusId')
@@ -69,6 +125,7 @@ export function reviewQueueFiltersFromSearchParams(search: URLSearchParams): Rev
     ...(nonEmpty(search.get('q')) ? { q: nonEmpty(search.get('q')) } : {}),
     ...(tags.length > 0 ? { tags } : {}),
     ...(disagreement ? { disagreement: disagreement === 'true' } : {}),
+    ...(offset === undefined ? {} : { offset }),
   }
 }
 
@@ -86,6 +143,9 @@ export function reviewQueueFiltersToSearchParams(filters: ReviewQueueFilters): U
   for (const tag of filters.tags ?? []) search.append('tag', tag)
   if (filters.disagreement !== undefined) {
     search.set('disagreement', String(filters.disagreement))
+  }
+  if (Number.isSafeInteger(filters.offset) && (filters.offset ?? 0) > 0) {
+    search.set('offset', String(filters.offset))
   }
   return search
 }

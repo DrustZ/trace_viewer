@@ -231,7 +231,13 @@ export default function AceRunsPage() {
             value={selected ?? ''}
             onChange={(event) => {
               setEpisodePage(0)
-              setSearch({ run: event.target.value })
+              // Merge instead of replace: dropping scenarioFile/scenarioId would
+              // remount the launcher (keyed on them) and wipe a half-filled form.
+              setSearch((current) => {
+                const next = new URLSearchParams(current)
+                next.set('run', event.target.value)
+                return next
+              })
             }}
             className="ml-auto rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
           >
@@ -246,7 +252,11 @@ export default function AceRunsPage() {
           initialScenarioId={initialScenarioId}
           onStarted={(runId) => {
             setEpisodePage(0)
-            setSearch({ run: runId })
+            setSearch((current) => {
+              const next = new URLSearchParams(current)
+              next.set('run', runId)
+              return next
+            })
           }}
         />
         {runs.isLoading ? (
@@ -567,7 +577,13 @@ export default function AceRunsPage() {
                           ? tracesByUid.get(episode.traceUid)
                           : undefined
                         return (
-                          <tr key={episode.pairKey} className="border-t border-slate-100 align-top">
+                          <tr
+                            key={
+                              episode.pairKey ??
+                              `${episode.scenarioId}:${episode.environmentSeed}:${episode.sourceTraceId}`
+                            }
+                            className="border-t border-slate-100 align-top"
+                          >
                             <td className="px-3 py-2">
                               <div className="font-mono text-slate-700">{episode.scenarioId}</div>
                               {episode.traceUid ? (

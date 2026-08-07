@@ -213,7 +213,11 @@ export default function ComparePage() {
             </div>
             {traceA !== '' && traceB !== '' && (
               <div className="shrink-0">
-                <AceTraceDiff traceAId={traceA} traceBId={traceB} />
+                <AceTraceDiff
+                  traceAId={traceA}
+                  traceBId={traceB}
+                  expectedIdentity={{ runA, runB, instanceId: instance }}
+                />
               </div>
             )}
             <div className="flex min-h-0 flex-1 gap-4">

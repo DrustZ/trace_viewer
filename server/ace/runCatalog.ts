@@ -98,20 +98,27 @@ function runKind(value: unknown, schemaVersion: number): AceRunKind {
 }
 
 function outcome(row: Record<string, unknown>): AceEvaluationOutcome {
-  if (row.invalid_user_sim === true) return 'invalid'
   const status = string(row.status)
   if (status === 'failed' || status === 'error') return 'runtime_error'
+  if (row.invalid_user_sim === true) return 'invalid'
   if (status !== 'completed') return 'ungraded'
   const grade = record(row.grade)
   if (typeof grade.passed === 'boolean') return grade.passed ? 'pass' : 'fail'
   return 'ungraded'
 }
 
-function episodeOf(row: Record<string, unknown>, scheduleDigest: string): AceBatchEpisode | null {
+function validSeed(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0
+}
+
+function episodeOf(
+  row: Record<string, unknown>,
+  scheduleDigest: string | undefined,
+): AceBatchEpisode | null {
   const scenarioId = string(row.scenario_id)
   const seed = number(row.environment_seed, number(row.seed, Number.NaN))
   const file = string(row.file)
-  if (!scenarioId || !Number.isFinite(seed) || !file) return null
+  if (!scenarioId || !validSeed(seed) || !file) return null
   const checks = Array.isArray(record(row.grade).checks) ? record(row.grade).checks : []
   const failedChecks = (checks as unknown[])
     .map(record)
@@ -119,7 +126,8 @@ function episodeOf(row: Record<string, unknown>, scheduleDigest: string): AceBat
     .map((check) => string(check.name))
     .filter((name): name is string => name !== undefined)
   const flags = record(row.flag_summary)
-  const environmentSeed = number(row.environment_seed, seed)
+  const explicitEnvironmentSeed = number(row.environment_seed, Number.NaN)
+  const environmentSeed = validSeed(explicitEnvironmentSeed) ? explicitEnvironmentSeed : seed
   return {
     scenarioId,
     seed,
@@ -145,7 +153,9 @@ function episodeOf(row: Record<string, unknown>, scheduleDigest: string): AceBat
       ? { userSimInvalidAttempts: number(row.user_sim_invalid_attempts) }
       : {}),
     environmentSeed,
-    pairKey: `${scheduleDigest}:${scenarioId}:${environmentSeed}`,
+    ...(scheduleDigest && validSeed(explicitEnvironmentSeed)
+      ? { pairKey: `${scheduleDigest}:${scenarioId}:${explicitEnvironmentSeed}` }
+      : {}),
   }
 }
 
@@ -162,7 +172,7 @@ export async function readAceBatch(manifestPath: string): Promise<AceBatchSummar
   const raw = record(JSON.parse(text))
   const schemaVersion = number(raw.schema_version, 1)
   const runId = string(raw.batch_id) ?? path.basename(path.dirname(manifestPath))
-  const scheduleDigest = string(raw.schedule_digest) ?? 'schedule-unknown'
+  const scheduleDigest = string(raw.schedule_digest)
   const completedRows = Array.isArray(raw.episodes) ? raw.episodes.map(record) : []
   const stateRows = Array.isArray(raw.episode_states) ? raw.episode_states.map(record) : []
   const episodeKey = (row: Record<string, unknown>) =>

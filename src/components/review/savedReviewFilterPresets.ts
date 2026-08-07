@@ -26,9 +26,14 @@ interface StoredReviewFilterPresets {
   presets: SavedReviewFilterPreset[]
 }
 
+function withoutPagination(filters: ReviewQueueFilters): ReviewQueueFilters {
+  const { limit: _limit, offset: _offset, ...filterConditions } = filters
+  return filterConditions
+}
+
 function canonicalPresetQuery(query: string): string {
   return reviewQueueFiltersToSearchParams(
-    reviewQueueFiltersFromSearchParams(new URLSearchParams(query)),
+    withoutPagination(reviewQueueFiltersFromSearchParams(new URLSearchParams(query))),
   ).toString()
 }
 
@@ -120,7 +125,7 @@ export function saveReviewFilterPreset(
   const preset: SavedReviewFilterPreset = {
     id,
     name: normalizedName,
-    query: reviewQueueFiltersToSearchParams(filters).toString(),
+    query: reviewQueueFiltersToSearchParams(withoutPagination(filters)).toString(),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   }

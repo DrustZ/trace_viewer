@@ -75,6 +75,28 @@ describe('saved review filter presets', () => {
     expect(loadReviewFilterPresets(storage)).toEqual([])
   })
 
+  it('strips pagination from legacy stored presets and always applies at the first page', () => {
+    const storage = memoryStorage(
+      JSON.stringify({
+        schemaVersion: 1,
+        presets: [
+          {
+            id: 'legacy-page',
+            name: 'Legacy page',
+            query:
+              'mode=assisted&annotator=alice&rubricVersion=rubric-v3&corpusId=simulation&state=draft&offset=400',
+            createdAt: '2026-08-06T00:00:00.000Z',
+            updatedAt: '2026-08-06T00:00:00.000Z',
+          },
+        ],
+      }),
+    )
+
+    const [preset] = loadReviewFilterPresets(storage)
+    expect(preset?.query).not.toContain('offset=')
+    expect(preset && reviewFiltersForPreset(preset).offset).toBe(0)
+  })
+
   it('strips run ids and unknown automatic fields from Calibration presets', () => {
     const storage = memoryStorage()
     const saved = saveReviewFilterPreset(

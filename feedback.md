@@ -4,6 +4,44 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 4 — 2026-08-07 00:45
+
+### Round 3 响应验证（四个提交逐一核验，全部真正闭环 ✅）
+
+- **3dbba5d probe 缓存** ✅ 内容寻址（全部 scenario rows 规范化 + `src/ace/**/*.py` 递归
+  digest + probe 脚本 + rubrics），probe 前后双读指纹相等才算 verified——stale success 在
+  结构上不可能；单飞无 interleave 窗口；增长有界。缓存命中约几 ms，可接受。
+- **125db7e overlay 恢复** ✅ token 写在 `meta.extra.detectorAnalysisToken` 且指纹刻意不含
+  它——不会自失效循环；内容变化必先改指纹，所以 token 匹配即 overlay 准确；重放是同步
+  无 Python 的，每次 rescan 至多一次，无 thrash。header 不再说谎。
+- **d75e31a 稳定化上限** ✅ analyze 3 次、waitForStableScan 60s，到顶抛真错误不吐旧数据。
+- **f15fc2c start READY** ✅ POST /api/ace/runs 现在阻塞到持久 READY 标记（launchToken
+  64-hex 认证、行缓冲解析健壮、超时 SIGTERM→250ms SIGKILL、stderr 里 token 已脱敏）；
+  失败以带类型的 4xx/5xx 返回。**control TOCTOU 也一并修了，且修在正确的层**：
+  ac_express 的 `transition_batch_control` 用 per-run flock + 锁内重读 + cancel 不可逆闩，
+  冲突映射为 `control_conflict` → 409。
+
+### 仍开放（优先级排序）
+
+1. **[MEDIUM] headline 指标 formal gate（Round 3 #5，未动）** — `dashboard.ts`
+   `passRateExecuted` 和 escalation matrix 仍聚合任何显式选中的 run；响应里没有
+   informal 标记（client 只能自己从 `scope.availableRuns[].runKind` 推导）。建议：聚合含
+   非 scored run 时响应加 `informalRuns: [...]` 或 `mixedRunKinds: true`，前端标注。
+2. **[LOW] dashboard 吞掉稳定化到顶错误** — `routes/ace.ts` dashboard 路由 catch 后返回无
+   detector 数据的聚合，`detectorAnalysisAvailable` 算了但没放进响应——消费者无法区分
+   "detector 全零" 和 "分析失败"。把这个布尔放进 payload 即可。
+3. **[LOW] probe 失败结果不缓存** — venv 持续损坏时每次轮询仍 spawn 一个快速失败的解释器
+   （单飞限并发 1）。可以给失败结果一个短 TTL（如 30s）。
+4. **[LOW] probe 指纹盲区** — venv/site-packages 变化不失效缓存；symlink 的 .py 不进指纹。
+5. **[LOW] 重复 `batch_id` 跨目录**（Round 3 #7）与 reviews 队列排序比较器
+   `undefined` 不一致（Round 1 起）仍未动。
+
+### 本轮 Claude 的直接修改
+
+1. `src/pages/AceRunsPage.tsx` — run 下拉与 `onStarted` 的 `setSearch` 改为合并现有
+   query params 而非整体替换（原先会丢 `scenarioFile`/`scenarioId`，launcher 因 key 变化
+   remount，用户填了一半的表单被清空）。
+
 ## Round 3 — 2026-08-06 23:50
 
 ### 响应验证（ed00530 + analysisCoordinator，质量好的部分）

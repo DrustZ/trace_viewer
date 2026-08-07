@@ -121,6 +121,93 @@ describe('ACE artifacts', () => {
     expect(trace.evaluation?.outcome).toBe('ungraded')
   })
 
+  it('derives pair identity locally and never trusts a producer-only pair key', () => {
+    const derived = applyAceArtifacts(parsed(), {
+      meta: { extra: { scenario_id: 'scenario-a', environment_seed: 7 } },
+      provenance: {
+        schedule_digest: 'schedule-a',
+        pair_key: 'forged-schedule:scenario-a:99',
+      },
+    })
+    expect(derived.meta.pairKey).toBe('schedule-a:scenario-a:7')
+
+    const producerOnly = applyAceArtifacts(parsed(), {
+      provenance: { pair_key: 'forged-schedule:scenario-a:7' },
+    })
+    expect(producerOnly.meta.pairKey).toBeUndefined()
+
+    const fractional = applyAceArtifacts(parsed(), {
+      meta: { extra: { scenario_id: 'scenario-a', environment_seed: 1.5 } },
+      provenance: { schedule_digest: 'schedule-a' },
+    })
+    expect(fractional.meta.pairKey).toBeUndefined()
+
+    const legacySeedOnly = parseAceBatchManifest({
+      schema_version: 3,
+      batch_id: 'legacy-seed-only',
+      schedule_digest: 'schedule-a',
+      episodes: [
+        {
+          scenario_id: 'scenario-a',
+          seed: 7,
+          file: 'episode-s7.json',
+          status: 'completed',
+          grade: { passed: true },
+        },
+      ],
+    })
+    expect(
+      applyAceArtifacts(parsed(), undefined, {
+        batch: legacySeedOnly,
+        sourceFile: 'episode-s7.json',
+      }).meta.pairKey,
+    ).toBeUndefined()
+  })
+
+  it('gives runtime and lifecycle state precedence over conflicting grade metadata', () => {
+    const batch = parseAceBatchManifest({
+      schema_version: 3,
+      batch_id: 'outcome-conflicts',
+      schedule_digest: 'schedule-a',
+      episodes: [
+        {
+          scenario_id: 'runtime',
+          environment_seed: 1,
+          file: 'runtime.json',
+          status: 'failed',
+          invalid_user_sim: true,
+          grade: { passed: true },
+        },
+        {
+          scenario_id: 'invalid',
+          environment_seed: 1,
+          file: 'invalid.json',
+          status: 'completed',
+          invalid_user_sim: true,
+          grade: { passed: true },
+        },
+        {
+          scenario_id: 'running',
+          environment_seed: 1,
+          file: 'running.json',
+          status: 'running',
+          grade: { passed: false },
+        },
+      ],
+    })
+    expect(batch).not.toBeNull()
+
+    expect(
+      applyAceArtifacts(parsed(), undefined, { batch, sourceFile: 'runtime.json' }).evaluation,
+    ).toMatchObject({ lifecycle: { state: 'failed' }, outcome: 'runtime_error' })
+    expect(
+      applyAceArtifacts(parsed(), undefined, { batch, sourceFile: 'invalid.json' }).evaluation,
+    ).toMatchObject({ lifecycle: { state: 'completed' }, outcome: 'invalid' })
+    expect(
+      applyAceArtifacts(parsed(), undefined, { batch, sourceFile: 'running.json' }).evaluation,
+    ).toMatchObject({ lifecycle: { state: 'executing' }, outcome: 'ungraded' })
+  })
+
   it('normalizes the complete sidecar without mixing shadow findings into grade gating', () => {
     const batch = parseAceBatchManifest({
       schema_version: 2,

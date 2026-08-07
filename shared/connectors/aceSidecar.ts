@@ -58,15 +58,18 @@ function snakeRecord(value: unknown): Record<string, unknown> {
 
 function batchEpisode(value: Record<string, unknown>): BatchEpisode | null {
   const scenarioId = stringValue(value.scenario_id) ?? stringValue(value.scenarioId)
-  const environmentSeed =
-    numberValue(value.environment_seed) ??
-    numberValue(value.environmentSeed) ??
-    numberValue(value.seed)
+  const recordedEnvironmentSeed =
+    numberValue(value.environment_seed) ?? numberValue(value.environmentSeed)
+  const environmentSeed = recordedEnvironmentSeed ?? numberValue(value.seed)
   if (!scenarioId || environmentSeed === undefined) return null
   return {
     ...value,
     scenarioId,
     environmentSeed,
+    environmentSeedRecorded:
+      recordedEnvironmentSeed !== undefined &&
+      Number.isSafeInteger(recordedEnvironmentSeed) &&
+      recordedEnvironmentSeed >= 0,
     sourceFile: stringValue(value.file) ?? stringValue(value.sourceFile),
     status: stringValue(value.status),
     phase: stringValue(value.phase),
@@ -462,8 +465,9 @@ function outcomeOf(
   invalid: boolean,
   gradePassed: boolean | undefined,
 ): TraceOutcome {
-  if (invalid) return 'invalid'
   if (lifecycle === 'failed') return 'runtime_error'
+  if (invalid) return 'invalid'
+  if (lifecycle !== 'completed') return 'ungraded'
   if (gradePassed === true) return 'pass'
   if (gradePassed === false) return 'fail'
   return 'ungraded'
@@ -500,15 +504,23 @@ export function applyAceArtifacts(
     stringValue(sourceExtra.scenario_id) ??
     stringValue(sourceExtra.scenarioId) ??
     episode?.scenarioId
-  const environmentSeed =
-    numberValue(sourceExtra.environment_seed) ??
-    numberValue(sourceExtra.environmentSeed) ??
-    episode?.environmentSeed
+  const recordedSourceEnvironmentSeed =
+    numberValue(sourceExtra.environment_seed) ?? numberValue(sourceExtra.environmentSeed)
+  const environmentSeed = recordedSourceEnvironmentSeed ?? episode?.environmentSeed
   const scheduleDigest = context.batch?.scheduleDigest ?? stringValue(provenance.schedule_digest)
+  const recordedEnvironmentSeed =
+    recordedSourceEnvironmentSeed ??
+    (episode?.environmentSeedRecorded === true ? episode.environmentSeed : undefined)
+  const pairableEnvironmentSeed =
+    recordedEnvironmentSeed !== undefined &&
+    Number.isSafeInteger(recordedEnvironmentSeed) &&
+    recordedEnvironmentSeed >= 0
+      ? recordedEnvironmentSeed
+      : undefined
   const pairKey =
-    scheduleDigest && scenarioId && environmentSeed !== undefined
-      ? `${scheduleDigest}:${scenarioId}:${environmentSeed}`
-      : stringValue(provenance.pair_key)
+    scheduleDigest && scenarioId && pairableEnvironmentSeed !== undefined
+      ? `${scheduleDigest}:${scenarioId}:${pairableEnvironmentSeed}`
+      : undefined
 
   const metrics = isRecord(rawEvaluation.metrics) ? rawEvaluation.metrics : {}
   const rawStatus = episode?.status ?? metrics.status

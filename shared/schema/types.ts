@@ -209,6 +209,8 @@ export interface TraceEvaluation {
 export interface BatchEpisode {
   scenarioId: string
   environmentSeed: number
+  /** False when a legacy display-only `seed` fallback supplied the value. */
+  environmentSeedRecorded?: boolean
   sourceFile?: string
   status?: string
   phase?: string

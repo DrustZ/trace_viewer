@@ -15,6 +15,9 @@ export interface AceEpisodePair {
 }
 
 export interface AcePairingIntegrity {
+  /** Rows without a locally derived schedule/scenario/seed identity. */
+  missingPairKeyRowsA: number
+  missingPairKeyRowsB: number
   /** Keys repeated within arm A. Every row for these keys is excluded from pairing. */
   duplicateKeysA: string[]
   /** Keys repeated within arm B. Every row for these keys is excluded from pairing. */
@@ -44,6 +47,7 @@ export function classifyAcePair(a: AceBatchEpisode, b: AceBatchEpisode): AcePair
 function episodesByPairKey(rows: readonly AceBatchEpisode[]): Map<string, AceBatchEpisode[]> {
   const grouped = new Map<string, AceBatchEpisode[]>()
   for (const row of rows) {
+    if (!row.pairKey) continue
     const group = grouped.get(row.pairKey)
     if (group) group.push(row)
     else grouped.set(row.pairKey, [row])
@@ -66,6 +70,7 @@ export function pairAceRuns(a: AceBatchEpisode[], b: AceBatchEpisode[]): AcePair
   const excludedDuplicatePairKeys = [...duplicateKeySet].sort()
 
   const pairs = a.flatMap((left) => {
+    if (!left.pairKey) return []
     if (duplicateKeySet.has(left.pairKey)) return []
     const leftGroup = leftByKey.get(left.pairKey)
     const rightGroup = rightByKey.get(left.pairKey)
@@ -94,6 +99,8 @@ export function pairAceRuns(a: AceBatchEpisode[], b: AceBatchEpisode[]): AcePair
   return {
     pairs,
     integrity: {
+      missingPairKeyRowsA: a.filter((row) => !row.pairKey).length,
+      missingPairKeyRowsB: b.filter((row) => !row.pairKey).length,
       duplicateKeysA,
       duplicateKeysB,
       excludedDuplicatePairKeys,
@@ -126,22 +133,28 @@ export function pairedTraceHref(
 }
 
 export function pairedPassInterval(pairs: AceEpisodePair[]): {
-  delta: number
+  delta: number | null
   low: number | null
   high: number | null
+  n: number
 } {
-  if (pairs.length === 0) return { delta: 0, low: null, high: null }
+  if (pairs.length === 0) return { delta: null, low: null, high: null, n: 0 }
   const eligible = pairs.filter((pair) => pair.delta !== 'not_comparable')
-  if (eligible.length === 0) return { delta: 0, low: null, high: null }
+  if (eligible.length === 0) return { delta: null, low: null, high: null, n: 0 }
   const differences: number[] = eligible.map((pair) =>
     pair.delta === 'improvement' ? 1 : pair.delta === 'regression' ? -1 : 0,
   )
   const delta = differences.reduce((sum, value) => sum + value, 0) / differences.length
-  if (differences.length < 2) return { delta, low: null, high: null }
+  if (differences.length < 2) return { delta, low: null, high: null, n: differences.length }
   const variance =
     differences.reduce((sum, value) => sum + (value - delta) ** 2, 0) / (differences.length - 1)
   const margin = 1.96 * Math.sqrt(variance / differences.length)
-  return { delta, low: Math.max(-1, delta - margin), high: Math.min(1, delta + margin) }
+  return {
+    delta,
+    low: Math.max(-1, delta - margin),
+    high: Math.min(1, delta + margin),
+    n: differences.length,
+  }
 }
 
 export function AcePairedComparison({ runA, runB }: { runA: string; runB: string }) {
@@ -165,11 +178,16 @@ export function AcePairedComparison({ runA, runB }: { runA: string; runB: string
       integrity.excludedDuplicatePairKeys.length > 0
         ? ` ${integrity.excludedDuplicatePairKeys.length} non-unique pair key(s) were excluded (${integrity.excludedRowsA} A row(s), ${integrity.excludedRowsB} B row(s)).`
         : ''
+    const missingIdentityDetail =
+      integrity.missingPairKeyRowsA > 0 || integrity.missingPairKeyRowsB > 0
+        ? ` ${integrity.missingPairKeyRowsA} A row(s) and ${integrity.missingPairKeyRowsB} B row(s) lack a trustworthy pair identity.`
+        : ''
     return (
       <p className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
         No matched units. Paired analysis requires the same schedule digest, scenario ID, and
         environment seed; use the unpaired per-run table above for unrelated batches.
         {duplicateDetail}
+        {missingIdentityDetail}
       </p>
     )
   }
@@ -195,7 +213,7 @@ export function AcePairedComparison({ runA, runB }: { runA: string; runB: string
         </span>
         {notComparable > 0 ? (
           <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">
-            {notComparable} excluded (invalid/runtime/pending)
+            {notComparable} excluded (invalid/runtime/ungraded)
           </span>
         ) : null}
         {integrity.excludedDuplicatePairKeys.length > 0 ? (
@@ -207,11 +225,24 @@ export function AcePairedComparison({ runA, runB }: { runA: string; runB: string
             {integrity.excludedRowsA} rows · B {integrity.excludedRowsB} rows
           </span>
         ) : null}
+        {integrity.missingPairKeyRowsA > 0 || integrity.missingPairKeyRowsB > 0 ? (
+          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">
+            missing pair identity · A {integrity.missingPairKeyRowsA} · B{' '}
+            {integrity.missingPairKeyRowsB}
+          </span>
+        ) : null}
+        {integrity.unmatchedUniqueA > 0 || integrity.unmatchedUniqueB > 0 ? (
+          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">
+            unmatched unique · A {integrity.unmatchedUniqueA} · B {integrity.unmatchedUniqueB}
+          </span>
+        ) : null}
         <span className="ml-auto font-mono">
-          paired Δ {(interval.delta * 100).toFixed(1)} pp
-          {interval.low === null || interval.high === null
+          {interval.delta === null
+            ? 'paired Δ unavailable · n=0 comparable'
+            : `paired Δ ${(interval.delta * 100).toFixed(1)} pp · n=${interval.n}`}
+          {interval.delta === null || interval.low === null || interval.high === null
             ? ''
-            : ` · 95% CI ${(interval.low * 100).toFixed(1)} to ${(interval.high * 100).toFixed(1)}`}
+            : ` · approx. 95% CI ${(interval.low * 100).toFixed(1)} to ${(interval.high * 100).toFixed(1)}`}
         </span>
       </summary>
       <div className="max-h-64 overflow-auto border-t border-slate-100">

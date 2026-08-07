@@ -7,6 +7,7 @@ import {
   alignToolSequence,
   alignTraceMessages,
   compareAceTraces,
+  matchedAceTraceIdentity,
   toolActualOutcome,
 } from './AceTraceDiff'
 
@@ -28,6 +29,7 @@ function trace(uid: string, messages: Message[], ledger: ToolLedgerEntry[] = [])
       checkpointStep: 0,
       split: 'test',
       sourceFormat: 'ace-episode',
+      pairKey: 'schedule-a:scenario-1:7',
     },
     messages,
     stats: {
@@ -55,6 +57,55 @@ function trace(uid: string, messages: Message[], ledger: ToolLedgerEntry[] = [])
     },
   }
 }
+
+describe('ACE matched trace identity', () => {
+  const expected = { runA: 'run-a', runB: 'run-b', instanceId: 'scenario-1' }
+
+  it('accepts only the same canonical schedule/scenario/seed unit', () => {
+    expect(
+      matchedAceTraceIdentity(
+        trace('a-trace', [message('a', 'A', 0)]),
+        trace('b-trace', [message('b', 'B', 0)]),
+        expected,
+      ),
+    ).toEqual({ matched: true, pairKey: 'schedule-a:scenario-1:7' })
+  })
+
+  it('rejects same-scenario traces from different seeds', () => {
+    const a = trace('a-trace', [])
+    const b = trace('b-trace', [])
+    b.meta.pairKey = 'schedule-a:scenario-1:8'
+
+    expect(matchedAceTraceIdentity(a, b, expected)).toMatchObject({
+      matched: false,
+      reason: expect.stringContaining('environment seeds'),
+    })
+  })
+
+  it('rejects missing pair identity and stale run or instance URLs', () => {
+    const a = trace('a-trace', [])
+    const b = trace('b-trace', [])
+    delete b.meta.pairKey
+    expect(matchedAceTraceIdentity(a, b, expected)).toMatchObject({
+      matched: false,
+      reason: expect.stringContaining('pair key'),
+    })
+
+    b.meta.pairKey = a.meta.pairKey
+    b.meta.runId = 'another-run'
+    expect(matchedAceTraceIdentity(a, b, expected)).toMatchObject({
+      matched: false,
+      reason: expect.stringContaining('selected runs'),
+    })
+
+    b.meta.runId = 'run-b'
+    b.meta.instanceId = 'scenario-2'
+    expect(matchedAceTraceIdentity(a, b, expected)).toMatchObject({
+      matched: false,
+      reason: expect.stringContaining('selected scenario'),
+    })
+  })
+})
 
 function reviewRecord(): ReviewRecord {
   return {

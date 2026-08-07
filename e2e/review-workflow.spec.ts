@@ -199,3 +199,114 @@ test('review presets and safe classification shortcuts work end to end', async (
     page.getByText('Submitted and locked. Automatic evaluation is now revealed'),
   ).toBeVisible()
 })
+
+test('review pagination is shareable, clamps stale offsets, and keyboard-next crosses pages', async ({
+  page,
+}) => {
+  const paginatedTraces = Array.from({ length: 205 }, (_, index) => `page-trace-${index + 1}`)
+  await page.addInitScript(() => {
+    class QuietEventSource {
+      addEventListener() {}
+      close() {}
+    }
+    Object.defineProperty(window, 'EventSource', { configurable: true, value: QuietEventSource })
+  })
+  await page.route('http://127.0.0.1:4173/api/**', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    const pathname = url.pathname
+    if (pathname === '/api/reviews/queue') {
+      const offset = Number(url.searchParams.get('offset') ?? 0)
+      const limit = Number(url.searchParams.get('limit') ?? 200)
+      await fulfillJson(route, {
+        total: paginatedTraces.length,
+        limit,
+        offset,
+        items: paginatedTraces.slice(offset, offset + limit).map((traceUid, pageIndex) => {
+          const absoluteIndex = offset + pageIndex + 1
+          return {
+            subject: subject(traceUid),
+            trace: {
+              corpusId: 'simulation',
+              runId: 'review-run',
+              traceUid,
+              sourceTraceId: `source-${traceUid}`,
+              title: `Case ${absoluteIndex}`,
+              instanceId: `scenario-${absoluteIndex}`,
+            },
+            state: 'unreviewed',
+            revision: 0,
+            locked: false,
+            priority: 'none',
+            rootCauseTags: [],
+          }
+        }),
+      })
+      return
+    }
+    if (pathname === '/api/reviews/calibration') {
+      await fulfillJson(route, {
+        records: 0,
+        recordsWithAutomaticVerdicts: 0,
+        dimensions: [],
+        disagreements: [],
+      })
+      return
+    }
+    if (pathname.startsWith('/api/reviews/') && pathname.endsWith('/draft')) {
+      const traceUid = decodeURIComponent(pathname.split('/')[3] ?? '')
+      await fulfillJson(route, {
+        subject: subject(traceUid),
+        trace: {
+          corpusId: 'simulation',
+          runId: 'review-run',
+          traceUid,
+          sourceTraceId: `source-${traceUid}`,
+          title: traceUid,
+          transcript: [
+            { id: `${traceUid}-message`, role: 'user', content: `Transcript for ${traceUid}` },
+          ],
+          rubric: [{ dimensionId: 'resolution', label: 'Resolution' }],
+          groundTruth: { status: 'available', authoritative: true },
+        },
+        draft: null,
+        latestFinal: null,
+        nextRevision: 1,
+        visibility: 'revealed',
+      })
+      return
+    }
+    await route.fulfill({
+      status: 404,
+      body: `unexpected request: ${request.method()} ${pathname}`,
+    })
+  })
+
+  await page.goto(
+    '/reviews?mode=assisted&annotator=local&rubricVersion=judge_v2&corpusId=simulation&state=unreviewed&offset=400',
+  )
+  await expect(page).toHaveURL(/offset=200/)
+  await expect(page.getByText('Showing 201–205 of 205')).toBeVisible()
+  await expect(page.getByLabel('Previous review page')).toBeEnabled()
+  await expect(page.getByLabel('Next review page')).toBeDisabled()
+
+  await page.getByLabel('Review priority').selectOption('high')
+  await expect(page).not.toHaveURL(/offset=/)
+  await expect(page).toHaveURL(/priority=high/)
+  await expect(page.getByText('Showing 1–200 of 205')).toBeVisible()
+  await expect(page.getByLabel('Previous review page')).toBeDisabled()
+  await expect(page.getByLabel('Next review page')).toBeEnabled()
+
+  await page.getByLabel('Next review page').click()
+  await expect(page).toHaveURL(/offset=200/)
+  await expect(page.getByText('Showing 201–205 of 205')).toBeVisible()
+  await page.getByLabel('Previous review page').click()
+  await expect(page.getByText('Showing 1–200 of 205')).toBeVisible()
+
+  await page.getByText('Case 200', { exact: true }).click()
+  await expect(page.getByText('Transcript for page-trace-200')).toBeVisible()
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect(page).toHaveURL(/offset=200/)
+  await expect(page.getByText('Showing 201–205 of 205')).toBeVisible()
+  await expect(page.getByText('Transcript for page-trace-201')).toBeVisible()
+})

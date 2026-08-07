@@ -35,7 +35,8 @@ export interface AceBatchEpisode {
   userSimAttempts?: number
   userSimInvalidAttempts?: number
   environmentSeed: number
-  pairKey: string
+  /** Present only when schedule digest + explicit environment seed make this unit pairable. */
+  pairKey?: string
 }
 
 export interface AceBatchTotals {

@@ -668,10 +668,11 @@ test('fixed local workflow launches, follows live progress, reviews, forks, and 
 
   await expect(page.getByText('Matched ACE units')).toBeVisible()
   await expect(page.getByText('1 improvements')).toBeVisible()
-  await expect(page.getByText('paired Δ 100.0 pp')).toBeVisible()
+  await expect(page.getByText(/paired Δ 100.0 pp · n=1/)).toBeVisible()
   await page.getByRole('link', { name: SCENARIO_ID }).click()
   await expect(page).toHaveURL(new RegExp(`traceA=${encodeURIComponent(PARENT_TRACE)}`))
   await expect(page).toHaveURL(new RegExp(`traceB=${encodeURIComponent(CHILD_TRACE)}`))
+  await expect(page.getByText('Aligned ACE trace diff')).toBeVisible()
 
   const parentColumn = page.getByTestId(`trace-view-${PARENT_RUN}`)
   const childColumn = page.getByTestId(`trace-view-${CHILD_RUN}`)

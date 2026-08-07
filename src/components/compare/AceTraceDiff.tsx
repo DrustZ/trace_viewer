@@ -61,6 +61,68 @@ export interface ComparisonReviewState {
   error?: string
 }
 
+export interface AceTraceDiffIdentity {
+  runA: string
+  runB: string
+  instanceId: string
+}
+
+export type AceTraceIdentityDecision =
+  | { matched: true; pairKey: string }
+  | { matched: false; reason: string }
+
+function traceRunId(trace: Trace): string | undefined {
+  return (
+    trace.meta.runId ??
+    (typeof trace.meta.extra?.run === 'string' ? trace.meta.extra.run : undefined)
+  )
+}
+
+/**
+ * Fail closed before calling two traces a matched ACE diff. A shared scenario
+ * name is insufficient because the two rows may use different environment
+ * seeds or schedules; pairKey is the canonical schedule/scenario/seed identity.
+ */
+export function matchedAceTraceIdentity(
+  a: Trace,
+  b: Trace,
+  expected: AceTraceDiffIdentity,
+): AceTraceIdentityDecision {
+  const runA = traceRunId(a)
+  const runB = traceRunId(b)
+  if (runA !== expected.runA || runB !== expected.runB) {
+    return {
+      matched: false,
+      reason: 'one or both trace URLs do not belong to the selected runs',
+    }
+  }
+  if (
+    !expected.instanceId ||
+    a.meta.instanceId !== expected.instanceId ||
+    b.meta.instanceId !== expected.instanceId
+  ) {
+    return {
+      matched: false,
+      reason: 'one or both trace URLs do not belong to the selected scenario',
+    }
+  }
+  const pairKeyA = a.meta.pairKey?.trim()
+  const pairKeyB = b.meta.pairKey?.trim()
+  if (!pairKeyA || !pairKeyB) {
+    return {
+      matched: false,
+      reason: 'both traces need a recorded schedule/scenario/seed pair key',
+    }
+  }
+  if (pairKeyA !== pairKeyB) {
+    return {
+      matched: false,
+      reason: 'the selected traces use different schedules or environment seeds',
+    }
+  }
+  return { matched: true, pairKey: pairKeyA }
+}
+
 function canonicalValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalValue)
   if (value !== null && typeof value === 'object') {
@@ -751,7 +813,15 @@ export function AceTraceDiffSummary({
   )
 }
 
-export function AceTraceDiff({ traceAId, traceBId }: { traceAId: string; traceBId: string }) {
+export function AceTraceDiff({
+  traceAId,
+  traceBId,
+  expectedIdentity,
+}: {
+  traceAId: string
+  traceBId: string
+  expectedIdentity: AceTraceDiffIdentity
+}) {
   const a = useTrace(traceAId || undefined)
   const b = useTrace(traceBId || undefined)
   const reviewA = useComparisonReviews(a.data)
@@ -772,6 +842,18 @@ export function AceTraceDiff({ traceAId, traceBId }: { traceAId: string; traceBI
     return (
       <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
         Aligned diff unavailable: one or both exact traces could not be loaded.
+      </p>
+    )
+  }
+  const identity = matchedAceTraceIdentity(a.data, b.data, expectedIdentity)
+  if (!identity.matched) {
+    return (
+      <p
+        data-testid="aligned-ace-trace-mismatch"
+        className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"
+      >
+        Aligned diff unavailable: {identity.reason}. Select the same matched row from the ACE table
+        or choose traces with the same pair key.
       </p>
     )
   }

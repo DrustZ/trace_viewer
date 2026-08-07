@@ -340,4 +340,88 @@ describe('ACE live batch catalog', () => {
       controlsAvailable: false,
     })
   })
+
+  it('never invents pair identity without a schedule digest and explicit valid seed', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ace-pair-identity-'))
+    fixtures.push(directory)
+    const manifestPath = path.join(directory, 'batch.json')
+    const row = (id: string, extra: Record<string, unknown> = {}) => ({
+      scenario_id: id,
+      seed: 7,
+      file: `${id}-s7.json`,
+      status: 'completed',
+      grade: { passed: true, checks: [] },
+      ...extra,
+    })
+
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'missing-schedule',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 1 },
+        episodes: [row('no-schedule', { environment_seed: 7 })],
+      }),
+    )
+    const missingSchedule = await readAceBatch(manifestPath)
+    expect(missingSchedule.scheduleDigest).toBeUndefined()
+    expect(missingSchedule.episodes?.[0]).not.toHaveProperty('pairKey')
+
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'seed-contract',
+        schedule_digest: 'schedule-a',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 3 },
+        episodes: [
+          row('explicit', { environment_seed: 7 }),
+          row('legacy-seed-only'),
+          row('fractional', { environment_seed: 1.5 }),
+        ],
+      }),
+    )
+    const seedContract = await readAceBatch(manifestPath)
+    expect(seedContract.episodes).toHaveLength(2)
+    expect(seedContract.episodes?.[0]?.pairKey).toBe('schedule-a:explicit:7')
+    expect(seedContract.episodes?.[1]).not.toHaveProperty('pairKey')
+  })
+
+  it('keeps runtime, invalid, and nonterminal grading conflicts out of each other', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ace-outcome-conflicts-'))
+    fixtures.push(directory)
+    const manifestPath = path.join(directory, 'batch.json')
+    const row = (id: string, status: string, extra: Record<string, unknown> = {}) => ({
+      scenario_id: id,
+      environment_seed: 1,
+      file: `${id}-s1.json`,
+      status,
+      ...extra,
+    })
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        schema_version: 3,
+        batch_id: 'outcome-conflicts',
+        schedule_digest: 'schedule-a',
+        lifecycle: { status: 'completed' },
+        totals: { episodes: 4 },
+        episodes: [
+          row('runtime', 'failed', { invalid_user_sim: true, grade: { passed: true } }),
+          row('invalid', 'completed', { invalid_user_sim: true, grade: { passed: true } }),
+          row('running', 'running', { grade: { passed: false } }),
+          row('cancelled', 'cancelled', { grade: { passed: false } }),
+        ],
+      }),
+    )
+
+    expect((await readAceBatch(manifestPath)).episodes?.map((episode) => episode.outcome)).toEqual([
+      'runtime_error',
+      'invalid',
+      'ungraded',
+      'ungraded',
+    ])
+  })
 })

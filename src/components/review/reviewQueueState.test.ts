@@ -4,8 +4,10 @@ import {
   calibrationFiltersForQueue,
   DEFAULT_REVIEW_QUEUE_FILTERS,
   nextReviewSubject,
+  normalizedReviewQueueOffset,
   reviewQueueFiltersFromSearchParams,
   reviewQueueFiltersToSearchParams,
+  reviewQueuePageWindow,
 } from './reviewQueueState'
 
 function subject(traceUid: string): ReviewSubject {
@@ -87,6 +89,45 @@ describe('review queue URL state', () => {
     expect(filters.corpusId).toBeUndefined()
     expect(reviewQueueFiltersToSearchParams(filters).get('state')).toBe('all')
     expect(reviewQueueFiltersToSearchParams(filters).get('corpusId')).toBe('all')
+  })
+
+  it('round-trips a positive page offset and canonicalizes zero or invalid offsets', () => {
+    const page = reviewQueueFiltersFromSearchParams(new URLSearchParams('offset=400'))
+    expect(page.offset).toBe(400)
+    expect(reviewQueueFiltersToSearchParams(page).get('offset')).toBe('400')
+
+    for (const query of ['offset=0', 'offset=-1', 'offset=1.5', 'offset=unsafe']) {
+      const filters = reviewQueueFiltersFromSearchParams(new URLSearchParams(query))
+      expect(filters.offset).toBeUndefined()
+      expect(reviewQueueFiltersToSearchParams(filters).has('offset')).toBe(false)
+    }
+  })
+})
+
+describe('review queue pagination', () => {
+  it('reports truthful ranges and adjacent page offsets', () => {
+    expect(reviewQueuePageWindow(610, 200, 200, 200)).toEqual({
+      start: 201,
+      end: 400,
+      total: 610,
+      hasPrevious: true,
+      hasNext: true,
+      previousOffset: 0,
+      nextOffset: 400,
+    })
+    expect(reviewQueuePageWindow(610, 200, 600, 10)).toMatchObject({
+      start: 601,
+      end: 610,
+      hasPrevious: true,
+      hasNext: false,
+    })
+  })
+
+  it('moves empty out-of-range pages to the last real page after totals shrink', () => {
+    expect(normalizedReviewQueueOffset(205, 200, 400)).toBe(200)
+    expect(normalizedReviewQueueOffset(200, 200, 200)).toBe(0)
+    expect(normalizedReviewQueueOffset(0, 200, 400)).toBe(0)
+    expect(normalizedReviewQueueOffset(610, 200, 400)).toBe(400)
   })
 })
 

@@ -72,6 +72,8 @@ describe('ACE matched-pair links', () => {
     expect(result.pairs).toHaveLength(1)
     expect(result.pairs[0]).toMatchObject({ key: uniqueKey, delta: 'improvement' })
     expect(result.integrity).toEqual({
+      missingPairKeyRowsA: 0,
+      missingPairKeyRowsB: 0,
       duplicateKeysA: [duplicateAKey],
       duplicateKeysB: [duplicateBKey],
       excludedDuplicatePairKeys: [duplicateAKey, duplicateBKey],
@@ -80,7 +82,7 @@ describe('ACE matched-pair links', () => {
       unmatchedUniqueA: 0,
       unmatchedUniqueB: 0,
     })
-    expect(pairedPassInterval(result.pairs)).toEqual({ delta: 1, low: null, high: null })
+    expect(pairedPassInterval(result.pairs)).toEqual({ delta: 1, low: null, high: null, n: 1 })
   })
 
   it('reports unmatched unique keys without counting them as duplicate exclusions', () => {
@@ -91,6 +93,8 @@ describe('ACE matched-pair links', () => {
 
     expect(result.pairs).toEqual([])
     expect(result.integrity).toEqual({
+      missingPairKeyRowsA: 0,
+      missingPairKeyRowsB: 0,
       duplicateKeysA: [],
       duplicateKeysB: [],
       excludedDuplicatePairKeys: [],
@@ -98,6 +102,43 @@ describe('ACE matched-pair links', () => {
       excludedRowsB: 0,
       unmatchedUniqueA: 1,
       unmatchedUniqueB: 1,
+    })
+  })
+
+  it('keeps missing pair identity visible and never matches it', () => {
+    const left = episode('ignored-a', 'pass', 'missing-a')
+    const right = episode('ignored-b', 'pass', 'missing-b')
+    delete left.pairKey
+    delete right.pairKey
+
+    expect(pairAceRuns([left], [right])).toEqual({
+      pairs: [],
+      integrity: {
+        missingPairKeyRowsA: 1,
+        missingPairKeyRowsB: 1,
+        duplicateKeysA: [],
+        duplicateKeysB: [],
+        excludedDuplicatePairKeys: [],
+        excludedRowsA: 0,
+        excludedRowsB: 0,
+        unmatchedUniqueA: 0,
+        unmatchedUniqueB: 0,
+      },
+    })
+  })
+
+  it('reports no estimate when every matched row is invalid or ungraded', () => {
+    const pairing = pairAceRuns(
+      [episode('schedule:invalid:1', 'invalid', 'a-invalid')],
+      [episode('schedule:invalid:1', 'ungraded', 'b-ungraded')],
+    )
+
+    expect(pairing.pairs[0]?.delta).toBe('not_comparable')
+    expect(pairedPassInterval(pairing.pairs)).toEqual({
+      delta: null,
+      low: null,
+      high: null,
+      n: 0,
     })
   })
 })

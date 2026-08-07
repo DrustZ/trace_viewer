@@ -1,10 +1,11 @@
 import {
   type ReviewQueueItem,
+  type ReviewQueueResponse,
   type ReviewRecord,
   type ReviewSubject,
   reviewSubjectKey,
 } from '@shared/reviews/types'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { ReviewQueueFilters } from '../api/reviews'
 import { CalibrationStatsPanel } from '../components/review/CalibrationStatsPanel'
@@ -15,6 +16,7 @@ import {
   nextReviewSubject,
   reviewQueueFiltersFromSearchParams,
   reviewQueueFiltersToSearchParams,
+  reviewQueuePageWindow,
 } from '../components/review/reviewQueueState'
 
 export function ReviewPage() {
@@ -22,17 +24,36 @@ export function ReviewPage() {
   const filters = useMemo(() => reviewQueueFiltersFromSearchParams(searchParams), [searchParams])
   const [selected, setSelected] = useState<ReviewSubject | null>(null)
   const [queueItems, setQueueItems] = useState<readonly ReviewQueueItem[]>([])
+  const [queuePage, setQueuePage] = useState<ReviewQueueResponse | null>(null)
   const [queueNotice, setQueueNotice] = useState<string | null>(null)
+  const selectFirstAtOffset = useRef<number | null>(null)
 
   const updateFilters = useCallback(
     (next: ReviewQueueFilters) => {
+      selectFirstAtOffset.current = null
       setSelected(null)
       setQueueItems([])
+      setQueuePage(null)
       setQueueNotice(null)
       setSearchParams(reviewQueueFiltersToSearchParams(next), { replace: true })
     },
     [setSearchParams],
   )
+
+  const receiveQueuePage = useCallback((page: ReviewQueueResponse) => {
+    setQueueItems(page.items)
+    setQueuePage(page)
+    const pendingOffset = selectFirstAtOffset.current
+    if (pendingOffset === null || pendingOffset !== page.offset) return
+    selectFirstAtOffset.current = null
+    const first = page.items[0]
+    if (first) {
+      setSelected(first.subject)
+      setQueueNotice(null)
+    } else {
+      setQueueNotice('The next page became empty after the queue changed.')
+    }
+  }, [])
 
   const select = useCallback((subject: ReviewSubject) => {
     setSelected(subject)
@@ -40,18 +61,43 @@ export function ReviewPage() {
   }, [])
 
   const next = useCallback(() => {
-    const subject = nextReviewSubject(
-      queueItems,
-      selected?.traceUid,
-      filters.state === 'unreviewed' || filters.state === 'draft',
-    )
+    const subject = nextReviewSubject(queueItems, selected?.traceUid)
     if (subject) {
       setSelected(subject)
       setQueueNotice(null)
       return
     }
+    if (queuePage) {
+      const pageWindow = reviewQueuePageWindow(
+        queuePage.total,
+        queuePage.limit,
+        queuePage.offset,
+        queuePage.items.length,
+      )
+      if (pageWindow.hasNext) {
+        selectFirstAtOffset.current = pageWindow.nextOffset
+        setSelected(null)
+        setQueueItems([])
+        setQueuePage(null)
+        setQueueNotice('Loading the next review page…')
+        setSearchParams(
+          reviewQueueFiltersToSearchParams({ ...filters, offset: pageWindow.nextOffset }),
+          { replace: true },
+        )
+        return
+      }
+    }
+    const wrap =
+      filters.state === 'unreviewed' || filters.state === 'draft'
+        ? nextReviewSubject(queueItems, selected?.traceUid, true)
+        : null
+    if (wrap) {
+      setSelected(wrap)
+      setQueueNotice(null)
+      return
+    }
     setQueueNotice('You reached the end of the current filtered queue.')
-  }, [filters.state, queueItems, selected?.traceUid])
+  }, [filters, queueItems, queuePage, selected?.traceUid, setSearchParams])
 
   const submitted = useCallback((_record: ReviewRecord) => {
     setQueueNotice('Submitted and locked. Review the reveal, then press Alt/Option + ↓ for next.')
@@ -89,7 +135,7 @@ export function ReviewPage() {
             filters={filters}
             selectedTraceUid={selected?.traceUid}
             onFiltersChange={updateFilters}
-            onItemsChange={setQueueItems}
+            onPageDataChange={receiveQueuePage}
             onSelect={select}
           />
           <CalibrationStatsPanel filters={calibrationFiltersForQueue(filters)} />

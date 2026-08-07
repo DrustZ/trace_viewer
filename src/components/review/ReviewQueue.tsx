@@ -1,8 +1,12 @@
-import type { ReviewQueueItem, ReviewSubject } from '@shared/reviews/types'
-import { useEffect, useState } from 'react'
+import type { ReviewQueueItem, ReviewQueueResponse, ReviewSubject } from '@shared/reviews/types'
+import { useCallback, useEffect, useState } from 'react'
 import { type ReviewQueueFilters, useReviewQueue } from '../../api/reviews'
 import { ReviewFilterPresets } from './ReviewFilterPresets'
-import { DEFAULT_REVIEW_QUEUE_FILTERS } from './reviewQueueState'
+import {
+  DEFAULT_REVIEW_QUEUE_FILTERS,
+  normalizedReviewQueueOffset,
+  reviewQueuePageWindow,
+} from './reviewQueueState'
 
 export interface ReviewQueueProps {
   initialFilters?: Partial<ReviewQueueFilters>
@@ -11,11 +15,57 @@ export interface ReviewQueueProps {
   className?: string
   onFiltersChange?: (filters: ReviewQueueFilters) => void
   onItemsChange?: (items: readonly ReviewQueueItem[]) => void
+  onPageDataChange?: (page: ReviewQueueResponse) => void
   onSelect?: (subject: ReviewSubject, item: ReviewQueueItem) => void
 }
 
 function selectClass(): string {
   return 'rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-800'
+}
+
+export function ReviewQueuePagination({
+  page,
+  disabled = false,
+  onPrevious,
+  onNext,
+}: {
+  page: ReviewQueueResponse
+  disabled?: boolean
+  onPrevious: (offset: number) => void
+  onNext: (offset: number) => void
+}) {
+  const window = reviewQueuePageWindow(page.total, page.limit, page.offset, page.items.length)
+  const range = window.start === 0 ? '0' : `${window.start}–${window.end}`
+  return (
+    <nav
+      aria-label="Review queue pages"
+      className="flex items-center justify-between gap-2 border-t border-slate-200 px-3 py-2"
+    >
+      <p aria-live="polite" className="text-xs text-slate-500">
+        Showing {range} of {window.total}
+      </p>
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          aria-label="Previous review page"
+          disabled={disabled || !window.hasPrevious}
+          className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-700 disabled:opacity-40"
+          onClick={() => onPrevious(window.previousOffset)}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          aria-label="Next review page"
+          disabled={disabled || !window.hasNext}
+          className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-700 disabled:opacity-40"
+          onClick={() => onNext(window.nextOffset)}
+        >
+          Next
+        </button>
+      </div>
+    </nav>
+  )
 }
 
 export function ReviewQueue({
@@ -25,6 +75,7 @@ export function ReviewQueue({
   className = '',
   onFiltersChange,
   onItemsChange,
+  onPageDataChange,
   onSelect,
 }: ReviewQueueProps) {
   const [uncontrolledFilters, setUncontrolledFilters] = useState<ReviewQueueFilters>({
@@ -35,19 +86,32 @@ export function ReviewQueue({
   const [query, setQuery] = useState(filters.q ?? '')
   const queue = useReviewQueue(filters)
 
-  const setFilters = (update: (previous: ReviewQueueFilters) => ReviewQueueFilters): void => {
-    const next = update(filters)
-    if (controlledFilters === undefined) setUncontrolledFilters(next)
-    onFiltersChange?.(next)
-  }
+  const setFilters = useCallback(
+    (update: (previous: ReviewQueueFilters) => ReviewQueueFilters): void => {
+      const next = update(filters)
+      if (controlledFilters === undefined) setUncontrolledFilters(next)
+      onFiltersChange?.(next)
+    },
+    [controlledFilters, filters, onFiltersChange],
+  )
 
   useEffect(() => {
     setQuery(filters.q ?? '')
   }, [filters.q])
 
   useEffect(() => {
-    if (queue.data) onItemsChange?.(queue.data.items)
-  }, [onItemsChange, queue.data])
+    const page = queue.data
+    if (!page) return
+    const requestedOffset = filters.offset ?? 0
+    if (page.offset !== requestedOffset) return
+    const normalizedOffset = normalizedReviewQueueOffset(page.total, page.limit, requestedOffset)
+    if (normalizedOffset !== requestedOffset) {
+      setFilters((previous) => ({ ...previous, offset: normalizedOffset }))
+      return
+    }
+    onItemsChange?.(page.items)
+    onPageDataChange?.(page)
+  }, [filters.offset, onItemsChange, onPageDataChange, queue.data, setFilters])
 
   return (
     <section className={`overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
@@ -276,6 +340,14 @@ export function ReviewQueue({
           </li>
         ))}
       </ol>
+      {queue.data ? (
+        <ReviewQueuePagination
+          page={queue.data}
+          disabled={queue.isFetching}
+          onPrevious={(offset) => setFilters((previous) => ({ ...previous, offset }))}
+          onNext={(offset) => setFilters((previous) => ({ ...previous, offset }))}
+        />
+      ) : null}
     </section>
   )
 }
