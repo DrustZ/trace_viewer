@@ -81,6 +81,12 @@ export function taskLabHref(scenarioId: string, sourceFile: string): string | nu
   return `/ace/lab?${new URLSearchParams({ scenarioFile, scenarioId }).toString()}`
 }
 
+/** One-click deep link: same prefilled lab, but the episode starts immediately. */
+export function taskAutorunHref(scenarioId: string, sourceFile: string): string | null {
+  const base = taskLabHref(scenarioId, sourceFile)
+  return base === null ? null : `${base}&autorun=1`
+}
+
 function UnknownValue({ value }: { value: unknown }) {
   if (value === null || value === undefined || value === '') {
     return <span className="italic text-slate-400">Not set in source</span>
@@ -611,6 +617,10 @@ export default function AceTasksPage() {
     task.data && !task.data.conflict
       ? taskLabHref(task.data.scenarioId, task.data.sourceFiles[0] ?? '')
       : null
+  const autorunHref =
+    task.data && !task.data.conflict
+      ? taskAutorunHref(task.data.scenarioId, task.data.sourceFiles[0] ?? '')
+      : null
 
   return (
     <div className="min-h-screen bg-slate-50 px-5 py-4">
@@ -817,12 +827,20 @@ export default function AceTasksPage() {
                       </div>
                     </div>
                     <div className="ml-auto flex flex-wrap gap-2">
+                      {autorunHref && (
+                        <Link
+                          to={autorunHref}
+                          className="rounded-md bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
+                        >
+                          Run in Playground
+                        </Link>
+                      )}
                       {labHref && (
                         <Link
                           to={labHref}
-                          className="rounded-md bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
+                          className="rounded-md border border-violet-200 px-2.5 py-1.5 text-xs text-violet-700 hover:bg-violet-50"
                         >
-                          Open in Playground
+                          Configure only
                         </Link>
                       )}
                       {experimentHref && (

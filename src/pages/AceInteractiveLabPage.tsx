@@ -3,7 +3,7 @@ import type { AceBatchSummary } from '@shared/schema/ace'
 import { ACE_RUN_CONTROL_ACTIONS, aceRunControlDecision } from '@shared/schema/aceRunControl'
 import type { TracesListResponse } from '@shared/schema/api'
 import type { Trace } from '@shared/schema/types'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   useAceCapabilities,
@@ -28,6 +28,7 @@ import {
   initialPlaygroundConfig,
   type PlaygroundRunConfig,
   quickRunSelection,
+  shouldAutorun,
 } from '../components/ace/playgroundRun'
 import { ErrorState, LoadingState } from '../components/common/EmptyState'
 import { formatNumber, formatPercent } from '../components/common/format'
@@ -323,12 +324,18 @@ function PlaygroundWorkbench({
   requestedTraceUid,
   selectedRunId,
   initialConfig,
+  autorunRequested = false,
+  onAutorunConsumed,
   onRunSelected,
 }: {
   sourceTrace?: Trace
   requestedTraceUid?: string
   selectedRunId?: string
   initialConfig: PlaygroundRunConfig
+  /** `?autorun=1` deep link: start the prefilled run once after mount. */
+  autorunRequested?: boolean
+  /** Strips autorun from the URL so a reload can never re-trigger it. */
+  onAutorunConsumed?: () => void
   onRunSelected: (runId: string) => void
 }) {
   const sourceIsSimulation = sourceTrace?.meta.corpusId === 'simulation'
@@ -422,6 +429,31 @@ function PlaygroundWorkbench({
       submitInFlight.current = false
     }
   }
+
+  // Autorun evaluates exactly once per mount, as soon as the bridge capability
+  // is known. The guard ref survives StrictMode's double effect, the URL param
+  // is stripped immediately (a reload never re-runs), and runEpisode's own
+  // in-flight + persisted-batchId idempotency backstops everything else.
+  const autorunFired = useRef(false)
+  const capabilitiesKnown = !capabilities.isLoading
+  useEffect(() => {
+    if (!autorunRequested || autorunFired.current || !capabilitiesKnown) return
+    autorunFired.current = true
+    onAutorunConsumed?.()
+    if (
+      shouldAutorun({
+        requested: autorunRequested,
+        alreadyFired: false,
+        capabilitiesKnown,
+        bridgeAvailable: available,
+        scenarioId: config.scenarioId,
+        seed: config.seed,
+        selectedRunId,
+      })
+    ) {
+      void runEpisode()
+    }
+  })
 
   // One primary CTA whose semantics follow the config: with no scenario picked
   // it is a zero-config Quick run (first scenario of the current/default pack,
@@ -735,6 +767,7 @@ export default function AceInteractiveLabPage() {
   const [search, setSearch] = useSearchParams()
   const requestedTraceUid = search.get('trace')?.trim() || undefined
   const selectedRunId = search.get('run')?.trim() || undefined
+  const autorunRequested = search.get('autorun') === '1'
   const trace = useTrace(requestedTraceUid)
   const sourceTrace = trace.data
 
@@ -756,7 +789,16 @@ export default function AceInteractiveLabPage() {
   const onRunSelected = (runId: string) => {
     const next = new URLSearchParams(search)
     next.set('run', runId)
+    // Belt and braces: a URL that names a live run must never still say
+    // autorun — copying or reloading it would start a second paid episode.
+    next.delete('autorun')
     setSearch(next)
+  }
+
+  const onAutorunConsumed = () => {
+    const next = new URLSearchParams(search)
+    next.delete('autorun')
+    setSearch(next, { replace: true })
   }
 
   return (
@@ -774,6 +816,8 @@ export default function AceInteractiveLabPage() {
         },
         sourceTrace,
       )}
+      autorunRequested={autorunRequested}
+      onAutorunConsumed={onAutorunConsumed}
       onRunSelected={onRunSelected}
     />
   )

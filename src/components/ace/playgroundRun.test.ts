@@ -9,6 +9,7 @@ import {
   initialPlaygroundConfig,
   type PlaygroundRunConfig,
   quickRunSelection,
+  shouldAutorun,
 } from './playgroundRun'
 
 function config(overrides: Partial<PlaygroundRunConfig> = {}): PlaygroundRunConfig {
@@ -157,6 +158,40 @@ describe('quickRunSelection', () => {
     expect(
       quickRunSelection([{ file: 'empty.json' }], tasks), // pack with no scenarios
     ).toBeNull()
+  })
+})
+
+describe('shouldAutorun', () => {
+  const ready = {
+    requested: true,
+    alreadyFired: false,
+    capabilitiesKnown: true,
+    bridgeAvailable: true,
+    scenarioId: 'scenario-01',
+    seed: '3',
+  }
+
+  it('fires once for a complete prefilled config', () => {
+    expect(shouldAutorun(ready)).toBe(true)
+  })
+
+  it('never fires twice: the guard flag wins over everything else', () => {
+    expect(shouldAutorun({ ...ready, alreadyFired: true })).toBe(false)
+  })
+
+  it('waits for capabilities and requires a live bridge', () => {
+    expect(shouldAutorun({ ...ready, capabilitiesKnown: false })).toBe(false)
+    expect(shouldAutorun({ ...ready, bridgeAvailable: false })).toBe(false)
+  })
+
+  it('never runs on top of an existing session (run param present)', () => {
+    expect(shouldAutorun({ ...ready, selectedRunId: 'run-1' })).toBe(false)
+  })
+
+  it('requires an explicit request and a complete scenario + seed', () => {
+    expect(shouldAutorun({ ...ready, requested: false })).toBe(false)
+    expect(shouldAutorun({ ...ready, scenarioId: '' })).toBe(false)
+    expect(shouldAutorun({ ...ready, seed: ' ' })).toBe(false)
   })
 })
 

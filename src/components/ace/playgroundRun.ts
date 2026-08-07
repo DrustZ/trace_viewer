@@ -104,6 +104,28 @@ export function quickRunSelection(
   return { scenarioFile: packFile, scenarioId: scenario.scenarioId, seed: '1' }
 }
 
+/**
+ * `?autorun=1` fires at most one run per page load, and only when the deep
+ * link arrived with a complete, immediately runnable config. It never waits
+ * for the user to complete a partial config (that would launch surprisingly
+ * late), never re-fires (guard ref), and never runs on top of an existing
+ * session (`run` param present, e.g. reload of a URL that already ran).
+ */
+export function shouldAutorun(state: {
+  requested: boolean
+  alreadyFired: boolean
+  capabilitiesKnown: boolean
+  bridgeAvailable: boolean
+  scenarioId: string
+  seed: string
+  selectedRunId?: string
+}): boolean {
+  if (!state.requested || state.alreadyFired) return false
+  if (!state.capabilitiesKnown || !state.bridgeAvailable) return false
+  if (state.selectedRunId !== undefined) return false
+  return state.scenarioId.trim() !== '' && state.seed.trim() !== ''
+}
+
 /** Run lifecycles during which the episode is still being produced or graded. */
 export const ACTIVE_RUN_LIFECYCLES = ['queued', 'running', 'paused', 'cancelling'] as const
 

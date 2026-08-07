@@ -155,6 +155,29 @@ describe('TraceHeader cockpit tabs and identity', () => {
     expect(productionHtml).not.toContain('View task definition')
   })
 
+  it('offers one-click replication: lab deep link with the trace uid and autorun=1', () => {
+    const simulation = renderToStaticMarkup(
+      <MemoryRouter>
+        <TraceHeader trace={makeTrace()} activeTab="conversation" onTabChange={() => undefined} />
+      </MemoryRouter>,
+    )
+    expect(simulation).toContain('Replicate in Playground')
+    expect(simulation).toMatch(
+      /href="\/ace\/lab\?trace=simulation%3Arun-a%3Asha-123&(?:amp;)?autorun=1"/,
+    )
+    expect(simulation).not.toContain('Open in Playground')
+
+    const production = makeTrace()
+    production.meta.corpusId = 'production'
+    const productionHtml = renderToStaticMarkup(
+      <MemoryRouter>
+        <TraceHeader trace={production} activeTab="conversation" onTabChange={() => undefined} />
+      </MemoryRouter>,
+    )
+    // Production traces have no runnable scenario contract — no replicate CTA.
+    expect(productionHtml).not.toContain('Replicate in Playground')
+  })
+
   it('does not leak automatic status, score, or failure counts into blind calibration chrome', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>

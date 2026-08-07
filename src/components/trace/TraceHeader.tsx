@@ -190,10 +190,13 @@ export function TraceHeader({
                   View task definition
                 </Link>
                 <Link
-                  to={`/ace/lab?${new URLSearchParams({ trace: traceUid }).toString()}`}
+                  // autorun replays the recorded scenario/seed/config in one
+                  // click; the lab strips the flag on arrival so a reload of
+                  // the resulting URL never launches a second episode.
+                  to={`/ace/lab?${new URLSearchParams({ trace: traceUid, autorun: '1' }).toString()}`}
                   className="text-xs font-medium text-violet-600 hover:underline"
                 >
-                  Open in Playground
+                  Replicate in Playground
                 </Link>
               </>
             )}

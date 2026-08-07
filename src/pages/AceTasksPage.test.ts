@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   ScoringAuthority,
+  taskAutorunHref,
   taskCompareHref,
   taskExperimentHref,
   taskLabHref,
@@ -97,6 +98,19 @@ describe('ACE task explorer links', () => {
       scenarioId: 's-refund-00',
     })
     expect(taskLabHref('s-refund-00', 'configs/scenarios/../sealed.json')).toBeNull()
+  })
+
+  it('builds the one-click Run in Playground link: prefilled lab plus autorun=1', () => {
+    const href = taskAutorunHref('s-refund-00', 'configs/scenarios/sealed.json')
+    const url = new URL(href as string, 'http://localhost')
+    expect(url.pathname).toBe('/ace/lab')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      scenarioFile: 'sealed.json',
+      scenarioId: 's-refund-00',
+      autorun: '1',
+    })
+    // Same containment rules as the configure-only link.
+    expect(taskAutorunHref('s-refund-00', 'configs/scenarios/../sealed.json')).toBeNull()
   })
 
   it('never renders stale check roles as verified after a source mismatch', () => {
