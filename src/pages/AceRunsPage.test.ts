@@ -1,4 +1,4 @@
-import type { AceBatchEpisode, AceRunTraceSummary } from '@shared/schema/ace'
+import type { AceBatchEpisode, AceBatchTotals, AceRunTraceSummary } from '@shared/schema/ace'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
@@ -6,7 +6,9 @@ import {
   aceRunControlDisabled,
   aceRunHeartbeat,
   aceRunProgress,
+  collectRunIssues,
   filterAceRunEpisodes,
+  RunStatTiles,
 } from './AceRunsPage'
 
 function episode(overrides: Partial<AceBatchEpisode> = {}): AceBatchEpisode {
@@ -47,6 +49,114 @@ function trace(overrides: Partial<AceRunTraceSummary> = {}): AceRunTraceSummary 
     ...overrides,
   }
 }
+
+function totals(overrides: Partial<AceBatchTotals> = {}): AceBatchTotals {
+  return {
+    episodes: 45,
+    passed: 30,
+    failedGrade: 10,
+    runtimeErrors: 2,
+    invalidUserSim: 3,
+    userSimAttempts: 50,
+    invalidUserSimAttempts: 5,
+    passRate: 0.667,
+    userSimValidityRate: 0.9,
+    userSimAttemptValidityRate: 0.9,
+    avgUserTurns: 4,
+    avgToolCalls: 6,
+    flagsMajor: 1,
+    flagsMinor: 2,
+    costUsd: 12.34,
+    ...overrides,
+  }
+}
+
+describe('RunStatTiles', () => {
+  it('shows exactly the six primary tiles and folds the rest into More stats', () => {
+    const html = renderToStaticMarkup(
+      RunStatTiles({
+        totals: totals(),
+        tracesLoaded: 41,
+        progress: { inProgress: 7, stateNotRepresented: 4 },
+      }),
+    )
+    const [primary = '', more = ''] = html.split('More stats')
+    for (const label of ['Scheduled', 'Pass', 'Fail', 'Invalid', 'Pass rate', 'Cost']) {
+      expect(primary).toContain(`>${label}</span>`)
+    }
+    expect(primary.match(/<span class="text-slate-400">/g)).toHaveLength(6)
+    expect(primary).toContain('$12.34')
+    for (const label of ['Traces loaded', 'Runtime', 'In progress', 'Attempt validity']) {
+      expect(primary).not.toContain(`>${label}</span>`)
+      expect(more).toContain(`>${label}</span>`)
+    }
+    expect(more).toContain('4 schedule states not yet represented')
+    expect(more).toContain('45 / 50 attempts')
+  })
+
+  it('renders a placeholder cost when the run reports none', () => {
+    const html = renderToStaticMarkup(
+      RunStatTiles({ totals: totals({ costUsd: null }), tracesLoaded: 0, progress: null }),
+    )
+    expect(html).toContain('—')
+  })
+})
+
+describe('collectRunIssues', () => {
+  it('returns nothing for a healthy scored run', () => {
+    expect(collectRunIssues({ runKind: 'scored' })).toEqual([])
+  })
+
+  it('merges every run notice into one ordered list, errors first', () => {
+    const issues = collectRunIssues(
+      {
+        runKind: 'debug',
+        staleManifest: true,
+        manifestError: 'EPARSE',
+        lifecycleError: 'harness crashed',
+        reconciliation: {
+          scheduledEpisodes: 45,
+          manifestEpisodes: 40,
+          ingestedTraces: 39,
+          matchedTraces: 39,
+          pendingTraceFiles: 0,
+          missingTerminalTraces: 1,
+          orphanTraces: 2,
+        },
+      },
+      new Error('bridge offline'),
+    )
+    expect(issues.map((issue) => issue.key)).toEqual([
+      'lifecycle',
+      'control',
+      'run-kind',
+      'stale-manifest',
+      'reconciliation',
+    ])
+    expect(issues.filter((issue) => issue.severity === 'error')).toHaveLength(2)
+    expect(issues.find((issue) => issue.key === 'control')?.text).toContain('bridge offline')
+    expect(issues.find((issue) => issue.key === 'reconciliation')?.text).toContain(
+      '1 terminal trace(s) missing · 2 orphan trace(s) · 40/45 scheduled states represented.',
+    )
+  })
+
+  it('skips reconciliation when the schedule is fully represented', () => {
+    expect(
+      collectRunIssues({
+        runKind: 'scored',
+        reconciliation: {
+          scheduledEpisodes: 45,
+          manifestEpisodes: 45,
+          ingestedTraces: 45,
+          matchedTraces: 45,
+          pendingTraceFiles: 0,
+          missingTerminalTraces: 0,
+          orphanTraces: 0,
+        },
+      }),
+    ).toEqual([])
+  })
+})
 
 describe('ACE run diagnostics helpers', () => {
   it('labels trace-only runs read-only and disables every control action', () => {

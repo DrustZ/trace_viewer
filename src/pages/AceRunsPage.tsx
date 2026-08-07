@@ -1,6 +1,7 @@
 import type {
   AceBatchEpisode,
   AceBatchSummary,
+  AceBatchTotals,
   AceRunLifecycle,
   AceRunTraceSummary,
 } from '@shared/schema/ace'
@@ -9,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAceRun, useAceRuns, useControlAceRun } from '../api/ace'
 import { AceRunLauncher } from '../components/ace/AceRunLauncher'
+import Drawer from '../components/common/Drawer'
 import { EmptyState, LoadingState } from '../components/common/EmptyState'
 import { formatNumber, formatPercent } from '../components/common/format'
 
@@ -99,6 +101,157 @@ export function aceRunProgress(
   }
 }
 
+export interface AceRunIssue {
+  key: string
+  severity: 'error' | 'warning'
+  text: string
+}
+
+/** Every run-level notice folded into one expandable "Issues (n)" block. */
+export function collectRunIssues(
+  run: Pick<
+    AceBatchSummary,
+    'runKind' | 'staleManifest' | 'manifestError' | 'lifecycleError' | 'reconciliation'
+  >,
+  controlError?: unknown,
+): AceRunIssue[] {
+  const issues: AceRunIssue[] = []
+  if (run.lifecycleError) {
+    issues.push({
+      key: 'lifecycle',
+      severity: 'error',
+      text: `Harness error: ${run.lifecycleError}`,
+    })
+  }
+  if (controlError) {
+    issues.push({
+      key: 'control',
+      severity: 'error',
+      text: `Control request failed: ${
+        controlError instanceof Error ? controlError.message : String(controlError)
+      }`,
+    })
+  }
+  if (run.runKind !== 'scored') {
+    issues.push({
+      key: 'run-kind',
+      severity: 'warning',
+      text: `This is a ${run.runKind} run. It is available for exact analysis, but it is excluded from the default formal aggregate.`,
+    })
+  }
+  if (run.staleManifest) {
+    issues.push({
+      key: 'stale-manifest',
+      severity: 'warning',
+      text: `The current batch.json is unreadable; showing the last successfully parsed snapshot. ${run.manifestError ?? ''}`.trim(),
+    })
+  }
+  const reconciliation = run.reconciliation
+  if (
+    reconciliation &&
+    (reconciliation.missingTerminalTraces > 0 ||
+      reconciliation.orphanTraces > 0 ||
+      reconciliation.manifestEpisodes < reconciliation.scheduledEpisodes)
+  ) {
+    issues.push({
+      key: 'reconciliation',
+      severity: 'warning',
+      text: `Ingest reconciliation: ${reconciliation.missingTerminalTraces} terminal trace(s) missing · ${reconciliation.orphanTraces} orphan trace(s) · ${reconciliation.manifestEpisodes}/${reconciliation.scheduledEpisodes} scheduled states represented.`,
+    })
+  }
+  return issues
+}
+
+/**
+ * The six primary run tiles; everything secondary (traces loaded, runtime
+ * errors, in-progress, attempt validity) folds into "More stats".
+ */
+export function RunStatTiles({
+  totals,
+  tracesLoaded,
+  progress,
+}: {
+  totals: AceBatchTotals
+  tracesLoaded: number
+  progress: { inProgress: number; stateNotRepresented: number } | null
+}) {
+  return (
+    <>
+      <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-3 xl:grid-cols-6">
+        <div>
+          <span className="text-slate-400">Scheduled</span>
+          <br />
+          <b>{formatNumber(totals.episodes)}</b>
+        </div>
+        <div>
+          <span className="text-slate-400">Pass</span>
+          <br />
+          <b className="text-emerald-700">{formatNumber(totals.passed)}</b>
+        </div>
+        <div>
+          <span className="text-slate-400">Fail</span>
+          <br />
+          <b className="text-red-700">{formatNumber(totals.failedGrade)}</b>
+        </div>
+        <div>
+          <span className="text-slate-400">Invalid</span>
+          <br />
+          <b className="text-amber-700">{formatNumber(totals.invalidUserSim)}</b>
+        </div>
+        <div>
+          <span className="text-slate-400">Pass rate</span>
+          <br />
+          <b>{formatPercent(totals.passRate)}</b>
+        </div>
+        <div>
+          <span className="text-slate-400">Cost</span>
+          <br />
+          <b>{totals.costUsd === null ? '—' : `$${totals.costUsd.toFixed(2)}`}</b>
+        </div>
+      </div>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[11px] text-slate-500 hover:text-slate-700">
+          More stats
+        </summary>
+        <div className="mt-2 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+          <div>
+            <span className="text-slate-400">Traces loaded</span>
+            <br />
+            <b>{formatNumber(tracesLoaded)}</b>
+          </div>
+          <div>
+            <span className="text-slate-400">Runtime</span>
+            <br />
+            <b className="text-violet-700">{formatNumber(totals.runtimeErrors)}</b>
+          </div>
+          <div>
+            <span className="text-slate-400">In progress</span>
+            <br />
+            <b>{formatNumber(progress?.inProgress ?? 0)}</b>
+            {(progress?.stateNotRepresented ?? 0) > 0 ? (
+              <div className="text-[10px] text-amber-600">
+                {formatNumber(progress?.stateNotRepresented ?? 0)} schedule states not yet
+                represented
+              </div>
+            ) : null}
+          </div>
+          <div>
+            <span className="text-slate-400">Attempt validity</span>
+            <br />
+            <b>{formatPercent(totals.userSimAttemptValidityRate)}</b>
+            {totals.userSimAttempts !== null && totals.invalidUserSimAttempts !== null ? (
+              <div className="text-[10px] text-slate-400">
+                {totals.userSimAttempts - totals.invalidUserSimAttempts} / {totals.userSimAttempts}{' '}
+                attempts
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </details>
+    </>
+  )
+}
+
 export function filterAceRunEpisodes(
   episodes: readonly AceBatchEpisode[],
   tracesByUid: ReadonlyMap<string, AceRunTraceSummary>,
@@ -152,6 +305,11 @@ export default function AceRunsPage() {
   const [episodeStatus, setEpisodeStatus] = useState('')
   const [failuresOnly, setFailuresOnly] = useState(false)
   const [episodePage, setEpisodePage] = useState(0)
+  // Deep links from the task explorer carry scenario params: open the launcher
+  // pre-filled instead of burying the intent behind the New run button.
+  const [launcherOpen, setLauncherOpen] = useState(
+    () => Boolean(initialScenarioFile) || Boolean(initialScenarioId),
+  )
   const episodeStatuses = useMemo(
     () => [...new Set(episodes.map((episode) => episode.status))].sort(),
     [episodes],
@@ -203,44 +361,60 @@ export default function AceRunsPage() {
     ? aceRunHeartbeat(run.data.updatedAt, run.data.lifecycle)
     : { ageMs: null, stale: false }
   const progress = run.data ? aceRunProgress(run.data.totals.episodes, episodes) : null
+  const issues = run.data ? collectRunIssues(run.data, control.error) : []
 
   return (
     <div className="min-h-screen bg-slate-50 px-5 py-4">
       <div className="mx-auto max-w-7xl space-y-4">
         <header className="flex flex-wrap items-center gap-3">
           <h1 className="text-base font-semibold text-slate-900">ACE runs</h1>
-          <select
-            value={selected ?? ''}
-            onChange={(event) => {
+          <label className="flex min-w-0 items-center gap-2">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+              Run
+            </span>
+            <select
+              value={selected ?? ''}
+              onChange={(event) => {
+                setEpisodePage(0)
+                // Merge instead of replace: dropping scenarioFile/scenarioId would
+                // remount the launcher (keyed on them) and wipe a half-filled form.
+                setSearch((current) => {
+                  const next = new URLSearchParams(current)
+                  next.set('run', event.target.value)
+                  return next
+                })
+              }}
+              className="max-w-[28rem] rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-sm font-semibold text-slate-900"
+            >
+              {(runs.data?.items ?? []).map((item) => (
+                <option key={item.runId}>{item.runId}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setLauncherOpen(true)}
+            className="ml-auto rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+          >
+            New run
+          </button>
+        </header>
+        <Drawer open={launcherOpen} onClose={() => setLauncherOpen(false)} title="New run">
+          <AceRunLauncher
+            key={`${initialScenarioFile ?? ''}:${initialScenarioId ?? ''}`}
+            initialScenarioFile={initialScenarioFile}
+            initialScenarioId={initialScenarioId}
+            onStarted={(runId) => {
               setEpisodePage(0)
-              // Merge instead of replace: dropping scenarioFile/scenarioId would
-              // remount the launcher (keyed on them) and wipe a half-filled form.
+              setLauncherOpen(false)
               setSearch((current) => {
                 const next = new URLSearchParams(current)
-                next.set('run', event.target.value)
+                next.set('run', runId)
                 return next
               })
             }}
-            className="ml-auto rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
-          >
-            {(runs.data?.items ?? []).map((item) => (
-              <option key={item.runId}>{item.runId}</option>
-            ))}
-          </select>
-        </header>
-        <AceRunLauncher
-          key={`${initialScenarioFile ?? ''}:${initialScenarioId ?? ''}`}
-          initialScenarioFile={initialScenarioFile}
-          initialScenarioId={initialScenarioId}
-          onStarted={(runId) => {
-            setEpisodePage(0)
-            setSearch((current) => {
-              const next = new URLSearchParams(current)
-              next.set('run', runId)
-              return next
-            })
-          }}
-        />
+          />
+        </Drawer>
         {runs.isLoading ? (
           <LoadingState label="Loading ACE runs…" />
         ) : runs.error ? (
@@ -301,110 +475,36 @@ export default function AceRunsPage() {
                   ? `Latest loaded trace ${new Date(run.data.updatedAt).toLocaleString()} · no batch manifest is available.`
                   : `Last durable manifest heartbeat ${new Date(run.data.updatedAt).toLocaleString()} · ${formatHeartbeatAge(heartbeat.ageMs)} · controls take effect at a safe turn boundary.`}
               </p>
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-5 xl:grid-cols-10">
-                <div>
-                  <span className="text-slate-400">Scheduled</span>
-                  <br />
-                  <b>{formatNumber(run.data.totals.episodes)}</b>
-                </div>
-                <div>
-                  <span className="text-slate-400">Traces loaded</span>
-                  <br />
-                  <b>{formatNumber(run.data.reconciliation?.ingestedTraces ?? runTraces.length)}</b>
-                </div>
-                <div>
-                  <span className="text-slate-400">Pass</span>
-                  <br />
-                  <b className="text-emerald-700">{formatNumber(run.data.totals.passed)}</b>
-                </div>
-                <div>
-                  <span className="text-slate-400">Fail</span>
-                  <br />
-                  <b className="text-red-700">{formatNumber(run.data.totals.failedGrade)}</b>
-                </div>
-                <div>
-                  <span className="text-slate-400">Invalid</span>
-                  <br />
-                  <b className="text-amber-700">{formatNumber(run.data.totals.invalidUserSim)}</b>
-                </div>
-                <div>
-                  <span className="text-slate-400">Runtime</span>
-                  <br />
-                  <b className="text-violet-700">{formatNumber(run.data.totals.runtimeErrors)}</b>
-                </div>
-                <div>
-                  <span className="text-slate-400">In progress</span>
-                  <br />
-                  <b>{formatNumber(progress?.inProgress ?? 0)}</b>
-                  {(progress?.stateNotRepresented ?? 0) > 0 ? (
-                    <div className="text-[10px] text-amber-600">
-                      {formatNumber(progress?.stateNotRepresented ?? 0)} schedule states not yet
-                      represented
-                    </div>
-                  ) : null}
-                </div>
-                <div>
-                  <span className="text-slate-400">Pass rate</span>
-                  <br />
-                  <b>{formatPercent(run.data.totals.passRate)}</b>
-                </div>
-                <div>
-                  <span className="text-slate-400">Attempt validity</span>
-                  <br />
-                  <b>{formatPercent(run.data.totals.userSimAttemptValidityRate)}</b>
-                  {run.data.totals.userSimAttempts !== null &&
-                  run.data.totals.invalidUserSimAttempts !== null ? (
-                    <div className="text-[10px] text-slate-400">
-                      {run.data.totals.userSimAttempts - run.data.totals.invalidUserSimAttempts} /{' '}
-                      {run.data.totals.userSimAttempts} attempts
-                    </div>
-                  ) : null}
-                </div>
-                <div>
-                  <span className="text-slate-400">Cost</span>
-                  <br />
-                  <b>
-                    {run.data.totals.costUsd === null
-                      ? '—'
-                      : `$${run.data.totals.costUsd.toFixed(2)}`}
-                  </b>
-                </div>
-              </div>
-              {run.data.runKind !== 'scored' && (
-                <p className="mt-3 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
-                  This is a {run.data.runKind} run. It is available for exact analysis, but it is
-                  excluded from the default formal aggregate.
-                </p>
+              <RunStatTiles
+                totals={run.data.totals}
+                tracesLoaded={run.data.reconciliation?.ingestedTraces ?? runTraces.length}
+                progress={progress}
+              />
+              {issues.length > 0 && (
+                <details
+                  open={issues.some((issue) => issue.severity === 'error')}
+                  className="mt-3 rounded border border-amber-200 bg-amber-50"
+                >
+                  <summary className="cursor-pointer px-2 py-1.5 text-xs font-medium text-amber-800">
+                    Issues ({issues.length})
+                  </summary>
+                  <ul className="space-y-1 px-2 pb-2">
+                    {issues.map((issue) => (
+                      <li
+                        key={issue.key}
+                        role={issue.severity === 'error' ? 'alert' : undefined}
+                        className={`rounded px-2 py-1.5 text-xs ${
+                          issue.severity === 'error'
+                            ? 'bg-red-50 text-red-800'
+                            : 'bg-amber-100/60 text-amber-800'
+                        }`}
+                      >
+                        {issue.text}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
-              {run.data.staleManifest && (
-                <p className="mt-3 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
-                  The current batch.json is unreadable; showing the last successfully parsed
-                  snapshot. {run.data.manifestError}
-                </p>
-              )}
-              {run.data.lifecycleError && (
-                <p className="mt-3 rounded bg-red-50 px-2 py-1.5 text-xs text-red-800">
-                  Harness error: {run.data.lifecycleError}
-                </p>
-              )}
-              {control.error && (
-                <p role="alert" className="mt-3 rounded bg-red-50 px-2 py-1.5 text-xs text-red-800">
-                  Control request failed:{' '}
-                  {control.error instanceof Error ? control.error.message : String(control.error)}
-                </p>
-              )}
-              {run.data.reconciliation &&
-                (run.data.reconciliation.missingTerminalTraces > 0 ||
-                  run.data.reconciliation.orphanTraces > 0 ||
-                  run.data.reconciliation.manifestEpisodes <
-                    run.data.reconciliation.scheduledEpisodes) && (
-                  <p className="mt-3 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
-                    Ingest reconciliation: {run.data.reconciliation.missingTerminalTraces} terminal
-                    trace(s) missing · {run.data.reconciliation.orphanTraces} orphan trace(s) ·{' '}
-                    {run.data.reconciliation.manifestEpisodes}/
-                    {run.data.reconciliation.scheduledEpisodes} scheduled states represented.
-                  </p>
-                )}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                 {['bot', 'bot_model', 'agent_transport', 'reasoning_effort', 'prompt_source'].map(
                   (key) =>
