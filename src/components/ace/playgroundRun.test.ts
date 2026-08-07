@@ -10,6 +10,7 @@ import {
   isExistingRunConflict,
   type PlaygroundRunConfig,
   quickRunSelection,
+  recordedTransportCorrection,
   resolveScenarioPack,
   runtimeErrorSummary,
   shouldAutorun,
@@ -391,10 +392,55 @@ describe('initialPlaygroundConfig', () => {
       transport: 'chat',
       reasoningEffort: 'none',
     })
+    // The legal recording needs no correction banner.
+    expect(recordedTransportCorrection(recorded)).toBeUndefined()
 
     // A trace without a recorded transport gets the canonical default.
     expect(initialPlaygroundConfig({}, sourceTrace()).transport).toBe('responses')
     expect(initialPlaygroundConfig({}).transport).toBe('responses')
+  })
+
+  it('sanitizes a recorded never-runnable chat+reasoning combo to responses and reports it', () => {
+    // Exactly how such source runs died: chat transport, reasoning low.
+    const recorded = sourceTrace()
+    const spec = (recorded.meta.extra?.config_snapshot as { spec: Record<string, unknown> }).spec
+    spec.agent_transport = 'chat_completions'
+    // Fixture already records reasoning_effort: 'low'.
+    const config = initialPlaygroundConfig({}, recorded)
+    expect(config.transport).toBe('responses')
+    expect(config.reasoningEffort).toBe('low')
+    expect(recordedTransportCorrection(recorded)).toEqual({ recordedReasoning: 'low' })
+    // The sanitized prefill passes the pre-submit check, so autorun can fire.
+    expect(buildPlaygroundRunRequest(config)).toMatchObject({
+      ok: true,
+      request: { transport: 'responses', reasoningEffort: 'low' },
+    })
+  })
+
+  it('names the implied runner default when the illegal recording omitted reasoning', () => {
+    const recorded = sourceTrace()
+    const spec = (recorded.meta.extra?.config_snapshot as { spec: Record<string, unknown> }).spec
+    spec.agent_transport = 'chat_completions'
+    delete spec.reasoning_effort
+    expect(initialPlaygroundConfig({}, recorded).transport).toBe('responses')
+    expect(recordedTransportCorrection(recorded)).toEqual({
+      recordedReasoning: 'runner default: low',
+    })
+  })
+
+  it('leaves recorded responses transport and production traces without a correction', () => {
+    const responsesTrace = sourceTrace()
+    const spec = (
+      responsesTrace.meta.extra?.config_snapshot as { spec: Record<string, unknown> }
+    ).spec
+    spec.agent_transport = 'responses'
+    expect(initialPlaygroundConfig({}, responsesTrace).transport).toBe('responses')
+    expect(recordedTransportCorrection(responsesTrace)).toBeUndefined()
+
+    const production = sourceTrace()
+    production.meta.corpusId = 'production'
+    expect(recordedTransportCorrection(production)).toBeUndefined()
+    expect(recordedTransportCorrection(undefined)).toBeUndefined()
   })
 
   it('never guesses a missing environment seed', () => {

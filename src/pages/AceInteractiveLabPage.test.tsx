@@ -294,6 +294,35 @@ describe('Playground page', () => {
     expect(html).toContain('Chat supports function tools only with reasoning')
   })
 
+  it('corrects a recorded never-runnable chat+reasoning combo and explains it in the panel', () => {
+    const recorded = sourceTrace()
+    const snapshot = recorded.meta.extra?.config_snapshot as { spec: Record<string, unknown> }
+    snapshot.spec.agent_transport = 'chat_completions' // recorded reasoning stays 'low'
+    mocks.trace.mockImplementation((uid?: string) =>
+      uid === undefined
+        ? { data: undefined, isLoading: false, isError: false }
+        : { data: recorded, isLoading: false, isError: false },
+    )
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab?trace=simulation%3Aparent-run%3Aepisode-1']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+
+    expect(html).toContain('data-testid="playground-transport-corrected"')
+    expect(html).toContain('corrected to Responses. The original run failed with this config.')
+    const select = html.match(/<select[^>]*data-testid="playground-transport"[\s\S]*?<\/select>/)
+    expect(select?.[0]).toMatch(/<option value="responses" selected/)
+    // Legal recordings render no correction banner (base fixture: no transport).
+    const clean = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+    expect(clean).not.toContain('playground-transport-corrected')
+  })
+
   it('surfaces the run lifecycle error headline in the session area', () => {
     mocks.run.mockReturnValue({
       data: {

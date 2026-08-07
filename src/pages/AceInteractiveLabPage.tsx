@@ -31,6 +31,7 @@ import {
   isExistingRunConflict,
   type PlaygroundRunConfig,
   quickRunSelection,
+  recordedTransportCorrection,
   resolveScenarioPack,
   runtimeErrorSummary,
   shouldAutorun,
@@ -414,6 +415,9 @@ function PlaygroundWorkbench({
 }) {
   const sourceIsSimulation = sourceTrace?.meta.corpusId === 'simulation'
   const recordedSeed = sourceTrace ? traceEnvironmentSeed(sourceTrace) : undefined
+  // Set when the recording itself was the never-runnable chat+reasoning combo
+  // (the prefill already corrected it to responses — explain, don't block).
+  const transportCorrection = recordedTransportCorrection(sourceTrace)
 
   const capabilities = useAceCapabilities()
   const scenarios = useAceScenarios()
@@ -647,6 +651,16 @@ function PlaygroundWorkbench({
             data-testid="playground-config"
           >
             <h2 className="text-sm font-semibold text-slate-800">Configuration</h2>
+            {transportCorrection && (
+              <p
+                className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800"
+                data-testid="playground-transport-corrected"
+              >
+                Recorded transport (chat) is incompatible with recorded reasoning effort (
+                {transportCorrection.recordedReasoning}) — corrected to Responses. The original run
+                failed with this config.
+              </p>
+            )}
 
             <label className="block text-xs text-slate-600">
               Prompt preset

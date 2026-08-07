@@ -57,6 +57,25 @@ export const DEFAULT_PLAYGROUND_CONFIG: PlaygroundRunConfig = {
  * source trace) the recorded config — prompt, harness, model, sampling —
  * plus its scenario and environment seed. A missing seed is never guessed.
  */
+/**
+ * A recorded config can itself be the known-illegal chat + reasoning ≠ 'none'
+ * combination — it is exactly how such source runs died (provider 400 on
+ * function tools). Replaying it faithfully would only park the user on the
+ * pre-submit validation error, so the prefill corrects the transport to
+ * responses; this returns what was recorded so the panel can explain the
+ * correction. Undefined for legal recordings (chat+none, responses+anything).
+ */
+export function recordedTransportCorrection(
+  sourceTrace: Trace | undefined,
+): { recordedReasoning: string } | undefined {
+  if (sourceTrace?.meta.corpusId !== 'simulation') return undefined
+  const overrides = traceRunFormOverrides(sourceTrace)
+  if (overrides.transport !== 'chat') return undefined
+  const reasoning = overrides.reasoningEffort ?? ''
+  if (reasoning === 'none') return undefined
+  return { recordedReasoning: reasoning === '' ? 'runner default: low' : reasoning }
+}
+
 export function initialPlaygroundConfig(
   params: { scenarioFile?: string; scenarioId?: string; seed?: string },
   sourceTrace?: Trace,
@@ -70,15 +89,24 @@ export function initialPlaygroundConfig(
   if (sourceTrace?.meta.corpusId !== 'simulation') return base
   const overrides = traceRunFormOverrides(sourceTrace)
   const recordedSeed = traceEnvironmentSeed(sourceTrace)
+  // A legal recorded transport is replayed as recorded (chat+none stays
+  // chat); the known-illegal chat+reasoning combination is corrected to
+  // responses so Replicate — including autorun — starts instead of parking
+  // on the validation error. A trace without a recorded transport keeps the
+  // canonical responses default.
+  const transport =
+    overrides.transport === undefined
+      ? undefined
+      : recordedTransportCorrection(sourceTrace)
+        ? ('responses' as const)
+        : overrides.transport
   return {
     ...base,
     scenarioId: sourceTrace.meta.instanceId,
     ...(recordedSeed !== undefined ? { seed: String(recordedSeed) } : {}),
     ...(overrides.prompt ? { promptPreset: overrides.prompt } : {}),
     ...(overrides.promptText ? { promptText: overrides.promptText } : {}),
-    // A recorded transport is replayed as recorded (e.g. chat + reasoning
-    // none); a trace without one keeps the canonical responses default.
-    ...(overrides.transport ? { transport: overrides.transport } : {}),
+    ...(transport ? { transport } : {}),
     ...(overrides.bot ? { bot: overrides.bot } : {}),
     ...(overrides.model ? { model: overrides.model } : {}),
     ...(overrides.temperature ? { temperature: overrides.temperature } : {}),
