@@ -756,7 +756,10 @@ export default function AceRunsPage() {
                   <button
                     type="button"
                     disabled={currentEpisodePage === 0}
-                    onClick={() => setEpisodePage((page) => Math.max(0, page - 1))}
+                    // Step from the CLAMPED page: after live data shrinks the
+                    // list, the raw index can sit past the end and Previous
+                    // would appear dead for several clicks.
+                    onClick={() => setEpisodePage(Math.max(0, currentEpisodePage - 1))}
                     className="rounded border px-2 py-1 disabled:opacity-40"
                   >
                     Previous
@@ -767,7 +770,7 @@ export default function AceRunsPage() {
                   <button
                     type="button"
                     disabled={currentEpisodePage + 1 >= pageCount}
-                    onClick={() => setEpisodePage((page) => Math.min(pageCount - 1, page + 1))}
+                    onClick={() => setEpisodePage(Math.min(pageCount - 1, currentEpisodePage + 1))}
                     className="rounded border px-2 py-1 disabled:opacity-40"
                   >
                     Next

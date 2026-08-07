@@ -541,7 +541,35 @@ export function AceRunLauncher({
   // Server-side idempotency: the same batchId is reused until a launch
   // succeeds, so retrying after a lost response cannot start a second paid
   // batch — the bridge rejects a duplicate/active run id with a 409 instead.
-  const pendingBatchId = useRef<string | null>(null)
+  // Persisted in sessionStorage because the launcher now lives in a drawer:
+  // closing it unmounts the component, and a ref alone would mint a fresh id
+  // on reopen, silently revoking the retry guarantee.
+  const pendingBatchIdKey = `ace-launcher-pending-batch:${sourceTraceUid ?? 'runs'}`
+  const pendingBatchIdFallback = useRef<string | null>(null)
+  const takePendingBatchId = (): string => {
+    let stored: string | null = null
+    try {
+      stored = window.sessionStorage.getItem(pendingBatchIdKey)
+    } catch {
+      stored = pendingBatchIdFallback.current
+    }
+    const batchId = stored ?? `viewer-${crypto.randomUUID()}`
+    pendingBatchIdFallback.current = batchId
+    try {
+      window.sessionStorage.setItem(pendingBatchIdKey, batchId)
+    } catch {
+      // sessionStorage unavailable: the in-memory fallback still guards remounts-free retries.
+    }
+    return batchId
+  }
+  const clearPendingBatchId = () => {
+    pendingBatchIdFallback.current = null
+    try {
+      window.sessionStorage.removeItem(pendingBatchIdKey)
+    } catch {
+      // Already cleared in memory.
+    }
+  }
   const submit = async () => {
     if (!available || submitInFlight.current) return
     const result = buildAceRunRequest(values, { sourceTraceUid })
@@ -550,10 +578,10 @@ export function AceRunLauncher({
       return
     }
     submitInFlight.current = true
-    const batchId = (pendingBatchId.current ??= `viewer-${crypto.randomUUID()}`)
+    const batchId = takePendingBatchId()
     try {
       const response = await start.mutateAsync({ ...result.request, batchId })
-      pendingBatchId.current = null
+      clearPendingBatchId()
       onStarted?.(response.runId)
     } catch {
       // React Query exposes the server error below the controls.

@@ -4,6 +4,38 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 13 — 2026-08-07 10:10 — UX 重设计十提交审查（afbbba2..2461a7d）
+
+### 总体评价
+
+重设计结构上很好：ReviewPanel 的竞态防护在拆分中逐字保留；键控 remount +
+`workspaceReady` 门 + `moving` 序列化让"跨 subject 提交"这类 bug 结构性不可能而非仅靠
+防护；`?run=` 合并、review 过滤 URL round-trip、NavRail 纯增量都对；868→874 测试全绿。
+
+### 发现（按严重度）
+
+1. **[MEDIUM-HIGH] 抽屉卸载销毁 launcher 幂等 key（Round 8 保证被回归）** —
+   `Drawer.tsx` `if (!open) return null` + launcher 进抽屉后，"启动失败→关抽屉→重开→重试"
+   会铸新 batchId，服务端无法 409 拒重 → 二次花钱；且中途关抽屉后 `start.error` 无处渲染。
+   **[已修复 by Claude]**：`pendingBatchId` 改为 sessionStorage 持久
+   （key=`ace-launcher-pending-batch:<context>`，成功后清除，storage 不可用时回退内存 ref）。
+   `start.error` 卸载后不可见的问题留给你们：建议关抽屉时若有未展示错误，在页面上显示一条。
+2. **[LOW-MEDIUM] C/X 快捷键会改动折叠在 Details 手风琴里的不可见 failure** —
+   `focusedFailureId` 在手风琴从未展开时也默认聚焦第一条，误触 C/X 即静默改判 + autosave
+   落盘。建议：手风琴收起时 C/X no-op（把 `<details>` 的 open 状态提到 state 并门控）。
+   你们正在拆分该区域组件，顺手处理。
+3. **[LOW-MEDIUM] Cmd+Enter 的编辑目标豁免是页面级而非面板级** — 在队列 Filters popover
+   的输入框里按 Cmd+Enter 会提交并锁定当前 review（Calibration 锁不可逆）。建议：chord
+   豁免仅当 target 在面板子树内（panel root ref `.contains(event.target)`）。
+4. **[LOW] Next/Prev 页边界期间的键入被静默丢弃** — `move()` await 队列请求期间旧面板仍可
+   编辑，`setSelected` remount 丢弃这窗口的编辑；旧设计的 `suspended` 冻结路径现在是死
+   prop（ReviewPage 不再传）。要么恢复传 `suspended`，要么删掉死 prop。
+5. **[LOW] Cmd+S 手动保存缺 submitInFlight 防护** — **[已修复 by Claude]**：`saveCurrent`
+   开头加了检查（与 autosave timer 同类防护）。
+6. **[LOW·先前既有] episode 分页从未钳制的原始索引步进** — **[已修复 by Claude]**：
+   Previous/Next 改为从 `currentEpisodePage` 步进（SSE 数据缩水后 Previous 不再"点几下没
+   反应"）。
+
 ## Round 12 — 2026-08-07 05:05（Round 9-11 为空巡检，未记录）
 
 - 抓到一个 flaky：`server/store/scan.test.ts › watches the resolved path from the same

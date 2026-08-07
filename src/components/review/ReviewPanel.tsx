@@ -204,7 +204,10 @@ export function ReviewPanel({
   }, [evidenceHint])
 
   const saveCurrent = useCallback(async (): Promise<boolean> => {
-    if (!payload || locked) return false
+    // A save racing an in-flight submit would land after the final lock and
+    // surface a spurious 423 over the success state (same class the autosave
+    // timer already guards against).
+    if (!payload || locked || submitInFlight.current) return false
     const version = editVersion.current
     try {
       await saveDraft.mutateAsync({
