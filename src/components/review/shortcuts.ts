@@ -4,8 +4,10 @@ export type ReviewShortcut =
   | 'save'
   | 'submit'
   | 'next'
+  | 'prev'
   | 'overall-pass'
   | 'overall-fail'
+  | 'overall-unsure'
   | 'failure-confirm'
   | 'failure-reject'
 
@@ -29,21 +31,23 @@ export const REVIEW_SHORTCUT_LABELS: ReadonlyArray<{
 }> = [
   { action: 'overall-pass', keys: 'P', description: 'Overall pass' },
   { action: 'overall-fail', keys: 'F', description: 'Overall fail' },
+  { action: 'overall-unsure', keys: 'U', description: 'Overall unsure' },
   {
     action: 'failure-confirm',
     keys: 'C',
-    description: 'Confirm focused failure',
+    description: 'Confirm hovered/expanded failure',
     requiresAutomatic: true,
   },
   {
     action: 'failure-reject',
     keys: 'X',
-    description: 'Reject focused failure',
+    description: 'Reject hovered/expanded failure',
     requiresAutomatic: true,
   },
-  { action: 'save', keys: '⌘/Ctrl S', description: 'Save draft' },
-  { action: 'submit', keys: '⌘/Ctrl Enter', description: 'Submit and lock' },
+  { action: 'save', keys: '⌘/Ctrl S', description: 'Save draft (works while typing)' },
+  { action: 'submit', keys: '⌘/Ctrl Enter', description: 'Submit and lock (works while typing)' },
   { action: 'next', keys: 'Alt/Option ↓', description: 'Next queue item' },
+  { action: 'prev', keys: 'Alt/Option ↑', description: 'Previous queue item' },
 ]
 
 export function visibleReviewShortcutLabels(hasAutomaticFailures: boolean) {
@@ -55,9 +59,10 @@ export function visibleReviewShortcutLabels(hasAutomaticFailures: boolean) {
 const EDITING_ROLES = new Set(['textbox', 'searchbox', 'combobox', 'spinbutton'])
 
 /**
- * Review shortcuts are intentionally disabled for every editable control,
- * including custom content-editable widgets. This applies to modifier chords
- * such as Command+Enter as well as single-key classification shortcuts.
+ * Single-key classification shortcuts stay disabled inside editable controls
+ * so typing a note never mutates the review. Modifier chords (⌘/Ctrl S,
+ * ⌘/Ctrl Enter) are exempt: they must work globally, including inside a
+ * textarea, so the fast path can be submitted without leaving the note field.
  */
 export function isReviewEditingTarget(target: EventTarget | null | undefined): boolean {
   if (!target || typeof target !== 'object') return false
@@ -80,27 +85,30 @@ export function isReviewEditingTarget(target: EventTarget | null | undefined): b
 }
 
 export function reviewShortcutFor(event: ReviewShortcutEvent): ReviewShortcut | null {
-  if (
-    event.repeat ||
-    event.isComposing ||
-    event.defaultPrevented ||
-    isReviewEditingTarget(event.target)
-  ) {
-    return null
-  }
-  if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === 'ArrowDown') return 'next'
+  if (event.repeat || event.isComposing || event.defaultPrevented) return null
+  const editing = isReviewEditingTarget(event.target)
   if (event.metaKey || event.ctrlKey) {
     if (event.altKey || event.shiftKey) return null
+    // Global chords: these fire even while typing in an editable control.
     if (event.key.toLocaleLowerCase() === 's') return 'save'
     if (event.key === 'Enter') return 'submit'
     return null
   }
-  if (event.altKey || event.shiftKey) return null
+  if (editing) return null
+  if (event.altKey) {
+    if (event.shiftKey) return null
+    if (event.key === 'ArrowDown') return 'next'
+    if (event.key === 'ArrowUp') return 'prev'
+    return null
+  }
+  if (event.shiftKey) return null
   switch (event.key.toLocaleLowerCase()) {
     case 'p':
       return 'overall-pass'
     case 'f':
       return 'overall-fail'
+    case 'u':
+      return 'overall-unsure'
     case 'c':
       return 'failure-confirm'
     case 'x':
@@ -138,6 +146,7 @@ export function applyReviewClassificationShortcut(
 ): ReviewPayload {
   if (shortcut === 'overall-pass') return { ...payload, overallVerdict: 'pass' }
   if (shortcut === 'overall-fail') return { ...payload, overallVerdict: 'fail' }
+  if (shortcut === 'overall-unsure') return { ...payload, overallVerdict: 'unsure' }
   if (!focusedFailureId || !visibleFailureIds.includes(focusedFailureId)) return payload
   if (shortcut === 'failure-confirm') {
     return withFailureDecision(payload, focusedFailureId, 'confirmed')

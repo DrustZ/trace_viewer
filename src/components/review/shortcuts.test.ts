@@ -26,13 +26,15 @@ describe('human review keyboard shortcuts', () => {
     expect(reviewShortcutFor(key('Enter', { ctrlKey: true }))).toBe('submit')
   })
 
-  it('maps Alt/Option+ArrowDown to the next queue item', () => {
+  it('maps Alt/Option+Arrow to queue navigation in both directions', () => {
     expect(reviewShortcutFor(key('ArrowDown', { altKey: true }))).toBe('next')
+    expect(reviewShortcutFor(key('ArrowUp', { altKey: true }))).toBe('prev')
   })
 
   it('maps single-key review and focused-failure decisions', () => {
     expect(reviewShortcutFor(key('p'))).toBe('overall-pass')
     expect(reviewShortcutFor(key('f'))).toBe('overall-fail')
+    expect(reviewShortcutFor(key('u'))).toBe('overall-unsure')
     expect(reviewShortcutFor(key('c'))).toBe('failure-confirm')
     expect(reviewShortcutFor(key('x'))).toBe('failure-reject')
   })
@@ -47,7 +49,7 @@ describe('human review keyboard shortcuts', () => {
     expect(reviewShortcutFor(key('p', { defaultPrevented: true }))).toBeNull()
   })
 
-  it('never fires inside native or custom editing controls', () => {
+  it('disables single-key and Alt-arrow shortcuts inside editing controls', () => {
     const input = { tagName: 'INPUT' } as unknown as EventTarget
     const textarea = { tagName: 'textarea' } as unknown as EventTarget
     const contentEditable = { tagName: 'div', isContentEditable: true } as unknown as EventTarget
@@ -59,15 +61,30 @@ describe('human review keyboard shortcuts', () => {
     for (const target of [input, textarea, contentEditable, customTextbox]) {
       expect(isReviewEditingTarget(target)).toBe(true)
       expect(reviewShortcutFor(key('p', { target }))).toBeNull()
-      expect(reviewShortcutFor(key('Enter', { metaKey: true, target }))).toBeNull()
+      expect(reviewShortcutFor(key('u', { target }))).toBeNull()
+      expect(reviewShortcutFor(key('c', { target }))).toBeNull()
       expect(reviewShortcutFor(key('ArrowDown', { altKey: true, target }))).toBeNull()
+      expect(reviewShortcutFor(key('ArrowUp', { altKey: true, target }))).toBeNull()
     }
+  })
+
+  it('keeps ⌘/Ctrl chords global so submit and save work inside a textarea', () => {
+    const textarea = { tagName: 'TEXTAREA' } as unknown as EventTarget
+    const input = { tagName: 'INPUT' } as unknown as EventTarget
+
+    expect(reviewShortcutFor(key('Enter', { metaKey: true, target: textarea }))).toBe('submit')
+    expect(reviewShortcutFor(key('Enter', { ctrlKey: true, target: textarea }))).toBe('submit')
+    expect(reviewShortcutFor(key('s', { metaKey: true, target: input }))).toBe('save')
+    expect(reviewShortcutFor(key('s', { ctrlKey: true, target: textarea }))).toBe('save')
   })
 
   it('mutates only server-visible focused automatic failures', () => {
     const initial = emptyReviewPayload()
     const passed = applyReviewClassificationShortcut(initial, 'overall-pass', null, [])
     expect(passed.overallVerdict).toBe('pass')
+    expect(applyReviewClassificationShortcut(passed, 'overall-unsure', null, []).overallVerdict).toBe(
+      'unsure',
+    )
 
     const hidden = applyReviewClassificationShortcut(initial, 'failure-confirm', 'secret-id', [])
     expect(hidden).toBe(initial)
