@@ -17,11 +17,11 @@ export function checkRowTone(check: { gating: boolean; ok: boolean }): string {
 }
 
 /**
- * Peek-sized evaluation summary for the trace drawer: verdict badge, the
- * hard-gate/shadow check table (name · gate kind · ✓✗ · first detail line),
- * and a jump to the full evaluation tab. The drawer's default view is the
- * conversation; without this strip a `?peek=` reader never sees why a trace
- * failed unless they know to switch tabs.
+ * Peek-sized evaluation summary for the trace drawer, below the conversation
+ * preview and collapsed by default: the one-line header carries the verdict
+ * badge and the failed-hard-gate count (with a red dot when any hard gate
+ * failed); expanding reveals the per-check table and the jump to the full
+ * evaluation tab. The conversation stays the drawer's primary surface.
  */
 export function EvaluationSummary({ trace }: { trace: Trace }) {
   const evaluation = trace.evaluation
@@ -32,11 +32,18 @@ export function EvaluationSummary({ trace }: { trace: Trace }) {
   const traceUid = trace.meta.traceUid ?? trace.meta.traceId
 
   return (
-    <section
+    <details
       data-testid="drawer-evaluation-summary"
-      className="shrink-0 border-b border-slate-200 bg-white px-4 py-2"
+      className="shrink-0 border-t border-slate-200 bg-white px-4 py-1.5"
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 py-0.5">
+        {failedGating > 0 && (
+          <span
+            data-testid="drawer-evaluation-alert"
+            className="h-2 w-2 rounded-full bg-red-500"
+            aria-label={`${failedGating} failed hard gates`}
+          />
+        )}
         <span
           className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${verdictClass(evaluation.outcome)}`}
         >
@@ -45,9 +52,12 @@ export function EvaluationSummary({ trace }: { trace: Trace }) {
         <span className="text-[11px] text-slate-500">
           {failedGating} failed hard gates · {findings} findings
         </span>
+        <span className="ml-auto text-[10px] text-slate-400">evaluation ▾</span>
+      </summary>
+      <div className="flex justify-end pt-1">
         <Link
           to={`/trace/${encodeURIComponent(traceUid)}?tab=evaluation`}
-          className="ml-auto text-[11px] font-medium text-violet-700 hover:underline"
+          className="text-[11px] font-medium text-violet-700 hover:underline"
         >
           Open full evaluation →
         </Link>
@@ -78,6 +88,6 @@ export function EvaluationSummary({ trace }: { trace: Trace }) {
           </tbody>
         </table>
       )}
-    </section>
+    </details>
   )
 }

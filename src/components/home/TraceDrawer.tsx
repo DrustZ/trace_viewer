@@ -105,10 +105,6 @@ export function TraceDrawer({
         </div>
       ) : (
         <div className="flex h-full min-h-0 flex-col">
-          {/* Verdict + hard gates stay visible on peek — the default drawer
-              view is the conversation, and the evaluation tab is one tab away
-              that most peek readers never open. */}
-          {tab !== 'evaluation' && <EvaluationSummary trace={trace.data} />}
           <div className="min-h-0 flex-1">
             <TraceView
               trace={trace.data}
@@ -120,6 +116,10 @@ export function TraceDrawer({
               onClose={onClose}
             />
           </div>
+          {/* Verdict + hard gates one glance away under the conversation —
+              collapsed by default (red dot when a hard gate failed), so the
+              preview stays the drawer's primary surface. */}
+          {tab !== 'evaluation' && <EvaluationSummary trace={trace.data} />}
         </div>
       )}
     </aside>

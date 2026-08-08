@@ -195,6 +195,10 @@ describe('EvaluationSummary (drawer peek)', () => {
     )
 
     expect(html).toContain('data-testid="drawer-evaluation-summary"')
+    // Collapsed by default: a <details> without the open attribute, with a
+    // red-dot alert in the one-line header when a hard gate failed.
+    expect(html).toMatch(/<details(?![^>]*\bopen)[^>]*data-testid="drawer-evaluation-summary"/)
+    expect(html).toContain('data-testid="drawer-evaluation-alert"')
     expect(html).toContain('fail')
     expect(html).toContain('1 failed hard gates · 1 findings')
     expect(html).toContain('FORBIDDEN')
@@ -205,6 +209,26 @@ describe('EvaluationSummary (drawer peek)', () => {
     expect(html).toMatch(
       /href="\/trace\/simulation(?::|%3A)run(?::|%3A)trace-1\?tab=evaluation"[^>]*>Open full evaluation/,
     )
+  })
+
+  it('shows no alert dot when every hard gate passed', () => {
+    const trace = traceWithFailure({
+      origin: 'grader',
+      code: 'x',
+      severity: 'minor',
+      gating: false,
+      source: 'test',
+    })
+    if (!trace.evaluation) throw new Error('fixture must include evaluation')
+    trace.evaluation.outcome = 'pass'
+    trace.evaluation.checks = [{ name: 'ACTIONS', ok: true, gating: true }]
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <EvaluationSummary trace={trace} />
+      </MemoryRouter>,
+    )
+    expect(html).not.toContain('data-testid="drawer-evaluation-alert"')
+    expect(html).toContain('0 failed hard gates')
   })
 
   it('renders nothing for an ungraded trace', () => {
