@@ -1,6 +1,7 @@
 import {
   emptyReviewPayload,
   type FailureDecision,
+  type JudgeReviewDecision,
   type ReviewPayload,
   type ReviewRecord,
   type ReviewSubject,
@@ -13,6 +14,7 @@ import { useReviewWorkspace, useSaveReviewDraft, useSubmitReview } from '../../a
 import { ReviewAutomaticSection } from './ReviewAutomaticSection'
 import { ReviewFailureSection } from './ReviewFailureSection'
 import { ReviewFastPath } from './ReviewFastPath'
+import { judgeReviewMode, ReviewJudgeOffNote, ReviewJudgeSection } from './ReviewJudgeSection'
 import { groundTruthPresentation, ReviewGroundTruthSection } from './ReviewGroundTruthSection'
 import { ReviewRubricSection } from './ReviewRubricSection'
 import { ReviewShortcutsHelp } from './ReviewShortcutsHelp'
@@ -67,6 +69,16 @@ function payloadOf(workspace: ReviewWorkspaceResponse): ReviewPayload {
         ...annotation,
         tags: [...annotation.tags],
       })),
+      ...(stored.judgeReviews
+        ? {
+            judgeReviews: Object.fromEntries(
+              Object.entries(stored.judgeReviews).map(([dimension, review]) => [
+                dimension,
+                { ...review },
+              ]),
+            ),
+          }
+        : {}),
     }
   }
   const payload = emptyReviewPayload()
@@ -185,6 +197,35 @@ export function ReviewPanel({
       setPayload((previous) => (previous ? apply(previous) : previous))
     },
     [locked],
+  )
+
+  const decideJudge = useCallback(
+    (dimension: string, decision: JudgeReviewDecision) => {
+      update((previous) => ({
+        ...previous,
+        judgeReviews: {
+          ...previous.judgeReviews,
+          [dimension]: { decision, note: previous.judgeReviews?.[dimension]?.note ?? '' },
+        },
+      }))
+    },
+    [update],
+  )
+
+  const noteJudge = useCallback(
+    (dimension: string, note: string) => {
+      update((previous) => ({
+        ...previous,
+        judgeReviews: {
+          ...previous.judgeReviews,
+          [dimension]: {
+            decision: previous.judgeReviews?.[dimension]?.decision ?? 'unsure',
+            note,
+          },
+        },
+      }))
+    },
+    [update],
   )
 
   const decideFailure = useCallback(
@@ -583,6 +624,24 @@ export function ReviewPanel({
 
       <section aria-label="Review details" className="space-y-2">
         <h3 className="text-sm font-semibold text-slate-800">Details</h3>
+        {/* Judge calibration leads: reviewing the judge's verdicts is the
+            primary job here, not re-reviewing the trace from scratch. */}
+        {judgeReviewMode(automatic) === 'review' && automatic?.judgeVerdicts ? (
+          <DetailsSection
+            title="LLM judge review"
+            count={Object.keys(automatic.judgeVerdicts).length}
+          >
+            <ReviewJudgeSection
+              judgeVerdicts={automatic.judgeVerdicts}
+              reviews={payload.judgeReviews ?? {}}
+              locked={locked}
+              onDecide={decideJudge}
+              onNote={noteJudge}
+            />
+          </DetailsSection>
+        ) : judgeReviewMode(automatic) === 'off-note' ? (
+          <ReviewJudgeOffNote />
+        ) : null}
         <DetailsSection title="Status & tags">
           <ReviewStatusSection
             reviewStatus={payload.reviewStatus}

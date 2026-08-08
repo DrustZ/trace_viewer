@@ -33,6 +33,20 @@ describe('fast-path submit payload', () => {
     const payload = { ...emptyReviewPayload(), reviewStatus: 'skipped' as const }
     expect(finalizeReviewPayload(payload).reviewStatus).toBe('skipped')
   })
+
+  it('carries judge calibration verdicts through submit finalization', () => {
+    const payload = {
+      ...emptyReviewPayload(),
+      judgeReviews: {
+        escalation: { decision: 'disagree' as const, note: 'judge cited a nonexistent message' },
+        resolution: { decision: 'agree' as const },
+      },
+    }
+    const finalized = finalizeReviewPayload(payload)
+    expect(finalized.judgeReviews).toEqual(payload.judgeReviews)
+    // Legacy payloads without the field stay without it (no synthetic {}).
+    expect(finalizeReviewPayload(emptyReviewPayload()).judgeReviews).toBeUndefined()
+  })
 })
 
 describe('transcript click toggles evidence', () => {

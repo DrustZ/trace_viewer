@@ -22,6 +22,15 @@ export type RubricVerdict = (typeof RUBRIC_VERDICTS)[number]
 export const FAILURE_DECISIONS = ['confirmed', 'false_positive', 'unsure'] as const
 export type FailureDecision = (typeof FAILURE_DECISIONS)[number]
 
+export const JUDGE_REVIEW_DECISIONS = ['agree', 'disagree', 'unsure'] as const
+export type JudgeReviewDecision = (typeof JUDGE_REVIEW_DECISIONS)[number]
+
+/** One human verdict on one LLM-judge dimension: was the judge right, and if not, why. */
+export interface JudgeDimensionReview {
+  decision: JudgeReviewDecision
+  note?: string
+}
+
 export interface ReviewSubject {
   corpusId: string
   /** Opaque HMAC alias in an unlocked Calibration response; canonical after reveal/storage. */
@@ -70,6 +79,13 @@ export interface ReviewPayload {
   rubricReviews: RubricReview[]
   failureReviews: FailureReview[]
   turnAnnotations: TurnAnnotation[]
+  /**
+   * Judge calibration — the primary object of human review when a trace
+   * carries LLM-judge output: per judge dimension, did the human agree with
+   * the judge's verdict. Optional for backward compatibility with payloads
+   * stored before this field existed.
+   */
+  judgeReviews?: Record<string, JudgeDimensionReview>
 }
 
 export interface AutomaticRubricVerdict {

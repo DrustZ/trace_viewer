@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   FAILURE_DECISIONS,
+  JUDGE_REVIEW_DECISIONS,
   REVIEW_MODES,
   REVIEW_PRIORITIES,
   REVIEW_STATUSES,
@@ -65,6 +66,13 @@ const turnAnnotationSchema = z
   })
   .strict()
 
+const judgeDimensionReviewSchema = z
+  .object({
+    decision: z.enum(JUDGE_REVIEW_DECISIONS),
+    note: note.optional(),
+  })
+  .strict()
+
 const payloadShape = {
   reviewStatus: z.enum(REVIEW_STATUSES),
   overallVerdict: z.enum(REVIEW_VERDICTS),
@@ -74,6 +82,14 @@ const payloadShape = {
   rubricReviews: z.array(rubricReviewSchema).max(250),
   failureReviews: z.array(failureReviewSchema).max(1_000),
   turnAnnotations: z.array(turnAnnotationSchema).max(2_000),
+  // Judge calibration verdicts. Optional: payloads stored before this field
+  // existed keep parsing (drafts, finals, and the append-only reviews.jsonl).
+  judgeReviews: z
+    .record(identifier, judgeDimensionReviewSchema)
+    .refine((value) => Object.keys(value).length <= 250, {
+      message: 'judgeReviews supports at most 250 dimensions',
+    })
+    .optional(),
 }
 
 function enforceUniqueReviewIds(
