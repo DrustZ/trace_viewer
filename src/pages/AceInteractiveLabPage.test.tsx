@@ -310,6 +310,17 @@ describe('Playground page', () => {
     expect(html).toContain('Chat supports function tools only with reasoning')
   })
 
+  it('offers the v3/v4 prompt presets with v4 marked canonical', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+    const preset = html.match(/<select[^>]*data-testid="playground-prompt-preset"[\s\S]*?<\/select>/)
+    expect(preset?.[0]).toContain('<option value="v3">v3</option>')
+    expect(preset?.[0]).toContain('<option value="v4">v4 · canonical</option>')
+  })
+
   it('corrects a recorded never-runnable chat+reasoning combo and explains it in the panel', () => {
     const recorded = sourceTrace()
     const snapshot = recorded.meta.extra?.config_snapshot as { spec: Record<string, unknown> }

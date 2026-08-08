@@ -33,6 +33,16 @@ const validRequest = {
 } as const
 
 describe('parseAceRunRequest', () => {
+  it('accepts every bridge prompt preset, including the v3/v4 iterations', () => {
+    for (const prompt of ['baseline', 'improved', 'optimized', 'v3', 'v4']) {
+      const parsed = parseAceRunRequest({ ...validRequest, prompt })
+      expect(parsed.bridgeParams.promptPreset).toBe(prompt)
+    }
+    expect(() => parseAceRunRequest({ ...validRequest, prompt: 'v99' })).toThrow(
+      /prompt must be one of/,
+    )
+  })
+
   it('translates the public contract to the fixed Python bridge vocabulary', () => {
     const parsed = parseAceRunRequest(validRequest)
 

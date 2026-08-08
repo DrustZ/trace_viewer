@@ -829,9 +829,11 @@ function PlaygroundWorkbench({
                 value={config.promptPreset}
                 onChange={(event) => setField('promptPreset', event.target.value)}
               >
-                <option>baseline</option>
-                <option>improved</option>
-                <option>optimized</option>
+                <option value="baseline">baseline</option>
+                <option value="improved">improved</option>
+                <option value="optimized">optimized</option>
+                <option value="v3">v3</option>
+                <option value="v4">v4 · canonical</option>
               </select>
             </label>
             <label className="block text-xs text-slate-600">

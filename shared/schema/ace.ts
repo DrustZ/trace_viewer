@@ -12,6 +12,15 @@ export type AceRunLifecycle =
 
 export type AceEvaluationOutcome = 'pass' | 'fail' | 'invalid' | 'runtime_error' | 'ungraded'
 
+/**
+ * Prompt presets the cockpit bridge resolves against configs/prompts. One
+ * list for the request validator, the recorded-config extractors, and every
+ * preset dropdown — the bridge map is the source of truth. `v4` is the
+ * informed-handoff canonical; `optimized` is the live evolving head.
+ */
+export const ACE_PROMPT_PRESETS = ['baseline', 'improved', 'optimized', 'v3', 'v4'] as const
+export type AcePromptPreset = (typeof ACE_PROMPT_PRESETS)[number]
+
 /** Formal score runs are kept separate from exploratory policy changes. */
 export type AceRunKind = 'scored' | 'debug' | 'counterfactual' | 'production' | 'unknown'
 
@@ -177,7 +186,7 @@ export interface AceRunRequest {
   seeds: number[]
   batchId?: string
   runKind: 'scored' | 'debug' | 'counterfactual'
-  prompt: 'baseline' | 'improved' | 'optimized' | string
+  prompt: AcePromptPreset | string
   /** Inline custom prompt. When present it supersedes `prompt`'s preset. */
   promptText?: string
   transport: 'chat' | 'responses'

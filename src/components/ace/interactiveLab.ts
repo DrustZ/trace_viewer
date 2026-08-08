@@ -1,5 +1,8 @@
+import { ACE_PROMPT_PRESETS } from '@shared/schema/ace'
 import type { AceTaskDetail } from '@shared/schema/aceTasks'
 import type { Trace } from '@shared/schema/types'
+
+const PROMPT_PRESETS: readonly string[] = ACE_PROMPT_PRESETS
 import {
   ACE_RUN_FIDELITY_FIELDS,
   type AceRunFidelityField,
@@ -79,10 +82,9 @@ function sourceProjection(trace: Trace): {
   const preset =
     promptSource.kind === 'preset' &&
     typeof promptSource.value === 'string' &&
-    ['baseline', 'improved', 'optimized'].includes(promptSource.value)
+    PROMPT_PRESETS.includes(promptSource.value)
       ? promptSource.value
-      : typeof spec.prompt === 'string' &&
-          ['baseline', 'improved', 'optimized'].includes(spec.prompt)
+      : typeof spec.prompt === 'string' && PROMPT_PRESETS.includes(spec.prompt)
         ? spec.prompt
         : undefined
   const promptText = stringValue(promptSnapshot.bot)

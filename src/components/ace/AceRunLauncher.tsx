@@ -810,9 +810,11 @@ export function AceRunLauncher({
               value={values.prompt}
               onChange={(event) => setField('prompt', event.target.value)}
             >
-              <option>baseline</option>
-              <option>improved</option>
-              <option>optimized</option>
+              <option value="baseline">baseline</option>
+              <option value="improved">improved</option>
+              <option value="optimized">optimized</option>
+              <option value="v3">v3</option>
+              <option value="v4">v4 · canonical</option>
             </select>
           </label>
           <label className="text-xs text-slate-600 md:col-span-2">

@@ -13,9 +13,8 @@ import { DEFAULT_PLAYGROUND_CONFIG, type PlaygroundRunConfig } from './playgroun
  * to grade check names (or `termination=<value>`) and light up ✓/✗ once the
  * episode is judged.
  *
- * Prompt note: the bridge exposes exactly three presets (baseline / improved /
- * optimized); `optimized` loads the current canonical optimized prompt, which
- * supersedes the archived v4 iteration.
+ * Prompt note: demos run the `v4` preset — the informed-handoff canonical
+ * (optimized_beta_v4.md) — except the bare-baseline counter-example.
  */
 export interface DemoWatchItem {
   label: string
@@ -47,7 +46,7 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     scenarioIds: ['g-refund-00'],
     seed: '1',
     bot: 'workflow',
-    promptPreset: 'optimized',
+    promptPreset: 'v4',
     stateScope: 'episode',
     watchFor: [
       { label: 'Consent minted before the write', check: 'CONSENT' },
@@ -65,7 +64,7 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     scenarioIds: ['atomic-fraud-blocked'],
     seed: '1',
     bot: 'workflow',
-    promptPreset: 'optimized',
+    promptPreset: 'v4',
     stateScope: 'episode',
     watchFor: [
       { label: 'Lookup precedes escalate (MUST_PRECEDE)', check: 'MUST_PRECEDE' },
@@ -82,7 +81,7 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     scenarioIds: ['nc-canceldelivered-00'],
     seed: '1',
     bot: '',
-    promptPreset: 'optimized',
+    promptPreset: 'v4',
     stateScope: 'episode',
     watchFor: [
       { label: 'Forbidden effects stayed at zero', check: 'FORBIDDEN' },
@@ -99,7 +98,7 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     scenarioIds: ['ext-fault-refund-response-lost'],
     seed: '1',
     bot: '',
-    promptPreset: 'optimized',
+    promptPreset: 'v4',
     stateScope: 'episode',
     watchFor: [
       { label: 'No blind retry (WRITE_SAFETY)', check: 'WRITE_SAFETY' },
@@ -116,7 +115,7 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     scenarioIds: ['e50-journey-modify-cancel', 'e50-journey-modify-verify'],
     seed: '1',
     bot: '',
-    promptPreset: 'optimized',
+    promptPreset: 'v4',
     stateScope: 'journey',
     watchFor: [
       { label: 'Step-2 world sees the cancel (WORLD_DIFF)', check: 'WORLD_DIFF' },

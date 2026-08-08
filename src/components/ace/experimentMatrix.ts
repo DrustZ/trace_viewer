@@ -1,4 +1,8 @@
-import type { AceRunRequest } from '@shared/schema/ace'
+import {
+  ACE_PROMPT_PRESETS,
+  type AcePromptPreset,
+  type AceRunRequest,
+} from '@shared/schema/ace'
 
 const SAFE_EXPERIMENT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,125}$/
 const SAFE_SCENARIO_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
@@ -14,7 +18,7 @@ export interface ExperimentVariantValues {
   bot: NonNullable<AceRunRequest['bot']>
   model: string
   promptMode: ExperimentPromptMode
-  promptPreset: 'baseline' | 'improved' | 'optimized'
+  promptPreset: AcePromptPreset
   promptText: string
   temperature: string
   transport: AceRunRequest['transport']
@@ -152,7 +156,7 @@ function variantRequest(
   if (!['chat', 'responses'].includes(values.transport)) {
     return `Variant ${label} must choose a supported transport.`
   }
-  if (!['baseline', 'improved', 'optimized'].includes(values.promptPreset)) {
+  if (!(ACE_PROMPT_PRESETS as readonly string[]).includes(values.promptPreset)) {
     return `Variant ${label} must choose a supported prompt preset.`
   }
   if (

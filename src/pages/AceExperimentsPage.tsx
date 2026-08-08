@@ -119,6 +119,8 @@ function VariantCard({
               <option value="baseline">Baseline</option>
               <option value="improved">Improved</option>
               <option value="optimized">Optimized</option>
+              <option value="v3">v3</option>
+              <option value="v4">v4 · canonical</option>
             </select>
           </label>
         )}

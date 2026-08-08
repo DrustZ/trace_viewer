@@ -65,6 +65,11 @@ describe('PLAYGROUND_DEMOS registry', () => {
     }
     const ids = new Set(PLAYGROUND_DEMOS.map((demo) => demo.id))
     expect(ids.size).toBe(6)
+    // v4 = informed-handoff canonical everywhere except the bare-baseline
+    // counter-example, which must stay deliberately un-tuned.
+    for (const demo of PLAYGROUND_DEMOS) {
+      expect(demo.promptPreset).toBe(demo.id === 'baseline-bare' ? 'baseline' : 'v4')
+    }
   })
 
   it('builds a valid single-episode config for every one-scenario demo', () => {
@@ -92,6 +97,7 @@ describe('PLAYGROUND_DEMOS registry', () => {
         scenarioIds: ['e50-journey-modify-cancel', 'e50-journey-modify-verify'],
         seeds: [1],
         runKind: 'debug',
+        prompt: 'v4',
         transport: 'responses',
         stateScope: 'journey',
       },

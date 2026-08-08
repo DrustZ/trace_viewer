@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { AceRunRequest } from '../../shared/schema/ace'
+import { ACE_PROMPT_PRESETS, type AceRunRequest } from '../../shared/schema/ace'
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 const SAFE_FILE =
@@ -174,7 +174,7 @@ export function parseAceRunRequest(value: unknown): {
       'synthetic regression reruns must be debug or counterfactual; formal metrics are excluded',
     )
   }
-  const prompt = oneOf(body.prompt, 'prompt', ['baseline', 'improved', 'optimized'] as const)
+  const prompt = oneOf(body.prompt, 'prompt', ACE_PROMPT_PRESETS)
   const promptText = optionalPromptText(body.promptText)
   if (runKind === 'scored' && promptText !== undefined) {
     throw new AceRequestError('custom promptText requires a debug or counterfactual run')

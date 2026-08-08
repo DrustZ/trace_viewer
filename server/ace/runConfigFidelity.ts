@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { ACE_PROMPT_PRESETS } from '../../shared/schema/ace'
+
+const PROMPT_PRESETS: readonly string[] = ACE_PROMPT_PRESETS
 
 const CONFIG_FIELDS = [
   'prompt',
@@ -86,12 +89,12 @@ function promptFromSource(spec: Record<string, unknown>): string | undefined {
   if (
     source.kind === 'preset' &&
     typeof source.value === 'string' &&
-    ['baseline', 'improved', 'optimized'].includes(source.value)
+    PROMPT_PRESETS.includes(source.value)
   ) {
     return `preset:${source.value}`
   }
   const legacyPreset = stringValue(spec.prompt)
-  if (legacyPreset && ['baseline', 'improved', 'optimized'].includes(legacyPreset)) {
+  if (legacyPreset && PROMPT_PRESETS.includes(legacyPreset)) {
     return `preset:${legacyPreset}`
   }
   return undefined
