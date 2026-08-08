@@ -9,6 +9,8 @@ import {
 } from '../../api/ace'
 import { formatNumber } from '../common/format'
 import { MarkdownContent } from '../common/MarkdownContent'
+import { failuresByMessage } from '../trace/failureSource'
+import { failureChipLabel } from '../trace/MessageCard'
 import { checkpointForkMessageId } from '../trace/ReplayTab'
 import { chronologicalMessages } from '../trace/regressionScenario'
 
@@ -91,12 +93,90 @@ export function bubbleStyle(message: Message): BubbleStyle {
   }
 }
 
-function Bubble({ message }: { message: Message }) {
+// ---------------------------------------------------------------------------
+// Inline check/failure anchoring
+// ---------------------------------------------------------------------------
+
+export interface InlineCheckBadge {
+  label: string
+  /** red = hard gate failed · amber = shadow failed · green = milestone passed */
+  tone: 'gating' | 'shadow' | 'milestone'
+  detail?: string
+}
+
+/** End-state hard gates worth a green badge; everything else passing is noise. */
+const MILESTONE_CHECKS = new Set(['WORLD_DIFF', 'OUTCOME', 'REQUIRED_INFO'])
+
+/**
+ * Grades anchored into the conversation stream. Failures use the same
+ * message anchoring as the Evaluation tab (unified single source); passing
+ * milestone hard gates are end-state assertions, so they attach to the final
+ * message — where the episode's story resolves.
+ */
+export function inlineBadgesByMessage(trace: Trace): Map<string, InlineCheckBadge[]> {
+  const badges = new Map<string, InlineCheckBadge[]>()
+  const push = (messageId: string, badge: InlineCheckBadge) => {
+    const bucket = badges.get(messageId)
+    if (bucket) bucket.push(badge)
+    else badges.set(messageId, [badge])
+  }
+  for (const [messageId, failures] of failuresByMessage(trace)) {
+    for (const failure of failures) {
+      push(messageId, {
+        label: failureChipLabel(failure),
+        tone: failure.gating ? 'gating' : 'shadow',
+        detail: typeof failure.evidence === 'string' ? failure.evidence : undefined,
+      })
+    }
+  }
+  const lastMessage = chronologicalMessages(trace.messages).at(-1)?.message
+  if (lastMessage && trace.evaluation) {
+    for (const check of trace.evaluation.checks) {
+      if (check.gating && check.ok && MILESTONE_CHECKS.has(check.name)) {
+        push(lastMessage.id, { label: check.name, tone: 'milestone', detail: check.detail })
+      }
+    }
+  }
+  return badges
+}
+
+const BADGE_TONE: Record<InlineCheckBadge['tone'], string> = {
+  gating: 'bg-red-100 text-red-800 border-red-200',
+  shadow: 'bg-amber-100 text-amber-800 border-amber-200',
+  milestone: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+}
+
+function InlineBadges({ badges, align }: { badges: InlineCheckBadge[]; align: 'start' | 'end' }) {
+  return (
+    <div
+      className={`mt-1 flex max-w-[85%] flex-wrap gap-1 ${align === 'end' ? 'justify-end' : ''}`}
+      data-testid="playground-inline-badges"
+    >
+      {badges.map((badge, index) => (
+        <details key={`${badge.label}-${index}`} className="min-w-0">
+          <summary
+            className={`cursor-pointer list-none rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold ${BADGE_TONE[badge.tone]}`}
+            title={badge.detail}
+          >
+            {badge.tone === 'milestone' ? '✓' : '✕'} {badge.label}
+          </summary>
+          {badge.detail && (
+            <p className="mt-1 max-w-md whitespace-pre-wrap break-words rounded border border-slate-200 bg-white px-2 py-1 text-left text-[11px] text-slate-700 shadow-sm">
+              {badge.detail}
+            </p>
+          )}
+        </details>
+      ))}
+    </div>
+  )
+}
+
+function Bubble({ message, badges }: { message: Message; badges?: InlineCheckBadge[] }) {
   const style = bubbleStyle(message)
   const isAnalysis = message.channel === 'analysis'
   return (
     <div
-      className={`flex ${style.align === 'end' ? 'justify-end' : 'justify-start'}`}
+      className={`flex flex-col ${style.align === 'end' ? 'items-end' : 'items-start'}`}
       data-testid="playground-bubble"
       data-role={style.label.toLowerCase()}
     >
@@ -134,6 +214,7 @@ function Bubble({ message }: { message: Message }) {
           </details>
         ))}
       </div>
+      {badges && badges.length > 0 && <InlineBadges badges={badges} align={style.align} />}
     </div>
   )
 }
@@ -190,6 +271,8 @@ const AUTOSCROLL_SLACK_PX = 48
 /** Chat-style rendering of one episode's messages (chronological order). */
 export function EpisodeConversation({ trace }: { trace: Trace }) {
   const ordered = useMemo(() => chronologicalMessages(trace.messages), [trace.messages])
+  // Grades land next to the message that triggered them once judging is done.
+  const badges = useMemo(() => inlineBadgesByMessage(trace), [trace])
   // Standard chat behavior: follow new messages at the bottom, but stop
   // following the moment the reader scrolls up; resume when they return.
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -219,7 +302,7 @@ export function EpisodeConversation({ trace }: { trace: Trace }) {
       data-testid="playground-conversation"
     >
       {ordered.map(({ message }) => (
-        <Bubble key={message.id} message={message} />
+        <Bubble key={message.id} message={message} badges={badges.get(message.id)} />
       ))}
     </div>
   )
@@ -243,13 +326,35 @@ export function EpisodeResultCard({ trace, costUsd }: { trace: Trace; costUsd?: 
   }, [outcome])
   if (!evaluation || outcome === undefined) return null
   const pending = evaluation.lifecycle.pendingPhase !== undefined
-  const failedGating = evaluation.checks.filter((check) => check.gating && !check.ok)
+  // Message-anchored findings already sit next to their bubbles; the card
+  // carries the episode-level view — every check, grouped hard gate / shadow.
+  const hardGates = evaluation.checks.filter((check) => check.gating)
+  const shadows = evaluation.checks.filter((check) => !check.gating)
   const badge =
     outcome === 'pass'
       ? 'bg-emerald-100 text-emerald-800'
       : outcome === 'fail' || outcome === 'runtime_error'
         ? 'bg-red-100 text-red-800'
         : 'bg-amber-100 text-amber-800'
+  const checkRow = (check: (typeof evaluation.checks)[number]) => (
+    <li
+      key={check.name}
+      className={`flex items-baseline gap-1.5 rounded px-2 py-1 text-xs ${
+        check.ok ? 'bg-emerald-50/50 text-slate-700' : check.gating ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800'
+      }`}
+      {...(check.gating && !check.ok ? { 'data-testid': 'playground-failed-check' } : {})}
+    >
+      <span className={check.ok ? 'text-emerald-600' : check.gating ? 'text-red-600' : 'text-amber-600'}>
+        {check.ok ? '✓' : '✕'}
+      </span>
+      <b className="font-mono">{check.name}</b>
+      {check.detail ? (
+        <span className="min-w-0 truncate text-slate-500" title={check.detail}>
+          — {check.detail.split('\n')[0]}
+        </span>
+      ) : null}
+    </li>
+  )
   return (
     <section
       className={`rounded-lg border bg-white p-3 transition-all duration-700 ${
@@ -270,23 +375,29 @@ export function EpisodeResultCard({ trace, costUsd }: { trace: Trace; costUsd?: 
           {formatNumber(evaluation.failures.length)} findings ·{' '}
           {formatNumber(evaluation.checks.length)} checks
         </span>
+        <span className="text-slate-400" data-testid="playground-shadow-layers">
+          judge {evaluation.judge ? 'on' : 'off'} · semantic verify{' '}
+          {evaluation.semanticVerify ? 'on' : 'off'}
+        </span>
         <span className="ml-auto font-mono text-slate-600">
           {costUsd === undefined || costUsd === null ? 'cost —' : `cost $${costUsd.toFixed(3)}`}
         </span>
       </div>
-      {failedGating.length > 0 && (
-        <ul className="mt-2 space-y-1">
-          {failedGating.map((check) => (
-            <li
-              key={check.name}
-              className="rounded bg-red-50 px-2 py-1 text-xs text-red-800"
-              data-testid="playground-failed-check"
-            >
-              ✕ <b className="font-mono">{check.name}</b>
-              {check.detail ? ` — ${check.detail}` : ''}
-            </li>
-          ))}
-        </ul>
+      {hardGates.length > 0 && (
+        <div className="mt-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Hard gates
+          </p>
+          <ul className="mt-1 space-y-1">{hardGates.map(checkRow)}</ul>
+        </div>
+      )}
+      {shadows.length > 0 && (
+        <div className="mt-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Shadow checks · never gate the outcome
+          </p>
+          <ul className="mt-1 space-y-1">{shadows.map(checkRow)}</ul>
+        </div>
       )}
     </section>
   )

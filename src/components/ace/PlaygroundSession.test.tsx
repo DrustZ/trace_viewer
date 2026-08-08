@@ -21,6 +21,7 @@ import {
   bubbleStyle,
   EpisodeConversation,
   EpisodeResultCard,
+  inlineBadgesByMessage,
   PlaygroundActions,
   sessionPhase,
 } from './PlaygroundSession'
@@ -138,6 +139,66 @@ describe('EpisodeConversation', () => {
   })
 })
 
+describe('inlineBadgesByMessage', () => {
+  function judged(): Trace {
+    const trace = episode()
+    if (!trace.evaluation) throw new Error('fixture must include evaluation')
+    trace.evaluation.checks = [
+      { name: 'WORLD_DIFF', ok: true, gating: true, detail: 'diff within license' },
+      { name: 'OUTCOME', ok: true, gating: true },
+      { name: 'ACTIONS', ok: true, gating: true }, // passing but not a milestone
+      { name: 'SOFT', ok: true, gating: false },
+    ]
+    trace.evaluation.failures = [
+      {
+        origin: 'grader',
+        code: 'refund_missing',
+        severity: 'major',
+        gating: true,
+        messageId: 'm-1',
+        evidence: 'refund never issued',
+        source: 'ace.grade',
+      },
+      {
+        origin: 'detector',
+        code: 'curt_tone',
+        severity: 'minor',
+        gating: false,
+        messageId: 'm-3',
+        source: 'detector',
+      },
+    ]
+    return trace
+  }
+
+  it('anchors failures to their message with gating/shadow tones', () => {
+    const badges = inlineBadgesByMessage(judged())
+    expect(badges.get('m-1')).toMatchObject([
+      { tone: 'gating', detail: 'refund never issued' },
+    ])
+    expect(badges.get('m-3')?.some((badge) => badge.tone === 'shadow')).toBe(true)
+  })
+
+  it('attaches only milestone hard-gate passes, at the final message', () => {
+    const badges = inlineBadgesByMessage(judged())
+    const finalBadges = badges.get('m-3') ?? []
+    const milestones = finalBadges.filter((badge) => badge.tone === 'milestone')
+    expect(milestones.map((badge) => badge.label).sort()).toEqual(['OUTCOME', 'WORLD_DIFF'])
+    // Non-milestone passes (ACTIONS) and shadow passes (SOFT) stay off the stream.
+    const all = [...badges.values()].flat().map((badge) => badge.label)
+    expect(all).not.toContain('ACTIONS')
+    expect(all).not.toContain('SOFT')
+  })
+
+  it('renders anchored badges beside the bubbles with expandable detail', () => {
+    const html = renderToStaticMarkup(<EpisodeConversation trace={judged()} />)
+    expect(html).toContain('data-testid="playground-inline-badges"')
+    expect(html).toContain('✕ refund_missing')
+    expect(html).toContain('✓ WORLD_DIFF')
+    expect(html).toContain('refund never issued')
+  })
+})
+
 describe('sessionPhase', () => {
   it('reports starting until the first durable message exists', () => {
     expect(sessionPhase(undefined, 0)).toMatchObject({ kind: 'starting', active: true })
@@ -185,12 +246,17 @@ describe('sessionPhase', () => {
 })
 
 describe('EpisodeResultCard', () => {
-  it('shows outcome, failed gating checks, and cost', () => {
+  it('shows outcome, cost, and every check grouped hard-gate / shadow', () => {
     const html = renderToStaticMarkup(<EpisodeResultCard trace={episode()} costUsd={0.1234} />)
     expect(html).toContain('fail')
+    // Grouped episode-level view: both gating checks visible, failed one flagged.
+    expect(html).toContain('Hard gates')
     expect(html).toContain('refund_issued')
     expect(html).toContain('refund never issued')
-    expect(html).not.toContain('no_hallucination')
+    expect(html).toContain('no_hallucination')
+    expect(html).toContain('data-testid="playground-failed-check"')
+    // Shadow layers are explicit even when off — never silent.
+    expect(html).toContain('judge off · semantic verify off')
     expect(html).toContain('cost $0.123')
   })
 
