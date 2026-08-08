@@ -282,6 +282,22 @@ describe('Playground page', () => {
     expect(html).not.toContain('>Quick run<')
   })
 
+  it('renders the demo gallery with six one-click cards and their watch chips', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/ace/lab']}>
+        <AceInteractiveLabPage />
+      </MemoryRouter>,
+    )
+    expect(html).toContain('data-testid="playground-demos"')
+    expect(html.match(/data-testid="playground-demo-card"/g)).toHaveLength(6)
+    expect(html).toContain('Compliant refund, end to end')
+    expect(html).toContain('Counter-example: bare baseline')
+    expect(html).toContain('data-testid="playground-demo-run-journey-state"')
+    // Watch chips advertise the checks each demo makes visible.
+    expect(html).toContain('termination=handoff')
+    expect(html).toContain('WRITE_SAFETY')
+  })
+
   it('defaults transport to responses and keeps it editable in the config panel', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/ace/lab']}>

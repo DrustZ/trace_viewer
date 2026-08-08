@@ -34,6 +34,8 @@ export interface PlaygroundRunConfig {
   temperature: string
   reasoningEffort: AceRunFormValues['reasoningEffort']
   costCap: string
+  /** World-state scope; journey demos share one state clone across steps. */
+  stateScope?: AceRunFormValues['stateScope']
   /** Simulation parent for a matched fresh rerun (never a checkpoint restore). */
   sourceTraceUid?: string
 }
@@ -293,6 +295,7 @@ export function buildPlaygroundRunRequest(config: PlaygroundRunConfig): AceRunFo
     temperature: config.temperature,
     reasoningEffort: config.reasoningEffort,
     costCap: config.costCap,
+    ...(config.stateScope ? { stateScope: config.stateScope } : {}),
   }
   const result = buildAceRunRequest(
     values,

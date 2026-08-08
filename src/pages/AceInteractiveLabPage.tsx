@@ -24,6 +24,13 @@ import {
   sessionPhase,
 } from '../components/ace/PlaygroundSession'
 import {
+  demoPlaygroundConfig,
+  demoRunRequest,
+  PLAYGROUND_DEMOS,
+  type PlaygroundDemo,
+  watchForStatus,
+} from '../components/ace/playgroundDemos'
+import {
   buildPlaygroundRunRequest,
   episodePollInterval,
   episodeSettled,
@@ -275,6 +282,69 @@ const BOT_HINTS: Record<string, string> = {
   baseline: 'Plain policy prompt, no extra structure.',
   playbook: 'Policy prompt plus the support playbook guidance.',
   workflow: 'Structured workflow harness drives each turn.',
+}
+
+const WATCH_STATE_STYLE: Record<string, { icon: string; cls: string; title?: string }> = {
+  pending: { icon: '…', cls: 'text-slate-400' },
+  pass: { icon: '✓', cls: 'text-emerald-600' },
+  fail: { icon: '✕', cls: 'text-red-600' },
+  absent: { icon: '—', cls: 'text-slate-300', title: 'This grader did not emit the check.' },
+}
+
+/**
+ * The demo card's "what to watch" list, lit against the judged episode. For a
+ * journey demo the payoff lives in the last step, so the panel follows the
+ * chronologically last durable trace of the run.
+ */
+function DemoWatchPanel({ demo, runId }: { demo: PlaygroundDemo; runId: string }) {
+  const run = useAceRun(runId, {
+    refetchInterval: (query) => episodePollInterval({ lifecycle: query.state.data?.lifecycle }),
+  })
+  const lifecycle = run.data?.lifecycle
+  const filters = useMemo(
+    () => encodeFilterSet({ conditions: [{ key: 'run', op: 'eq', value: runId }] }),
+    [runId],
+  )
+  const traces = useTraces(
+    { filters, sort: 'timestamp', order: 'asc', limit: 5 },
+    { refetchInterval: episodePollInterval({ lifecycle }) },
+  )
+  const items =
+    traces.data && 'items' in traces.data ? (traces.data as TracesListResponse).items : []
+  const last = items.at(-1)
+  const lastUid = last ? (last.meta.traceUid ?? last.meta.traceId) : undefined
+  const episode = useTrace(lastUid, {
+    refetchInterval: (query) =>
+      episodePollInterval({ lifecycle, episodeSettled: episodeSettled(query.state.data) }),
+  })
+  const status = watchForStatus(demo.watchFor, episode.data)
+  return (
+    <section
+      className="rounded-lg border border-blue-200 bg-blue-50/30 p-3"
+      data-testid="playground-demo-watch"
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+        Demo · {demo.title}
+      </p>
+      <ul className="mt-1.5 space-y-1">
+        {status.map((item) => {
+          const style = WATCH_STATE_STYLE[item.state] ?? WATCH_STATE_STYLE.pending
+          return (
+            <li
+              key={item.check}
+              className="flex items-baseline gap-1.5 text-xs text-slate-700"
+              data-watch-state={item.state}
+              title={style.title}
+            >
+              <span className={`font-semibold ${style.cls}`}>{style.icon}</span>
+              {item.label}
+              <span className="font-mono text-[10px] text-slate-400">{item.check}</span>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
 }
 
 const PHASE_PILL_STYLE: Record<SessionPhaseKind, string> = {
@@ -571,7 +641,10 @@ function PlaygroundWorkbench({
   )
   const needsQuickPick = config.scenarioId.trim() === ''
   const sessionRef = useRef<HTMLElement | null>(null)
+  const [activeDemoId, setActiveDemoId] = useState<string>()
+  const activeDemo = PLAYGROUND_DEMOS.find((demo) => demo.id === activeDemoId)
   const launchEpisode = () => {
+    setActiveDemoId(undefined) // manual runs detach from any demo watch-list
     if (needsQuickPick) {
       if (!quick) return
       const merged: PlaygroundRunConfig = {
@@ -584,6 +657,46 @@ function PlaygroundWorkbench({
       void runEpisode(merged)
     } else {
       void runEpisode()
+    }
+    sessionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // Journeys are the one sanctioned multi-scenario exception (ordered steps,
+  // one shared state clone). Same batchId idempotency + attach-on-conflict
+  // discipline as runEpisode.
+  const runJourneyDemo = async (demo: PlaygroundDemo) => {
+    if (!available || submitInFlight.current) return
+    const result = demoRunRequest(demo)
+    if (!result.ok) {
+      setValidationError(result.error)
+      return
+    }
+    submitInFlight.current = true
+    const batchId = takePendingBatchId()
+    try {
+      const response = await start.mutateAsync({ ...result.request, batchId })
+      clearPendingBatchId()
+      onRunSelected(response.runId)
+    } catch (error) {
+      if (isExistingRunConflict(error)) {
+        clearPendingBatchId()
+        onRunSelected(batchId)
+        start.reset()
+      }
+    } finally {
+      submitInFlight.current = false
+    }
+  }
+
+  const launchDemo = (demo: PlaygroundDemo) => {
+    setActiveDemoId(demo.id)
+    if (demo.scenarioIds.length === 1) {
+      // The panel reflects the demo's preset so everything stays inspectable.
+      const merged = demoPlaygroundConfig(demo)
+      setConfig(merged)
+      void runEpisode(merged)
+    } else {
+      void runJourneyDemo(demo)
     }
     sessionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -643,6 +756,52 @@ function PlaygroundWorkbench({
             )}
           </section>
         )}
+
+        <section
+          className="rounded-lg border border-slate-200 bg-white p-3"
+          data-testid="playground-demos"
+        >
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Demos</h2>
+            <span className="text-[11px] text-slate-400">
+              One click each — curated configs that make one metric class visible in the stream.
+            </span>
+          </div>
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {PLAYGROUND_DEMOS.map((demo) => (
+              <article
+                key={demo.id}
+                data-testid="playground-demo-card"
+                className={`flex w-64 shrink-0 flex-col rounded-md border p-2.5 ${
+                  activeDemoId === demo.id ? 'border-blue-300 bg-blue-50/40' : 'border-slate-200'
+                }`}
+              >
+                <h3 className="text-xs font-semibold text-slate-800">{demo.title}</h3>
+                <p className="mt-1 flex-1 text-[11px] leading-4 text-slate-500">{demo.blurb}</p>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {demo.watchFor.map((item) => (
+                    <span
+                      key={item.check}
+                      className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px] text-slate-500"
+                      title={item.label}
+                    >
+                      {item.check}
+                    </span>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  data-testid={`playground-demo-run-${demo.id}`}
+                  onClick={() => launchDemo(demo)}
+                  disabled={!available || start.isPending}
+                  className="mt-2 self-start rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-700 disabled:opacity-40"
+                >
+                  Run demo
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
           {/* Left: configuration panel */}
@@ -875,6 +1034,9 @@ function PlaygroundWorkbench({
               </p>
             )}
 
+            {activeDemo && selectedRunId && (
+              <DemoWatchPanel demo={activeDemo} runId={selectedRunId} />
+            )}
             {selectedRunId ? (
               <EpisodeSession runId={selectedRunId} onChildRun={onRunSelected} />
             ) : (
