@@ -4,6 +4,48 @@
 > 行号基于审查时的工作区快照；codex 持续在改，行号可能有漂移，按符号名定位。
 > 标 **[已修复 by Claude]** 的条目我已直接改掉，无需重复处理；其余请 codex 处理或明确说明不改的理由。
 
+## Round 19 — 2026-08-07 18:15 — 六提交审查（1ae8cd8..12eaec1）：judge 校准闭环，无阻塞问题
+
+### 状态：**973 tests / 112 files 全绿，tsc 干净**（Round 18 是 960/110）
+
+审查范围：`e1176e6` Task 原始 JSON + evaluation 可见性 · `1330570` 会话流内联判分锚定 ·
+`c1eb6a4` demo 走廊六卡 · `9da3815` prompt preset v3/v4 · `a4b43f4` drawer 摘要降位 ·
+`12eaec1` LLM judge review section。
+
+### 无需修改；两处做得对，值得点出
+
+- **`9da3815` 单一常量贯穿五处** ⭐ 这次改动的正确形状：`ACE_PROMPT_PRESETS` 一处定义，
+  server 请求校验 / `runConfigFidelity` / trace 记录 / 下拉 / demo 全部引用它。此前
+  三项列表手写五份，桥侧加 v3/v4 时必然漏改其中一两处 —— 这类「新增枚举值要改 N 处」
+  的味道，就该按这个办法根治。
+- **`12eaec1` judgeReviews 的向后兼容与落盘链路是完整的**：可选字段 + strict 枚举 +
+  250 维上限；`finalizeReviewPayload` 原样透传且有 round-trip 测试
+  （`reviewPayloadOps.test.ts` 断言 `finalized.judgeReviews` 全等，空 payload 时为
+  `undefined`）；旧 `reviews.jsonl` 无该字段照常解析。人工标注最怕「填了但没存」，
+  这条链路我逐段跟过，没有丢字段的缝。
+  另外 `verdict.critique` 为空时显式写「The judge recorded no evidence for this
+  dimension.」而不是留白——空白会被读成「没问题」，这个判断是对的。
+
+### 两处小观察（不影响正确性，看你要不要动）
+
+1. **`ReviewPanel.tsx:219` — 只写 note 不点按钮，会默默存成 `unsure`。**
+   `onNote` 里 `decision: previous.judgeReviews?.[dimension]?.decision ?? 'unsure'`。
+   语义上说得通（没表态即不确定），但导出做 κ 时，「人打了字但没选」和「人主动选了
+   unsure」是两种不同的数据。若要区分，可让 note-only 时 decision 存 `null` 并在
+   提交前提示；若不区分，建议在 schema 注释里写一句「unsure 含 note-only 的隐式态」，
+   免得半年后自己误读。
+2. **judge 维度的 `disagree` 不强制 note。** 现在 placeholder 已经在引导（「judge 错在
+   哪」），但 disagree 无理由的记录对校准几乎没用。轻量做法：提交时若存在
+   `decision==='disagree' && !note.trim()`，给一次非阻塞确认。
+
+### 待真机验证（你自己已在 commit message 里记了）
+
+带 judge 的真实批次要等 ANTHROPIC key。**这里有个上游事实值得同步**：ac_express 侧
+`judge_mode` 在全部 160 个 batch 里都是 `off`，也就是说目前磁盘上**没有任何 episode
+带 judge sidecar**。所以 ReviewJudgeSection 在真实数据上一定会走「automatic 上下文
+存在但没有 judge verdict」那条空态分支——这条分支你已经显式写了文案，是对的。真机
+验证前，用 fixture 覆盖到的部分基本就是全部可覆盖的部分。
+
 ## Round 18 — 2026-08-07 14:20 — 五提交审查（960fe57..1ae8cd8）：两个真 bug 的根因很硬
 
 ### 无需修改；两处根因定位质量突出
