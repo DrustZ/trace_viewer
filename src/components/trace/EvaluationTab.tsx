@@ -167,18 +167,35 @@ export function EvaluationTab({
           <p className="p-4 text-xs text-slate-500">No task grader was run.</p>
         ) : (
           <div className="grid gap-px bg-slate-100 md:grid-cols-2">
+            {/* Tone reads at a glance: red = hard gate failed, amber = shadow
+                failed, green = passed. */}
             {evaluation.checks.map((check) => (
-              <div key={check.name} className="bg-white p-3">
+              <div
+                key={check.name}
+                className={`p-3 ${
+                  check.ok ? 'bg-emerald-50/40' : check.gating ? 'bg-red-50/70' : 'bg-amber-50/70'
+                }`}
+              >
                 <div className="flex items-center gap-2">
-                  <span className={check.ok ? 'text-emerald-600' : 'text-red-600'}>
+                  <span
+                    className={
+                      check.ok
+                        ? 'text-emerald-600'
+                        : check.gating
+                          ? 'text-red-600'
+                          : 'text-amber-600'
+                    }
+                  >
                     {check.ok ? '✓' : '✕'}
                   </span>
                   <b className="font-mono text-xs">{check.name}</b>
-                  {check.gating && (
-                    <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-700">
-                      GATING
-                    </span>
-                  )}
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      check.gating ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {check.gating ? 'HARD GATE' : 'SHADOW'}
+                  </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {check.detail ?? 'No detail recorded'}
@@ -249,60 +266,74 @@ export function EvaluationTab({
           </div>
         </Card>
       )}
-      {(evaluation.judge || evaluation.semanticVerify) && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {evaluation.judge && (
-            <Card title="Judge · shadow only">
-              <div className="space-y-2 p-4">
-                {Object.entries(evaluation.judge.dimensions).map(([name, value]) => (
-                  <div key={name} className="rounded border border-slate-100 p-2 text-xs">
-                    <b>{name}</b> · {value.verdict}
-                    <p className="text-slate-500">{value.evidence ?? 'No evidence recorded'}</p>
-                  </div>
-                ))}
-                {evaluation.judge.disagreement && (
-                  <p className="rounded bg-violet-50 px-2 py-1 text-xs text-violet-700">
-                    Judge disagrees with the deterministic grader; prioritize blind review.
-                  </p>
-                )}
-              </div>
-            </Card>
-          )}
-          {evaluation.semanticVerify && (
-            <Card title="Semantic verification · shadow only">
-              <div className="p-4 text-xs">
-                <p>
-                  {evaluation.semanticVerify.supportedCount ?? 0} supported ·{' '}
-                  <span className="text-red-700">
-                    {evaluation.semanticVerify.contradictedCount ?? 0} contradicted
-                  </span>{' '}
-                  · {evaluation.semanticVerify.unverifiedCount ?? 0} unverified
+      {/* Shadow layers render explicitly even when off: silence reads as data
+          loss, when the truth is simply "this run was not paid to judge". */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Judge · shadow only">
+          {evaluation.judge ? (
+            <div className="space-y-2 p-4">
+              {Object.entries(evaluation.judge.dimensions).map(([name, value]) => (
+                <div key={name} className="rounded border border-slate-100 p-2 text-xs">
+                  <b>{name}</b> · {value.verdict}
+                  <p className="text-slate-500">{value.evidence ?? 'No evidence recorded'}</p>
+                </div>
+              ))}
+              {evaluation.judge.disagreement && (
+                <p className="rounded bg-violet-50 px-2 py-1 text-xs text-violet-700">
+                  Judge disagrees with the deterministic grader; prioritize blind review.
                 </p>
-                <ul className="mt-2 space-y-1">
-                  {evaluation.semanticVerify.claims
-                    .filter((claim) => claim.verdict !== 'supported')
-                    .map((claim) => (
-                      <li
-                        key={JSON.stringify([
-                          claim.kind,
-                          claim.messageId,
-                          claim.rawIndex,
-                          claim.chronologicalIndex,
-                          claim.span,
-                          claim.value,
-                          claim.verdict,
-                        ])}
-                        className="rounded bg-slate-50 px-2 py-1"
-                      >
-                        {claim.kind ?? 'claim'}={JSON.stringify(claim.value)} · {claim.verdict}
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            </Card>
+              )}
+            </div>
+          ) : (
+            <p className="p-4 text-xs text-slate-500" data-testid="judge-off-note">
+              LLM judge: off for this run. Enable at batch launch with{' '}
+              <code className="rounded bg-slate-100 px-1">--judge all</code> /{' '}
+              <code className="rounded bg-slate-100 px-1">sample</code>. Shadow layer only — it
+              never gates the outcome.
+            </p>
           )}
-        </div>
-      )}
+        </Card>
+        <Card title="Semantic verification · shadow only">
+          {evaluation.semanticVerify ? (
+            <div className="p-4 text-xs">
+              <p>
+                {evaluation.semanticVerify.supportedCount ?? 0} supported ·{' '}
+                <span className="text-red-700">
+                  {evaluation.semanticVerify.contradictedCount ?? 0} contradicted
+                </span>{' '}
+                · {evaluation.semanticVerify.unverifiedCount ?? 0} unverified
+              </p>
+              <ul className="mt-2 space-y-1">
+                {evaluation.semanticVerify.claims
+                  .filter((claim) => claim.verdict !== 'supported')
+                  .map((claim) => (
+                    <li
+                      key={JSON.stringify([
+                        claim.kind,
+                        claim.messageId,
+                        claim.rawIndex,
+                        claim.chronologicalIndex,
+                        claim.span,
+                        claim.value,
+                        claim.verdict,
+                      ])}
+                      className="rounded bg-slate-50 px-2 py-1"
+                    >
+                      {claim.kind ?? 'claim'}={JSON.stringify(claim.value)} · {claim.verdict}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="p-4 text-xs text-slate-500" data-testid="semantic-off-note">
+              Semantic verification: off for this run. Enable at batch launch with{' '}
+              <code className="rounded bg-slate-100 px-1">--semantic-verify all</code> /{' '}
+              <code className="rounded bg-slate-100 px-1">sample</code>. Shadow layer only — it
+              never gates the outcome.
+            </p>
+          )}
+        </Card>
+      </div>
       {/* World diff + tool ledger are evaluation evidence, not a separate tab. */}
       <WorldStateSections evaluation={evaluation} />
     </div>

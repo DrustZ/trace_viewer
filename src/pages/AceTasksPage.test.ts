@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
+  RawScenarioJson,
   ScoringAuthority,
   taskAutorunHref,
   taskCompareHref,
@@ -111,6 +112,27 @@ describe('ACE task explorer links', () => {
     })
     // Same containment rules as the configure-only link.
     expect(taskAutorunHref('s-refund-00', 'configs/scenarios/../sealed.json')).toBeNull()
+  })
+
+  it('renders the raw scenario JSON collapsed with a copy affordance on the detail card', () => {
+    const definition = {
+      scenario_id: 's-refund-00',
+      card: { goal: 'Refund the payment.' },
+      forbidden_actions: ['cancel_order'],
+    }
+    const html = renderToStaticMarkup(
+      createElement(Variant, { index: 0, variant: variant({ definition }) }),
+    )
+    expect(html).toContain('data-testid="task-raw-scenario"')
+    expect(html).toContain('Raw scenario JSON')
+    expect(html).toContain('leakage canary redacted')
+    expect(html).toContain('data-testid="task-raw-scenario-copy"')
+    expect(html).toContain('&quot;scenario_id&quot;: &quot;s-refund-00&quot;')
+    // Collapsed by default: a plain <details> without the open attribute.
+    expect(html).toMatch(/<details(?![^>]*\bopen)[^>]*data-testid="task-raw-scenario"/)
+
+    // A list-shaped variant (no definition) renders nothing.
+    expect(renderToStaticMarkup(createElement(RawScenarioJson, { definition: undefined }))).toBe('')
   })
 
   it('never renders stale check roles as verified after a source mismatch', () => {

@@ -116,6 +116,11 @@ def grade_atomic():
       '/api/ace/tasks?suite=sealed&issue=cancel_order&language=en&persona=pushes_back',
     )
     expect(response.status).toBe(200)
+    // List items are variant-free summaries — no raw definitions in the list.
+    for (const item of response.body.items) {
+      expect(item.variants).toBeUndefined()
+      expect(item.definition).toBeUndefined()
+    }
     expect(response.body).toMatchObject({
       total: 1,
       filteredTotal: 1,
@@ -158,6 +163,13 @@ def grade_atomic():
   it('returns the complete definition by scenario id and a clear 404', async () => {
     const response = await request(app()).get('/api/ace/tasks/scenario-01')
     expect(response.status).toBe(200)
+    // The detail response carries the authored scenario row verbatim so the
+    // task page can show/copy the raw JSON.
+    expect(response.body.variants[0].definition).toMatchObject({
+      scenario_id: 'scenario-01',
+      expected_actions: [{ name: 'cancel_order' }],
+      card: { goal: 'Cancel the order before it ships.' },
+    })
     expect(response.body).toMatchObject({
       scenarioId: 'scenario-01',
       conflict: false,

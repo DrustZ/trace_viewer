@@ -1,6 +1,8 @@
 import type { FailureV1, Trace } from '@shared/schema/types'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
+import { EvaluationSummary } from './EvaluationSummary'
 import { EvaluationTab, failureMessageId } from './EvaluationTab'
 
 function traceWithFailure(failure: FailureV1): Trace {
@@ -121,5 +123,105 @@ describe('EvaluationTab failure anchors', () => {
     expect(html).toContain('Synthetic regression rerun · formal metrics excluded')
     expect(html).toContain('production:source:trace-7')
     expect(html).toContain('reg-production-7')
+  })
+})
+
+describe('EvaluationTab shadow-layer visibility', () => {
+  it('says explicitly when judge and semantic verification were off — never silent', () => {
+    const trace = traceWithFailure({
+      origin: 'grader',
+      code: 'missing_action',
+      severity: 'major',
+      gating: true,
+      source: 'test',
+    })
+    const html = renderToStaticMarkup(<EvaluationTab trace={trace} />)
+
+    expect(html).toContain('data-testid="judge-off-note"')
+    expect(html).toContain('LLM judge: off for this run')
+    expect(html).toContain('data-testid="semantic-off-note"')
+    expect(html).toContain('Semantic verification: off for this run')
+    expect(html).toContain('never gates the outcome')
+  })
+
+  it('tones grade checks by verdict: red hard-gate fail, amber shadow fail, green pass', () => {
+    const trace = traceWithFailure({
+      origin: 'grader',
+      code: 'missing_action',
+      severity: 'major',
+      gating: true,
+      source: 'test',
+    })
+    if (!trace.evaluation) throw new Error('fixture must include evaluation')
+    trace.evaluation.checks = [
+      { name: 'FORBIDDEN', ok: false, gating: true, detail: 'forbidden refund effect' },
+      { name: 'SOFT_TONE', ok: false, gating: false, detail: 'curt reply' },
+      { name: 'ACTIONS', ok: true, gating: true, detail: 'all expected actions occurred' },
+    ]
+    const html = renderToStaticMarkup(<EvaluationTab trace={trace} />)
+
+    expect(html).toContain('HARD GATE')
+    expect(html).toContain('SHADOW')
+    expect(html).toMatch(/bg-red-50\/70[^>]*>[\s\S]*?FORBIDDEN/)
+    expect(html).toMatch(/bg-amber-50\/70[^>]*>[\s\S]*?SOFT_TONE/)
+    expect(html).toMatch(/bg-emerald-50\/40[^>]*>[\s\S]*?ACTIONS/)
+  })
+})
+
+describe('EvaluationSummary (drawer peek)', () => {
+  it('shows verdict, per-check hard-gate/shadow rows, and the full-evaluation link', () => {
+    const trace = traceWithFailure({
+      origin: 'grader',
+      code: 'forbidden_effect',
+      severity: 'critical',
+      gating: true,
+      source: 'test',
+    })
+    if (!trace.evaluation) throw new Error('fixture must include evaluation')
+    trace.evaluation.checks = [
+      {
+        name: 'FORBIDDEN',
+        ok: false,
+        gating: true,
+        detail: 'forbidden refund effect: 299 cents\nsecond line',
+      },
+      { name: 'SOFT_TONE', ok: false, gating: false, detail: 'curt reply' },
+      { name: 'ACTIONS', ok: true, gating: true },
+    ]
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <EvaluationSummary trace={trace} />
+      </MemoryRouter>,
+    )
+
+    expect(html).toContain('data-testid="drawer-evaluation-summary"')
+    expect(html).toContain('fail')
+    expect(html).toContain('1 failed hard gates · 1 findings')
+    expect(html).toContain('FORBIDDEN')
+    expect(html).toContain('hard gate')
+    expect(html).toContain('shadow')
+    // The visible cell carries the first line; the full detail stays on title.
+    expect(html).toContain('>forbidden refund effect: 299 cents</td>')
+    expect(html).toMatch(
+      /href="\/trace\/simulation(?::|%3A)run(?::|%3A)trace-1\?tab=evaluation"[^>]*>Open full evaluation/,
+    )
+  })
+
+  it('renders nothing for an ungraded trace', () => {
+    const trace = traceWithFailure({
+      origin: 'grader',
+      code: 'x',
+      severity: 'minor',
+      gating: false,
+      source: 'test',
+    })
+    trace.evaluation = undefined
+    expect(
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <EvaluationSummary trace={trace} />
+        </MemoryRouter>,
+      ),
+    ).toBe('')
   })
 })

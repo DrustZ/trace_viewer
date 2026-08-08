@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError } from '../../api/client'
 import { useTrace } from '../../api/hooks'
 import { ErrorState, LoadingState } from '../common/EmptyState'
+import { EvaluationSummary } from '../trace/EvaluationSummary'
 import type { TraceTab } from '../trace/TraceHeader'
 import { TraceView } from '../trace/TraceView'
 
@@ -103,15 +104,23 @@ export function TraceDrawer({
           </button>
         </div>
       ) : (
-        <TraceView
-          trace={trace.data}
-          tab={tab}
-          onTabChange={setTab}
-          variant="drawer"
-          listSearch={listSearch}
-          onNavigate={onNavigate}
-          onClose={onClose}
-        />
+        <div className="flex h-full min-h-0 flex-col">
+          {/* Verdict + hard gates stay visible on peek — the default drawer
+              view is the conversation, and the evaluation tab is one tab away
+              that most peek readers never open. */}
+          {tab !== 'evaluation' && <EvaluationSummary trace={trace.data} />}
+          <div className="min-h-0 flex-1">
+            <TraceView
+              trace={trace.data}
+              tab={tab}
+              onTabChange={setTab}
+              variant="drawer"
+              listSearch={listSearch}
+              onNavigate={onNavigate}
+              onClose={onClose}
+            />
+          </div>
+        </div>
       )}
     </aside>
   )

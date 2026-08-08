@@ -161,6 +161,12 @@ export interface AceTaskVariant {
   userScript: string[] | null
   /** Python-probed current-worktree semantics, never inferred from copied TS rules. */
   effectiveChecks?: AceTaskEffectiveCheck[]
+  /**
+   * The authored scenario row (leakage-canary keys redacted, same rule as the
+   * definition digest). Reaches clients only via the task-detail endpoint —
+   * list responses are variant-free summaries.
+   */
+  definition?: unknown
 }
 
 export interface AceTaskSummary {

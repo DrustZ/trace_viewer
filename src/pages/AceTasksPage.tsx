@@ -8,6 +8,7 @@ import type {
   AceTaskStatusSummary,
   AceTaskVariant,
 } from '@shared/schema/aceTasks'
+import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useAceTask, useAceTasks } from '../api/aceTasks'
 import { EmptyState, LoadingState } from '../components/common/EmptyState'
@@ -404,6 +405,49 @@ function ObservedContracts({ contracts }: { contracts: AceTaskObservedScoringCon
   )
 }
 
+/**
+ * The authored scenario row, verbatim minus the leakage canary (the cockpit
+ * never renders the canary). Collapsed by default: the decomposed sections
+ * above stay the primary reading surface; this is the copyable ground truth.
+ */
+export function RawScenarioJson({ definition }: { definition: unknown }) {
+  const [copied, setCopied] = useState(false)
+  if (definition === undefined) return null
+  const text = JSON.stringify(definition, null, 2)
+  const copy = () => {
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1_500)
+    })
+  }
+  return (
+    <details
+      className="overflow-hidden rounded-lg border border-slate-200 bg-white"
+      data-testid="task-raw-scenario"
+    >
+      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">
+        Raw scenario JSON
+        <span className="ml-2 font-normal text-slate-400">
+          authored source · leakage canary redacted
+        </span>
+      </summary>
+      <div className="border-t border-slate-100 p-3">
+        <button
+          type="button"
+          data-testid="task-raw-scenario-copy"
+          onClick={copy}
+          className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+        >
+          {copied ? 'Copied ✓' : 'Copy JSON'}
+        </button>
+        <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-3 font-mono text-[11px] leading-4 text-slate-800">
+          {text}
+        </pre>
+      </div>
+    </details>
+  )
+}
+
 export function Variant({ variant, index }: { variant: AceTaskVariant; index: number }) {
   const authorityStatus = variant.pythonAuthority?.status ?? 'unavailable'
   const semanticsVerified = authorityStatus === 'verified'
@@ -552,6 +596,8 @@ export function Variant({ variant, index }: { variant: AceTaskVariant; index: nu
         <StructuredList title="Must precede" values={variant.mustPrecede} />
       </div>
       <StructuredList title="Deterministic user script" values={variant.userScript} />
+
+      <RawScenarioJson definition={variant.definition} />
 
       <section className="rounded-lg border border-slate-200 bg-white p-3">
         <h3 className="text-xs font-semibold text-slate-800">Source provenance</h3>

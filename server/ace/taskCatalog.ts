@@ -426,6 +426,11 @@ function normalizeVariant(row: UnknownRecord, source: AceTaskSource): AceTaskVar
     consentRequired: boolean(row.consent_required),
     promiseCheck: boolean(row.promise_check),
     userScript: textList(row, 'user_script'),
+    // The authored source of truth: every decomposed field above is a
+    // projection of this row, and reviewers need to read/copy the original.
+    // Canary keys stay redacted — the cockpit never renders the leakage
+    // canary (same rule the definition digest follows).
+    definition: definitionValue(row),
   }
 }
 
